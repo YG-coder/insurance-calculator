@@ -43,11 +43,9 @@ export const metadata: Metadata = {
 
     // ✅ 구글 서치콘솔 인증
     verification: {
-        google: "m43I3sHTtVDzUX2boyrzKQqVYl4TUB504tOJFJGfpD4"
+        google: "m43I3sHTtVDzUX2boyrzKQqVYl4TUB504tOJFJGfpD4",
         other: {
-
             "naver-site-verification": "dae405d642587eca39fd9ecbf8558e23fa85bae2",
-
         },
     },
 };

@@ -43,7 +43,7 @@ export const metadata: Metadata = {
 
     // ✅ 구글 서치콘솔 인증
     verification: {
-        google: "GXlO_JaqRc_86OdNOVN-Yrq9Pc5fzWyHfrd_SroZJZU"
+        google: "m43I3sHTtVDzUX2boyrzKQqVYl4TUB504tOJFJGfpD4"
     },
 };
 

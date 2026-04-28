@@ -29,11 +29,14 @@ export const metadata: Metadata = {
     description: SITE.description,
   },
   robots: { index: true, follow: true },
+  verification: {
+    google: "m43I3sHTtVDzUX2b여기에_나머지_값",
+  },
 };
 
 export default function RootLayout({
-  children,
-}: {
+                                     children,
+                                   }: {
   children: React.ReactNode;
 }) {
   const jsonLd = {
@@ -46,16 +49,16 @@ export default function RootLayout({
   };
 
   return (
-    <html lang="ko">
+      <html lang="ko">
       <body>
-        <Header />
-        <main className="min-h-[60vh]">{children}</main>
-        <Footer />
-        <script
+      <Header />
+      <main className="min-h-[60vh]">{children}</main>
+      <Footer />
+      <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-        />
+      />
       </body>
-    </html>
+      </html>
   );
 }

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import "./globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -41,7 +42,6 @@ export const metadata: Metadata = {
         follow: true,
     },
 
-    // ✅ 구글 서치콘솔 인증
     verification: {
         google: "m43I3sHTtVDzUX2boyrzKQqVYl4TUB504tOJFJGfpD4",
         other: {
@@ -67,11 +67,17 @@ export default function RootLayout({
     return (
         <html lang="ko">
         <body>
+        <Script
+            async
+            src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6405059957088169"
+            crossOrigin="anonymous"
+            strategy="afterInteractive"
+        />
+
         <Header />
         <main className="min-h-[60vh]">{children}</main>
         <Footer />
 
-        {/* JSON-LD */}
         <script
             type="application/ld+json"
             dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}

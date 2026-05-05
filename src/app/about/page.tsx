@@ -73,7 +73,7 @@ export default function AboutPage() {
 
         <h2>문의</h2>
         <p>
-          사이트 이용 중 오류나 개선 제안이 있으시면 <strong>contact@보험계산기.kr</strong>로 연락해
+          사이트 이용 중 오류나 개선 제안이 있으시면 <strong>support@보험계산기.kr</strong>로 연락해
           주시기 바랍니다. 보내주신 의견은 사이트 개선에 큰 도움이 됩니다.
         </p>
       </section>

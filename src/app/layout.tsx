@@ -5,6 +5,8 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { SITE } from "@/lib/site";
 
+const ADSENSE_CLIENT = "ca-pub-6405509957088169";
+
 export const metadata: Metadata = {
     metadataBase: new URL(SITE.url),
 
@@ -48,6 +50,10 @@ export const metadata: Metadata = {
             "naver-site-verification": "dae405d642587eca39fd9ecbf8558e23fa85bae2",
         },
     },
+
+    other: {
+        "google-adsense-account": ADSENSE_CLIENT,
+    },
 };
 
 export default function RootLayout({
@@ -69,7 +75,7 @@ export default function RootLayout({
         <body>
         <Script
             async
-            src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6405059957088169"
+            src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT}`}
             crossOrigin="anonymous"
             strategy="afterInteractive"
         />
@@ -78,7 +84,8 @@ export default function RootLayout({
         <main className="min-h-[60vh]">{children}</main>
         <Footer />
 
-        <script
+        <Script
+            id="ld-json-website"
             type="application/ld+json"
             dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />

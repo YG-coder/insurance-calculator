@@ -3,7 +3,7 @@ import { SITE, CALCULATORS } from "@/lib/site";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();
-  const staticPages = ["", "/about", "/privacy", "/terms"];
+  const staticPages = ["", "/about", "/privacy", "/terms", "/disclaimer"];
 
   return [
     ...staticPages.map((p) => ({

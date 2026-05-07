@@ -1,189 +1,134 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import ResultCard from "@/components/ResultCard";
 
-type CarType = "compact" | "midsize" | "fullsize" | "suv" | "import";
-
-function formatKRW(n: number) {
-  return n.toLocaleString("ko-KR") + "원";
-}
-
-const CAR_FACTOR: Record<CarType, number> = {
-  compact: 0.8,
-  midsize: 1.0,
-  fullsize: 1.3,
-  suv: 1.2,
-  import: 1.8,
-};
-
-const CAR_LABEL: Record<CarType, string> = {
-  compact: "경/소형",
-  midsize: "중형",
-  fullsize: "대형",
-  suv: "SUV",
-  import: "수입차",
-};
-
-function driverAgeFactor(age: number) {
-  if (age < 21) return 2.5;
-  if (age < 26) return 1.7;
-  if (age < 30) return 1.3;
-  if (age < 50) return 1.0;
-  if (age < 60) return 1.05;
-  if (age < 70) return 1.2;
-  return 1.5;
-}
-
-function experienceFactor(years: number) {
-  if (years < 1) return 1.4;
-  if (years < 3) return 1.2;
-  if (years < 5) return 1.05;
-  if (years < 10) return 0.95;
-  return 0.85;
-}
-
-function accidentFactor(count: number) {
-  if (count <= 0) return 0.9;
-  if (count === 1) return 1.15;
-  if (count === 2) return 1.4;
-  return 1.8;
-}
+const won = (n: number) =>
+  `${Math.max(0, Math.round(n)).toLocaleString("ko-KR")}원`;
 
 export default function CarCalc() {
-  const [age, setAge] = useState<string>("");
-  const [experience, setExperience] = useState<string>("");
-  const [accidents, setAccidents] = useState<string>("0");
-  const [carType, setCarType] = useState<CarType>("midsize");
-  const [carValue, setCarValue] = useState<string>("25000000");
+  const [age, setAge] = useState<string>("35");
+  const [years, setYears] = useState<string>("5"); // 운전 경력
+  const [accidents, setAccidents] = useState<string>("0"); // 최근 3년 사고
+  const [carValue, setCarValue] = useState<string>("25000000"); // 차량가액
+  const [submitted, setSubmitted] = useState(false);
 
-  const result = useMemo(() => {
-    const ageNum = parseInt(age, 10);
-    const expNum = parseInt(experience, 10);
-    const accNum = parseInt(accidents, 10);
-    const value = parseInt(carValue.replace(/[^0-9]/g, ""), 10);
+  const ageNum = Math.min(80, Math.max(18, Number(age) || 0));
+  const yearsNum = Math.min(50, Math.max(0, Number(years) || 0));
+  const accNum = Math.min(10, Math.max(0, Number(accidents) || 0));
+  const valNum = Number(carValue.replace(/[^0-9]/g, "")) || 0;
 
-    if (!ageNum || ageNum < 18 || ageNum > 100) return null;
-    if (isNaN(expNum) || expNum < 0) return null;
-    if (!value || value <= 0) return null;
+  // 단순화된 자동차보험료 모델 (참고용)
+  // 기본료: 차량가액의 4% 연납
+  const baseAnnual = valNum * 0.04;
 
-    // 차량가액 1천만 원당 기본 보험료 (참고용 단순화)
-    const basePerTenMillion = 200_000;
-    const tenMillions = value / 10_000_000;
+  // 연령 요율: 26세 이상 1.0, 21~25세 1.2, 21세 미만 1.5
+  const ageFactor = ageNum >= 26 ? 1.0 : ageNum >= 21 ? 1.2 : 1.5;
 
-    const factor =
-      CAR_FACTOR[carType] *
-      driverAgeFactor(ageNum) *
-      experienceFactor(expNum) *
-      accidentFactor(accNum);
+  // 경력 할인: 1년 -3%, 최대 -30%
+  const expDiscount = Math.min(0.3, yearsNum * 0.03);
 
-    const yearly = Math.round(basePerTenMillion * tenMillions * factor);
-    const monthly = Math.round(yearly / 12);
-    const low = Math.round(yearly * 0.8);
-    const high = Math.round(yearly * 1.2);
+  // 사고 할증: 1건 +15%
+  const accFactor = 1 + accNum * 0.15;
 
-    return { yearly, monthly, low, high };
-  }, [age, experience, accidents, carType, carValue]);
+  const annual = baseAnnual * ageFactor * accFactor * (1 - expDiscount);
+  const monthly = annual / 12;
+  const low = annual * 0.85;
+  const high = annual * 1.2;
 
   return (
     <div className="card">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div>
-          <label className="label-base">운전자 연령</label>
+          <label className="label-base" htmlFor="car-age">
+            나이 (만)
+          </label>
           <input
-            type="number"
-            min={18}
-            max={100}
-            placeholder="예: 35"
+            id="car-age"
+            inputMode="numeric"
+            className="input-base"
             value={age}
-            onChange={(e) => setAge(e.target.value)}
-            className="input-base"
+            onChange={(e) => setAge(e.target.value.replace(/[^0-9]/g, ""))}
+            placeholder="예: 35"
           />
         </div>
 
         <div>
-          <label className="label-base">운전 경력 (년)</label>
+          <label className="label-base" htmlFor="car-years">
+            운전 경력 (년)
+          </label>
           <input
-            type="number"
-            min={0}
-            max={70}
-            placeholder="예: 5"
-            value={experience}
-            onChange={(e) => setExperience(e.target.value)}
+            id="car-years"
+            inputMode="numeric"
             className="input-base"
+            value={years}
+            onChange={(e) => setYears(e.target.value.replace(/[^0-9]/g, ""))}
+            placeholder="예: 5"
           />
         </div>
 
         <div>
-          <label className="label-base">최근 3년 사고 건수</label>
-          <select
-            value={accidents}
-            onChange={(e) => setAccidents(e.target.value)}
+          <label className="label-base" htmlFor="car-acc">
+            최근 3년 사고 건수
+          </label>
+          <input
+            id="car-acc"
+            inputMode="numeric"
             className="input-base"
-          >
-            <option value="0">무사고</option>
-            <option value="1">1건</option>
-            <option value="2">2건</option>
-            <option value="3">3건 이상</option>
-          </select>
+            value={accidents}
+            onChange={(e) =>
+              setAccidents(e.target.value.replace(/[^0-9]/g, ""))
+            }
+            placeholder="예: 0"
+          />
         </div>
 
         <div>
-          <label className="label-base">차종</label>
-          <select
-            value={carType}
-            onChange={(e) => setCarType(e.target.value as CarType)}
+          <label className="label-base" htmlFor="car-value">
+            차량가액 (원)
+          </label>
+          <input
+            id="car-value"
+            inputMode="numeric"
             className="input-base"
-          >
-            {Object.entries(CAR_LABEL).map(([k, v]) => (
-              <option key={k} value={k}>
-                {v}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="sm:col-span-2">
-          <label className="label-base">차량가액</label>
-          <select
             value={carValue}
-            onChange={(e) => setCarValue(e.target.value)}
-            className="input-base"
-          >
-            <option value="10000000">1,000만 원</option>
-            <option value="15000000">1,500만 원</option>
-            <option value="20000000">2,000만 원</option>
-            <option value="25000000">2,500만 원</option>
-            <option value="30000000">3,000만 원</option>
-            <option value="40000000">4,000만 원</option>
-            <option value="50000000">5,000만 원</option>
-            <option value="70000000">7,000만 원</option>
-            <option value="100000000">1억 원</option>
-          </select>
+            onChange={(e) =>
+              setCarValue(e.target.value.replace(/[^0-9]/g, ""))
+            }
+            placeholder="예: 25000000"
+          />
+          <p className="mt-2 text-xs text-slate-500">
+            현재 차량가액: {won(valNum)}
+          </p>
         </div>
       </div>
 
-      {result ? (
-        <div className="mt-6">
+      <div className="mt-6">
+        <button
+          type="button"
+          className="btn-primary w-full sm:w-auto"
+          onClick={() => setSubmitted(true)}
+        >
+          예상 자동차보험료 계산하기
+        </button>
+      </div>
+
+      {submitted && valNum > 0 && (
+        <div className="mt-8">
           <ResultCard
-            title="예상 자동차보험료 (참고용)"
+            title="예상 자동차보험료 (연납 기준 · 참고용)"
             items={[
-              { label: "예상 연 보험료", value: formatKRW(result.yearly), highlight: true },
-              { label: "월 환산", value: formatKRW(result.monthly) },
-              {
-                label: "최저 ~ 최고 (보험사 변동성)",
-                value: `${formatKRW(result.low)} ~ ${formatKRW(result.high)}`,
-              },
+              { label: "최저 추정 (연)", value: won(low) },
+              { label: "중심값 (연)", value: won(annual), highlight: true },
+              { label: "최고 추정 (연)", value: won(high) },
+              { label: "월 환산 (중심값)", value: won(monthly) },
             ]}
           />
-          <p className="mt-3 text-sm text-slate-600 leading-relaxed">
-            동일 조건이라도 보험사·담보 구성·특약·블랙박스 할인 등에 따라 실제 보험료는 크게 달라질 수 있습니다.
-            <strong> 다이렉트 자동차보험 비교 견적</strong>을 통해 정확한 금액을 확인하시기 바랍니다.
+          <p className="mt-3 text-xs text-slate-500">
+            ※ 본 결과는 운전경력·사고이력·차량가액만을 단순 반영한 추정치이며,
+            실제 보험료는 차종, 운행 거리, 가입담보, 특약, 보험사별 요율에 따라
+            크게 달라질 수 있습니다.
           </p>
-        </div>
-      ) : (
-        <div className="mt-6 text-sm text-slate-500 bg-slate-50 rounded-xl p-4">
-          연령, 경력, 차량 정보를 입력하면 예상 보험료가 자동으로 계산됩니다.
         </div>
       )}
     </div>

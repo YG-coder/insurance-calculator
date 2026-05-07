@@ -1,66 +1,54 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import ResultCard from "@/components/ResultCard";
 
-type Sex = "male" | "female";
+type Gender = "male" | "female";
 
-function formatKRW(n: number) {
-  return n.toLocaleString("ko-KR") + "원";
-}
-
-// 나이대별 기본 위험 계수 (참고용 단순화)
-function ageFactor(age: number) {
-  if (age < 20) return 0.6;
-  if (age < 30) return 0.8;
-  if (age < 40) return 1.0;
-  if (age < 50) return 1.4;
-  if (age < 60) return 2.0;
-  if (age < 70) return 3.0;
-  return 4.5;
-}
+const won = (n: number) =>
+  `${Math.max(0, Math.round(n)).toLocaleString("ko-KR")}원`;
 
 export default function PremiumCalc() {
-  const [age, setAge] = useState<string>("");
-  const [sex, setSex] = useState<Sex>("male");
+  const [age, setAge] = useState<string>("35");
+  const [gender, setGender] = useState<Gender>("male");
   const [smoker, setSmoker] = useState<boolean>(false);
-  const [coverage, setCoverage] = useState<string>("50000000");
+  const [coverage, setCoverage] = useState<string>("100000000"); // 1억
+  const [submitted, setSubmitted] = useState(false);
 
-  const result = useMemo(() => {
-    const ageNum = parseInt(age, 10);
-    const cov = parseInt(coverage.replace(/[^0-9]/g, ""), 10);
+  const ageNum = Math.min(80, Math.max(0, Number(age) || 0));
+  const covNum = Number(coverage.replace(/[^0-9]/g, "")) || 0;
 
-    if (!ageNum || ageNum < 0 || ageNum > 100) return null;
-    if (!cov || cov <= 0) return null;
+  // 매우 단순화된 위험률 모델 (참고용)
+  // base: 보장금액 1천만 원당 월 800원
+  const base = (covNum / 10_000_000) * 800;
 
-    const basePerTenMillion = 3000; // 보장 1천만 원당 기본 (참고용 단순화)
-    const tenMillions = cov / 10_000_000;
+  // 연령 가산: 30세 1.0배, 10년 +0.6배
+  const ageFactor = 1 + Math.max(0, ageNum - 30) * 0.06;
 
-    let factor = ageFactor(ageNum);
-    if (sex === "female") factor *= 0.85;
-    if (smoker) factor *= 1.3;
+  // 성별: 남성 1.0, 여성 0.85
+  const genderFactor = gender === "male" ? 1.0 : 0.85;
 
-    const monthly = Math.round(basePerTenMillion * tenMillions * factor);
-    const low = Math.round(monthly * 0.8);
-    const high = Math.round(monthly * 1.2);
-    const yearly = monthly * 12;
+  // 흡연: 1.3배
+  const smokeFactor = smoker ? 1.3 : 1.0;
 
-    return { monthly, low, high, yearly };
-  }, [age, sex, smoker, coverage]);
+  const center = base * ageFactor * genderFactor * smokeFactor;
+  const low = center * 0.8;
+  const high = center * 1.25;
 
   return (
     <div className="card">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div>
-          <label className="label-base">나이</label>
+          <label className="label-base" htmlFor="age">
+            나이 (만)
+          </label>
           <input
-            type="number"
-            min={0}
-            max={100}
-            placeholder="예: 35"
-            value={age}
-            onChange={(e) => setAge(e.target.value)}
+            id="age"
+            inputMode="numeric"
             className="input-base"
+            value={age}
+            onChange={(e) => setAge(e.target.value.replace(/[^0-9]/g, ""))}
+            placeholder="예: 35"
           />
         </div>
 
@@ -69,9 +57,9 @@ export default function PremiumCalc() {
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
-              onClick={() => setSex("male")}
-              className={`px-4 py-3 rounded-xl border font-semibold transition ${
-                sex === "male"
+              onClick={() => setGender("male")}
+              className={`px-4 py-3 rounded-xl border text-sm font-semibold transition ${
+                gender === "male"
                   ? "bg-brand-600 text-white border-brand-600"
                   : "bg-white text-slate-700 border-slate-300 hover:border-brand-300"
               }`}
@@ -80,9 +68,9 @@ export default function PremiumCalc() {
             </button>
             <button
               type="button"
-              onClick={() => setSex("female")}
-              className={`px-4 py-3 rounded-xl border font-semibold transition ${
-                sex === "female"
+              onClick={() => setGender("female")}
+              className={`px-4 py-3 rounded-xl border text-sm font-semibold transition ${
+                gender === "female"
                   ? "bg-brand-600 text-white border-brand-600"
                   : "bg-white text-slate-700 border-slate-300 hover:border-brand-300"
               }`}
@@ -98,7 +86,7 @@ export default function PremiumCalc() {
             <button
               type="button"
               onClick={() => setSmoker(false)}
-              className={`px-4 py-3 rounded-xl border font-semibold transition ${
+              className={`px-4 py-3 rounded-xl border text-sm font-semibold transition ${
                 !smoker
                   ? "bg-brand-600 text-white border-brand-600"
                   : "bg-white text-slate-700 border-slate-300 hover:border-brand-300"
@@ -109,7 +97,7 @@ export default function PremiumCalc() {
             <button
               type="button"
               onClick={() => setSmoker(true)}
-              className={`px-4 py-3 rounded-xl border font-semibold transition ${
+              className={`px-4 py-3 rounded-xl border text-sm font-semibold transition ${
                 smoker
                   ? "bg-brand-600 text-white border-brand-600"
                   : "bg-white text-slate-700 border-slate-300 hover:border-brand-300"
@@ -121,43 +109,50 @@ export default function PremiumCalc() {
         </div>
 
         <div>
-          <label className="label-base">보장금액</label>
-          <select
-            value={coverage}
-            onChange={(e) => setCoverage(e.target.value)}
+          <label className="label-base" htmlFor="coverage">
+            보장금액 (원)
+          </label>
+          <input
+            id="coverage"
+            inputMode="numeric"
             className="input-base"
-          >
-            <option value="10000000">1,000만 원</option>
-            <option value="30000000">3,000만 원</option>
-            <option value="50000000">5,000만 원</option>
-            <option value="100000000">1억 원</option>
-            <option value="200000000">2억 원</option>
-            <option value="300000000">3억 원</option>
-          </select>
+            value={coverage}
+            onChange={(e) =>
+              setCoverage(e.target.value.replace(/[^0-9]/g, ""))
+            }
+            placeholder="예: 100000000"
+          />
+          <p className="mt-2 text-xs text-slate-500">
+            현재 보장금액: {won(covNum)}
+          </p>
         </div>
       </div>
 
-      {result ? (
-        <div className="mt-6">
+      <div className="mt-6">
+        <button
+          type="button"
+          className="btn-primary w-full sm:w-auto"
+          onClick={() => setSubmitted(true)}
+        >
+          예상 보험료 계산하기
+        </button>
+      </div>
+
+      {submitted && covNum > 0 && ageNum > 0 && (
+        <div className="mt-8">
           <ResultCard
-            title="예상 보험료 범위 (참고용)"
+            title="예상 월 보험료 범위 (참고용 추정)"
             items={[
-              { label: "예상 월 보험료", value: formatKRW(result.monthly), highlight: true },
-              {
-                label: "최저 ~ 최고 (보험사 변동성)",
-                value: `${formatKRW(result.low)} ~ ${formatKRW(result.high)}`,
-              },
-              { label: "연간 예상", value: formatKRW(result.yearly) },
+              { label: "최저 추정", value: won(low) },
+              { label: "중심값", value: won(center), highlight: true },
+              { label: "최고 추정", value: won(high) },
             ]}
           />
-          <p className="mt-3 text-sm text-slate-600 leading-relaxed">
-            동일 조건이라도 보험사·상품·특약 구성에 따라 실제 보험료는 ±20% 이상 차이날 수 있습니다.
-            정확한 견적은 각 보험사 공식 채널에서 확인하시기 바랍니다.
+          <p className="mt-3 text-xs text-slate-500">
+            ※ 본 계산은 일반적인 산정 요소를 단순화한 추정치이며, 실제 보험료는
+            보험사 상품·심사 결과·특약·납입 방식에 따라 크게 달라질 수
+            있습니다.
           </p>
-        </div>
-      ) : (
-        <div className="mt-6 text-sm text-slate-500 bg-slate-50 rounded-xl p-4">
-          나이와 보장금액을 입력하면 예상 보험료 범위가 자동으로 계산됩니다.
         </div>
       )}
     </div>

@@ -50,6 +50,11 @@ export default function Footer() {
                   이용약관
                 </Link>
               </li>
+              <li>
+                <Link href="/disclaimer" className="hover:text-brand-400">
+                  면책사항
+                </Link>
+              </li>
             </ul>
           </div>
         </div>

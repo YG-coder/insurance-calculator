@@ -176,6 +176,27 @@ export default function HealthPage() {
           보험사의 약관과 안내를 따르시기 바랍니다.
         </NoticeBox>
       </div>
+      <div className="mt-12 border-t pt-6">
+        <p className="mb-3 text-sm font-semibold text-slate-700">
+          다른 계산기도 확인해보세요
+        </p>
+
+        <div className="flex flex-wrap gap-3 text-sm">
+          <a
+              href="/insurance-premium-calculator"
+              className="text-brand-600 hover:underline"
+          >
+            보험료 계산기
+          </a>
+
+          <a
+              href="/car-insurance-calculator"
+              className="text-brand-600 hover:underline"
+          >
+            자동차보험 계산기
+          </a>
+        </div>
+      </div>
     </article>
   );
 }

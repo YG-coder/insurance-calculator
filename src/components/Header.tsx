@@ -20,6 +20,9 @@ export default function Header() {
           <Link href="/car-insurance-calculator" className="hover:text-brand-600 transition">
             자동차보험
           </Link>
+          <Link href="/guide" className="hover:text-brand-600 transition">
+            가이드
+          </Link>
           <Link href="/about" className="hover:text-brand-600 transition">
             소개
           </Link>

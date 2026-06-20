@@ -4,6 +4,7 @@ import NoticeBox from "@/components/NoticeBox";
 import CTABox from "@/components/CTABox";
 import FAQ from "@/components/FAQ";
 import RelatedCalculators from "@/components/RelatedCalculators";
+import RelatedGuides from "@/components/RelatedGuides";
 import { SITE } from "@/lib/site";
 
 const PAGE_URL = `${SITE.url}/car-insurance-calculator`;
@@ -146,6 +147,8 @@ export default function CarPage() {
           아닙니다. 가입 전 반드시 약관과 보험사 공식 견적을 확인하시기 바랍니다.
         </NoticeBox>
       </div>
+
+      <RelatedGuides cluster="car" />
 
       <div className="mt-12 border-t pt-6">
         <p className="mb-3 text-sm font-semibold text-slate-700">

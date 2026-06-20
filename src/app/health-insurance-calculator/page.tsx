@@ -4,6 +4,7 @@ import NoticeBox from "@/components/NoticeBox";
 import CTABox from "@/components/CTABox";
 import FAQ from "@/components/FAQ";
 import RelatedCalculators from "@/components/RelatedCalculators";
+import RelatedGuides from "@/components/RelatedGuides";
 import { SITE } from "@/lib/site";
 
 const URL = `${SITE.url}/health-insurance-calculator`;
@@ -176,6 +177,8 @@ export default function HealthPage() {
           보험사의 약관과 안내를 따르시기 바랍니다.
         </NoticeBox>
       </div>
+      <RelatedGuides cluster="health" />
+
       <div className="mt-12 border-t pt-6">
         <p className="mb-3 text-sm font-semibold text-slate-700">
           다른 계산기도 확인해보세요

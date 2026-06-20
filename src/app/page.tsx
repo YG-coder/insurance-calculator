@@ -3,6 +3,7 @@ import Link from "next/link";
 import CalculatorCard from "@/components/CalculatorCard";
 import FAQ from "@/components/FAQ";
 import { CALCULATORS, SITE } from "@/lib/site";
+import { publishedGuides } from "@/lib/guides";
 
 export const metadata: Metadata = {
   title: `${SITE.name} - 실손·자동차·보험료 무료 계산`,
@@ -119,6 +120,40 @@ export default function HomePage() {
               </li>
             </ul>
           </div>
+        </div>
+      </section>
+
+      <section className="container-base py-14">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">
+            보험 가이드
+          </h2>
+          <Link
+            href="/guide"
+            className="text-sm font-semibold text-brand-600 hover:text-brand-700"
+          >
+            전체 보기 →
+          </Link>
+        </div>
+        <p className="text-slate-600 mb-6">
+          계산만으로는 부족하다면, 보험을 고르고 활용하는 데 도움이 되는 가이드도
+          함께 확인해보세요.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {publishedGuides()
+            .slice(0, 6)
+            .map((g) => (
+              <Link
+                key={g.slug}
+                href={`/guide/${g.slug}`}
+                className="card hover:border-brand-300 hover:shadow-md transition"
+              >
+                <div className="font-semibold text-slate-900">{g.title}</div>
+                <div className="text-xs text-slate-600 mt-2 leading-relaxed">
+                  {g.description}
+                </div>
+              </Link>
+            ))}
         </div>
       </section>
 

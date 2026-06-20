@@ -1,6 +1,6 @@
 export const SITE = {
   name: "보험계산기",
-  url: "https://보험계산기.kr",
+  url: "https://xn--989a00a773aktdxo7a.kr",
   description:
     "실손보험, 보험료, 자동차보험을 무료로 계산해보세요. 2026년 기준 참고용 보험 계산기 전문 사이트입니다.",
 };

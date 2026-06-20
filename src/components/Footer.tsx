@@ -30,6 +30,11 @@ export default function Footer() {
                   자동차보험 계산기
                 </Link>
               </li>
+              <li>
+                <Link href="/guide" className="hover:text-brand-400">
+                  보험 가이드
+                </Link>
+              </li>
             </ul>
           </div>
           <div>

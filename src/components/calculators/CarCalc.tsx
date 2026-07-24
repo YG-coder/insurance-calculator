@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import ResultCard from "@/components/ResultCard";
+import AmountInput from "@/components/AmountInput";
 
 const won = (n: number) =>
   `${Math.max(0, Math.round(n)).toLocaleString("ko-KR")}원`;
@@ -87,19 +88,12 @@ export default function CarCalc() {
           <label className="label-base" htmlFor="car-value">
             차량가액 (원)
           </label>
-          <input
+          <AmountInput
             id="car-value"
-            inputMode="numeric"
-            className="input-base"
             value={carValue}
-            onChange={(e) =>
-              setCarValue(e.target.value.replace(/[^0-9]/g, ""))
-            }
-            placeholder="예: 25000000"
+            onChange={setCarValue}
+            placeholder="예: 25,000,000"
           />
-          <p className="mt-2 text-xs text-slate-500">
-            현재 차량가액: {won(valNum)}
-          </p>
         </div>
       </div>
 

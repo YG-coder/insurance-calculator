@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import ResultCard from "@/components/ResultCard";
+import AmountInput from "@/components/AmountInput";
 
 type Coverage = "benefit" | "non_benefit"; // 급여 / 비급여
 type Visit = "outpatient" | "inpatient";   // 통원 / 입원
@@ -46,17 +47,12 @@ export default function HealthCalc() {
           <label className="label-base" htmlFor="med-amount">
             병원비 (원)
           </label>
-          <input
+          <AmountInput
             id="med-amount"
-            inputMode="numeric"
-            className="input-base"
             value={amount}
-            onChange={(e) => setAmount(e.target.value.replace(/[^0-9]/g, ""))}
-            placeholder="예: 300000"
+            onChange={setAmount}
+            placeholder="예: 300,000"
           />
-          <p className="mt-2 text-xs text-slate-500">
-            현재 입력 금액: {won(num)}
-          </p>
         </div>
 
         <div>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import ResultCard from "@/components/ResultCard";
+import AmountInput from "@/components/AmountInput";
 
 type Gender = "male" | "female";
 
@@ -112,19 +113,12 @@ export default function PremiumCalc() {
           <label className="label-base" htmlFor="coverage">
             보장금액 (원)
           </label>
-          <input
+          <AmountInput
             id="coverage"
-            inputMode="numeric"
-            className="input-base"
             value={coverage}
-            onChange={(e) =>
-              setCoverage(e.target.value.replace(/[^0-9]/g, ""))
-            }
-            placeholder="예: 100000000"
+            onChange={setCoverage}
+            placeholder="예: 100,000,000"
           />
-          <p className="mt-2 text-xs text-slate-500">
-            현재 보장금액: {won(covNum)}
-          </p>
         </div>
       </div>
 

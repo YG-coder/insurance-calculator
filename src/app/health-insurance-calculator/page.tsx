@@ -69,6 +69,16 @@ export default function HealthPage() {
         </Link>
       </div>
 
+      <div className="mt-3">
+        <Link
+          href="/surrender-value-calculator"
+          className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-5 py-4 font-semibold text-slate-700 transition hover:border-brand-300 hover:shadow-md"
+        >
+          <span>보험 해지를 고민 중이라면? 해지환급금 계산기로 손익 확인하기</span>
+          <span aria-hidden>→</span>
+        </Link>
+      </div>
+
       <div className="mt-6">
         <CTABox />
       </div>

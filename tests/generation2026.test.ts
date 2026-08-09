@@ -1,4 +1,4 @@
-import { calc2026 } from "../src/lib/insurance/generation2026";
+import { calc2026 } from "../src/lib/insurance/engine/generation2026";
 
 let pass = 0, fail = 0;
 function check(name: string, cond: boolean, detail = "") {

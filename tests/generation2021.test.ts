@@ -1,6 +1,6 @@
-import { calc2021 } from "../src/lib/insurance/generation2021";
+import { calc2021 } from "../src/lib/insurance/engine/generation2021";
 import { reference2021 } from "./_reference2021";
-import { Coverage, Visit, Tier } from "../src/lib/insurance/types";
+import { Coverage, Visit, Tier } from "../src/lib/insurance/engine/types";
 
 const amounts = [0, 15000, 30000, 50000, 100000, 300000, 1000000, 5000000]; // 8
 const coverages: Coverage[] = ["benefit", "non_benefit"];                    // 2

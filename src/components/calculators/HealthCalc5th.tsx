@@ -4,8 +4,8 @@ import { useState } from "react";
 import ResultCard from "@/components/ResultCard";
 import AmountInput from "@/components/AmountInput";
 import NoticeBox from "@/components/NoticeBox";
-import { calculate } from "@/lib/insurance/engine";
-import { Coverage, Visit, Tier, Severity } from "@/lib/insurance/types";
+import { calculate } from "@/lib/insurance/engine/engine";
+import { Coverage, Visit, Tier, Severity } from "@/lib/insurance/engine/types";
 
 const won = (n: number) =>
   `${Math.max(0, Math.round(n)).toLocaleString("ko-KR")}원`;

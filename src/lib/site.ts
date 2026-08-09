@@ -21,6 +21,13 @@ export const CALCULATORS = [
     icon: "🆕",
   },
   {
+    title: "해지환급금 계산기",
+    short: "해지환급금",
+    description: "보험을 지금 해지하면 돌려받는 금액과 손실을 계산합니다.",
+    href: "/surrender-value-calculator",
+    icon: "💸",
+  },
+  {
     title: "보험료 계산기",
     short: "보험료",
     description: "나이·성별·보장금액 기준 예상 보험료 범위를 확인합니다.",

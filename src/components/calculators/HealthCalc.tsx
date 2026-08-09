@@ -3,7 +3,7 @@
 import { useState } from "react";
 import ResultCard from "@/components/ResultCard";
 import AmountInput from "@/components/AmountInput";
-import { calculate } from "@/lib/insurance/engine";
+import { calculate } from "@/lib/insurance/engine/engine";
 
 type Coverage = "benefit" | "non_benefit"; // 급여 / 비급여
 type Visit = "outpatient" | "inpatient";   // 통원 / 입원

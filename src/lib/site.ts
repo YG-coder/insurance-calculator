@@ -14,6 +14,13 @@ export const CALCULATORS = [
     icon: "🏥",
   },
   {
+    title: "5세대 실손보험 자기부담금 계산기",
+    short: "5세대 실손",
+    description: "2026년 출시 5세대 실손보험 기준 본인부담금과 보험 적용 금액을 계산합니다.",
+    href: "/5th-generation-health-insurance-calculator",
+    icon: "🆕",
+  },
+  {
     title: "보험료 계산기",
     short: "보험료",
     description: "나이·성별·보장금액 기준 예상 보험료 범위를 확인합니다.",

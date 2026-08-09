@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import HealthCalc from "@/components/calculators/HealthCalc";
 import NoticeBox from "@/components/NoticeBox";
 import CTABox from "@/components/CTABox";
@@ -57,6 +58,16 @@ export default function HealthPage() {
       </header>
 
       <HealthCalc />
+
+      <div className="mt-6">
+        <Link
+          href="/5th-generation-health-insurance-calculator"
+          className="flex items-center justify-between gap-3 rounded-xl border-2 border-brand-200 bg-brand-50 px-5 py-4 font-semibold text-brand-800 transition hover:border-brand-300 hover:shadow-md"
+        >
+          <span>2026년 5세대 실손보험에 가입하셨나요? 5세대 실손보험 기준으로 계산하기</span>
+          <span aria-hidden>→</span>
+        </Link>
+      </div>
 
       <div className="mt-6">
         <CTABox />

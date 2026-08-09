@@ -3,6 +3,7 @@
 import { useState } from "react";
 import ResultCard from "@/components/ResultCard";
 import AmountInput from "@/components/AmountInput";
+import { calculate } from "@/lib/insurance/engine";
 
 type Coverage = "benefit" | "non_benefit"; // 급여 / 비급여
 type Visit = "outpatient" | "inpatient";   // 통원 / 입원
@@ -20,25 +21,14 @@ export default function HealthCalc() {
 
   const num = Number(amount.replace(/[^0-9]/g, "")) || 0;
 
-  // 4세대 실손 자기부담률 (금융위원회 안내 기준)
-  // 급여: 입원·통원 동일 20% / 비급여: 입원·통원 동일 30%
-  const rate = coverage === "benefit" ? 0.2 : 0.3;
-
-  // 통원 최소공제액 (입원은 정률만 적용, 최소공제액 없음)
-  // 급여: 병·의원급 1만 원 / 상급종합·종합병원 2만 원
-  // 비급여: 3만 원 (의료기관 구분 없음)
-  const minDeductible =
-    visit !== "outpatient"
-      ? 0
-      : coverage === "benefit"
-      ? tier === "clinic"
-        ? 10000
-        : 20000
-      : 30000;
-
-  const rateBased = num * rate;
-  const ownPay = Math.max(rateBased, minDeductible);
-  const insurancePay = Math.max(num - ownPay, 0);
+  // 계산은 실손보험 엔진(generation2021)에 위임. 산식은 src/lib/insurance/ 로 이동.
+  // 내부 엔진 교체이며, 화면·상태·라벨·결과값은 종전과 동일하다.
+  const result = calculate("2021", { amount: num, coverage, visit, tier });
+  const rate = result.rateApplied ?? 0;
+  const minDeductible = result.minDeductible ?? 0;
+  const rateBased = result.rateBased ?? 0;
+  const ownPay = result.ownPay ?? 0;
+  const insurancePay = result.insurancePay ?? 0;
 
   return (
     <div className="card">

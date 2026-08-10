@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import HealthSurrenderCalc from "@/components/calculators/HealthSurrenderCalc";
 import NoticeBox from "@/components/NoticeBox";
 import RelatedCalculators from "@/components/RelatedCalculators";
@@ -42,6 +43,16 @@ export default function SurrenderValuePage() {
           이 계산기는 사용자가 입력한 값만으로 계산하며, 상품별 평균 환급률이나 예정이율 같은 추정값을
           제시하지 않습니다. 정확한 해지환급금은 가입하신 보험의 약관 또는 보험사 앱에서 확인하세요.
         </NoticeBox>
+      </div>
+
+      <div className="mt-3">
+        <Link
+          href="/future-premium-calculator"
+          className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-5 py-4 font-semibold text-slate-700 transition hover:border-brand-300 hover:shadow-md"
+        >
+          <span>반대로, 그대로 유지하면? 앞으로 낼 보험료 계산하기</span>
+          <span aria-hidden>→</span>
+        </Link>
       </div>
 
       <RelatedCalculators currentHref="/surrender-value-calculator" />

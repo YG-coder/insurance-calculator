@@ -28,6 +28,13 @@ export const CALCULATORS = [
     icon: "💸",
   },
   {
+    title: "앞으로 낼 보험료 계산기",
+    short: "앞으로 낼 보험료",
+    description: "보험을 끝까지 유지하면 앞으로 얼마를 더 내야 하는지 계산합니다.",
+    href: "/future-premium-calculator",
+    icon: "📆",
+  },
+  {
     title: "보험료 계산기",
     short: "보험료",
     description: "나이·성별·보장금액 기준 예상 보험료 범위를 확인합니다.",

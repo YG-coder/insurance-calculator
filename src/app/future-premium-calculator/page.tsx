@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import FuturePremiumCalc from "@/components/calculators/FuturePremiumCalc";
 import NoticeBox from "@/components/NoticeBox";
 import RelatedCalculators from "@/components/RelatedCalculators";
@@ -42,6 +43,16 @@ export default function FuturePremiumPage() {
           이 계산기는 사용자가 입력한 값만으로 계산하며, 보험료 인상률·물가·평균 보험료 같은 추정값을
           넣지 않습니다. 갱신형 보험의 실제 보험료는 조건에 따라 달라질 수 있습니다.
         </NoticeBox>
+      </div>
+
+      <div className="mt-3">
+        <Link
+          href="/surrender-value-calculator"
+          className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-5 py-4 font-semibold text-slate-700 transition hover:border-brand-300 hover:shadow-md"
+        >
+          <span>반대로, 지금 해지하면? 해지환급금 계산기로 손익 확인하기</span>
+          <span aria-hidden>→</span>
+        </Link>
       </div>
 
       <RelatedCalculators currentHref="/future-premium-calculator" />

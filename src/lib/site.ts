@@ -42,6 +42,20 @@ export const CALCULATORS = [
     icon: "⚖️",
   },
   {
+    title: "보장 공백 계산기",
+    short: "보장 공백",
+    description: "필요 보장금액과 현재 보장금액의 차이(부족·초과)를 계산합니다.",
+    href: "/coverage-gap-calculator",
+    icon: "🛡️",
+  },
+  {
+    title: "사망보장 계산기",
+    short: "사망보장",
+    description: "유족 필요자금과 준비된 자금의 차이로 필요한 사망보장금액을 계산합니다.",
+    href: "/death-coverage-calculator",
+    icon: "👪",
+  },
+  {
     title: "보험료 계산기",
     short: "보험료",
     description: "나이·성별·보장금액 기준 예상 보험료 범위를 확인합니다.",

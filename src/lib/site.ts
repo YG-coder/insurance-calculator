@@ -56,6 +56,13 @@ export const CALCULATORS = [
     icon: "👪",
   },
   {
+    title: "유족 생활비 계산기",
+    short: "유족 생활비",
+    description: "생애주기별 생활비를 구간으로 나눠 총 유족 생활비를 계산합니다.",
+    href: "/family-living-calculator",
+    icon: "👨‍👩‍👧",
+  },
+  {
     title: "보험료 계산기",
     short: "보험료",
     description: "나이·성별·보장금액 기준 예상 보험료 범위를 확인합니다.",

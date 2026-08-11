@@ -55,6 +55,16 @@ export default function FuturePremiumPage() {
         </Link>
       </div>
 
+      <div className="mt-3">
+        <Link
+          href="/cancel-vs-keep-calculator"
+          className="flex items-center justify-between gap-3 rounded-xl border-2 border-brand-200 bg-brand-50 px-5 py-4 font-semibold text-brand-800 transition hover:border-brand-300 hover:shadow-md"
+        >
+          <span>두 금액을 한 화면에서 보기 · 해지 vs 유지 계산기</span>
+          <span aria-hidden>→</span>
+        </Link>
+      </div>
+
       <RelatedCalculators currentHref="/future-premium-calculator" />
     </article>
   );

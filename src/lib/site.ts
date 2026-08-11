@@ -35,6 +35,13 @@ export const CALCULATORS = [
     icon: "📆",
   },
   {
+    title: "보험 해지 vs 유지 계산기",
+    short: "해지 vs 유지",
+    description: "해지환급금과 앞으로 낼 보험료를 한 화면에서 나란히 비교합니다.",
+    href: "/cancel-vs-keep-calculator",
+    icon: "⚖️",
+  },
+  {
     title: "보험료 계산기",
     short: "보험료",
     description: "나이·성별·보장금액 기준 예상 보험료 범위를 확인합니다.",

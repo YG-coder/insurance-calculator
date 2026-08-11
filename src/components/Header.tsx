@@ -11,23 +11,11 @@ export default function Header() {
           <span className="font-bold text-lg text-slate-900">보험계산기</span>
         </Link>
         <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-600">
-          <Link href="/health-insurance-calculator" className="hover:text-brand-600 transition">
-            실손보험
-          </Link>
-          <Link href="/surrender-value-calculator" className="hover:text-brand-600 transition">
-            해지환급금
-          </Link>
-          <Link href="/cancel-vs-keep-calculator" className="hover:text-brand-600 transition">
-            해지 vs 유지
-          </Link>
-          <Link href="/death-coverage-calculator" className="hover:text-brand-600 transition">
-            사망보장
+          <Link href="/#calculators" className="hover:text-brand-600 transition">
+            계산기
           </Link>
           <Link href="/guide" className="hover:text-brand-600 transition">
             가이드
-          </Link>
-          <Link href="/about" className="hover:text-brand-600 transition">
-            소개
           </Link>
         </nav>
         <nav className="flex md:hidden items-center gap-4 text-sm font-medium text-slate-600">

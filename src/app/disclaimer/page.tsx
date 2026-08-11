@@ -90,8 +90,8 @@ export default function DisclaimerPage() {
           면책사항
         </h1>
         <p className="mt-3 text-slate-600 leading-relaxed">
-          보험계산기({SITE.url})에서 제공하는 모든 계산 결과와 콘텐츠의 활용
-          범위, 정보의 한계, 책임의 범위에 대한 공식 안내입니다.
+          보험계산기.kr에서 제공하는 계산 결과와 콘텐츠의 활용 범위, 정보의 한계 및 책임 범위를
+          안내합니다.
         </p>
       </header>
 

@@ -2,7 +2,7 @@ export const SITE = {
   name: "보험계산기",
   url: "https://xn--989a00a773aktdxo7a.kr",
   description:
-    "실손보험, 보험료, 자동차보험을 무료로 계산해보세요. 2026년 기준 참고용 보험 계산기 전문 사이트입니다.",
+    "해지환급금·사망보장·보장 공백부터 실손보험 자기부담금까지, 보험 의사결정에 필요한 숫자를 직접 계산하세요. 추정값 없이 입력한 값으로 계산하는 참고용 보험 계산기입니다.",
 };
 
 export const CALCULATORS = [
@@ -63,16 +63,16 @@ export const CALCULATORS = [
     icon: "👨‍👩‍👧",
   },
   {
-    title: "보험료 계산기",
-    short: "보험료",
-    description: "나이·성별·보장금액 기준 예상 보험료 범위를 확인합니다.",
+    title: "보험료 비중 계산기",
+    short: "보험료 비중",
+    description: "월 소득에서 보험료가 차지하는 비중을 계산합니다.",
     href: "/insurance-premium-calculator",
-    icon: "💰",
+    icon: "💳",
   },
   {
-    title: "자동차보험 계산기",
-    short: "자동차보험",
-    description: "운전 경력과 사고 이력을 반영해 예상 자동차보험료를 산출합니다.",
+    title: "자동차보험 견적 비교 계산기",
+    short: "자동차 견적 비교",
+    description: "여러 보험사에서 받은 자동차보험 견적의 최저·최고·차액을 비교합니다.",
     href: "/car-insurance-calculator",
     icon: "🚗",
   },

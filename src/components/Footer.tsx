@@ -8,8 +8,8 @@ export default function Footer() {
           <div>
             <h3 className="text-white font-bold text-lg mb-3">보험계산기</h3>
             <p className="text-sm leading-relaxed">
-              실손보험, 보험료, 자동차보험을 한 곳에서 계산할 수 있는 참고용 보험
-              계산기 사이트입니다.
+              해지환급금·사망보장·보장 공백부터 실손보험 자기부담금까지, 보험 의사결정에 필요한 숫자를
+              입력한 값으로 직접 계산하는 참고용 보험 계산기 사이트입니다.
             </p>
           </div>
           <div>
@@ -21,13 +21,23 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/insurance-premium-calculator" className="hover:text-brand-400">
-                  보험료 계산기
+                <Link href="/surrender-value-calculator" className="hover:text-brand-400">
+                  해지환급금 계산기
                 </Link>
               </li>
               <li>
-                <Link href="/car-insurance-calculator" className="hover:text-brand-400">
-                  자동차보험 계산기
+                <Link href="/cancel-vs-keep-calculator" className="hover:text-brand-400">
+                  해지 vs 유지 계산기
+                </Link>
+              </li>
+              <li>
+                <Link href="/death-coverage-calculator" className="hover:text-brand-400">
+                  사망보장 계산기
+                </Link>
+              </li>
+              <li>
+                <Link href="/coverage-gap-calculator" className="hover:text-brand-400">
+                  보장 공백 계산기
                 </Link>
               </li>
               <li>

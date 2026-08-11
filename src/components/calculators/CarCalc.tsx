@@ -1,130 +1,125 @@
 "use client";
 
 import { useState } from "react";
-import ResultCard from "@/components/ResultCard";
 import AmountInput from "@/components/AmountInput";
+import NoticeBox from "@/components/NoticeBox";
+import { calcCarQuoteCompare } from "@/lib/insurance/decision/carQuoteCompare";
 
-const won = (n: number) =>
-  `${Math.max(0, Math.round(n)).toLocaleString("ko-KR")}원`;
+const won = (n: number) => `${Math.round(n).toLocaleString("ko-KR")}원`;
+const onlyNum = (s: string) => Number(s.replace(/[^0-9]/g, "")) || 0;
+
+interface Row { name: string; amount: string; }
+const emptyRow = (): Row => ({ name: "", amount: "" });
 
 export default function CarCalc() {
-  const [age, setAge] = useState<string>("35");
-  const [years, setYears] = useState<string>("5"); // 운전 경력
-  const [accidents, setAccidents] = useState<string>("0"); // 최근 3년 사고
-  const [carValue, setCarValue] = useState<string>("25000000"); // 차량가액
+  const [rows, setRows] = useState<Row[]>([emptyRow(), emptyRow()]);
   const [submitted, setSubmitted] = useState(false);
 
-  const ageNum = Math.min(80, Math.max(18, Number(age) || 0));
-  const yearsNum = Math.min(50, Math.max(0, Number(years) || 0));
-  const accNum = Math.min(10, Math.max(0, Number(accidents) || 0));
-  const valNum = Number(carValue.replace(/[^0-9]/g, "")) || 0;
+  const update = (i: number, key: keyof Row, val: string) =>
+    setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, [key]: val } : r)));
+  const addRow = () => setRows((prev) => (prev.length < 6 ? [...prev, emptyRow()] : prev));
+  const removeRow = (i: number) => setRows((prev) => prev.filter((_, idx) => idx !== i));
 
-  // 단순화된 자동차보험료 모델 (참고용)
-  // 기본료: 차량가액의 4% 연납
-  const baseAnnual = valNum * 0.04;
+  // 유효 견적 = 금액 입력된(빈 문자열 아님) 행. 최소 2개.
+  const validCount = rows.filter((r) => r.amount.trim() !== "").length;
+  const canCalc = validCount >= 2;
 
-  // 연령 요율: 26세 이상 1.0, 21~25세 1.2, 21세 미만 1.5
-  const ageFactor = ageNum >= 26 ? 1.0 : ageNum >= 21 ? 1.2 : 1.5;
-
-  // 경력 할인: 1년 -3%, 최대 -30%
-  const expDiscount = Math.min(0.3, yearsNum * 0.03);
-
-  // 사고 할증: 1건 +15%
-  const accFactor = 1 + accNum * 0.15;
-
-  const annual = baseAnnual * ageFactor * accFactor * (1 - expDiscount);
-  const monthly = annual / 12;
-  const low = annual * 0.85;
-  const high = annual * 1.2;
+  const result = canCalc
+    ? calcCarQuoteCompare(
+        rows
+          .filter((r) => r.amount.trim() !== "")
+          .map((r) => ({ name: r.name, amount: onlyNum(r.amount) }))
+      )
+    : null;
 
   return (
     <div className="card">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-        <div>
-          <label className="label-base" htmlFor="car-age">
-            나이 (만)
-          </label>
-          <input
-            id="car-age"
-            inputMode="numeric"
-            className="input-base"
-            value={age}
-            onChange={(e) => setAge(e.target.value.replace(/[^0-9]/g, ""))}
-            placeholder="예: 35"
-          />
-        </div>
-
-        <div>
-          <label className="label-base" htmlFor="car-years">
-            운전 경력 (년)
-          </label>
-          <input
-            id="car-years"
-            inputMode="numeric"
-            className="input-base"
-            value={years}
-            onChange={(e) => setYears(e.target.value.replace(/[^0-9]/g, ""))}
-            placeholder="예: 5"
-          />
-        </div>
-
-        <div>
-          <label className="label-base" htmlFor="car-acc">
-            최근 3년 사고 건수
-          </label>
-          <input
-            id="car-acc"
-            inputMode="numeric"
-            className="input-base"
-            value={accidents}
-            onChange={(e) =>
-              setAccidents(e.target.value.replace(/[^0-9]/g, ""))
-            }
-            placeholder="예: 0"
-          />
-        </div>
-
-        <div>
-          <label className="label-base" htmlFor="car-value">
-            차량가액 (원)
-          </label>
-          <AmountInput
-            id="car-value"
-            value={carValue}
-            onChange={setCarValue}
-            placeholder="예: 25,000,000"
-          />
-        </div>
+      <div className="space-y-3">
+        {rows.map((r, i) => (
+          <div key={i} className="grid grid-cols-1 sm:grid-cols-[1fr_1.2fr_auto] gap-3 items-end">
+            <div>
+              {i === 0 && <label className="label-base">보험사 이름 <span className="text-slate-400 font-normal">(선택)</span></label>}
+              <input
+                type="text"
+                value={r.name}
+                onChange={(e) => update(i, "name", e.target.value)}
+                placeholder={`견적 ${String.fromCharCode(65 + i)}`}
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 focus:border-brand-400 focus:outline-none"
+              />
+            </div>
+            <div>
+              {i === 0 && <label className="label-base">견적 금액 (원)</label>}
+              <AmountInput id={`car-a-${i}`} value={r.amount} onChange={(v) => update(i, "amount", v)} placeholder="예: 850,000" />
+            </div>
+            <div>
+              {rows.length > 2 && (
+                <button type="button" onClick={() => removeRow(i)} className="px-3 py-3 text-xs text-slate-400 hover:text-red-500">
+                  삭제
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
       </div>
 
-      <div className="mt-6">
+      <div className="mt-4 flex flex-wrap gap-3">
+        {rows.length < 6 && (
+          <button type="button" onClick={addRow} className="px-4 py-2 rounded-xl border border-slate-300 text-sm font-semibold text-slate-700 hover:border-brand-300">
+            + 견적 추가
+          </button>
+        )}
         <button
           type="button"
-          className="btn-primary w-full sm:w-auto"
+          className="btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
+          disabled={!canCalc}
           onClick={() => setSubmitted(true)}
         >
-          예상 자동차보험료 계산하기
+          견적 비교하기
         </button>
       </div>
+      {!canCalc && <p className="mt-2 text-xs text-slate-500">비교하려면 견적 금액을 2개 이상 입력해 주세요.</p>}
 
-      {submitted && valNum > 0 && (
-        <div className="mt-8">
-          <ResultCard
-            title="예상 자동차보험료 (연납 기준 · 참고용)"
-            items={[
-              { label: "최저 추정 (연)", value: won(low) },
-              { label: "중심값 (연)", value: won(annual), highlight: true },
-              { label: "최고 추정 (연)", value: won(high) },
-              { label: "월 환산 (중심값)", value: won(monthly) },
-            ]}
-          />
-          <p className="mt-3 text-xs text-slate-500">
-            ※ 본 계산 결과는 임의의 단순 추정 배율을 적용한 참고값이며, 보험개발원
-            또는 개별 보험사의 실제 보험료 산출 요율을 적용한 견적이 아닙니다.
-            실제 보험료는 차종, 운행 거리, 가입담보, 특약, 보험사별 요율에 따라
-            크게 달라질 수 있으니 보험다모아나 각 보험사 다이렉트 견적으로 반드시
+      {submitted && result && result.status === "OK" && (
+        <div className="mt-8 space-y-4">
+          <div className="overflow-hidden rounded-2xl border border-slate-200">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-slate-500">
+                <tr>
+                  <th className="text-left px-4 py-3 font-semibold">견적</th>
+                  <th className="text-right px-4 py-3 font-semibold">금액</th>
+                  <th className="text-right px-4 py-3 font-semibold">구분</th>
+                </tr>
+              </thead>
+              <tbody>
+                {result.quotes.map((q, i) => (
+                  <tr key={i} className="border-t border-slate-100">
+                    <td className="px-4 py-3 text-slate-800">{q.name}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-slate-900">{won(q.amount)}</td>
+                    <td className="px-4 py-3 text-right text-xs text-slate-500">
+                      {q.isLowest && q.isHighest ? "—" : q.isLowest ? "최저" : q.isHighest ? "최고" : ""}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="rounded-xl border border-slate-200 px-5 py-4">
+              <p className="text-xs text-slate-500 mb-1">최고−최저 차액</p>
+              <p className="text-xl font-bold text-slate-900">{won(result.gap ?? 0)}</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 px-5 py-4">
+              <p className="text-xs text-slate-500 mb-1">월 환산 차액 (÷12)</p>
+              <p className="text-xl font-bold text-slate-900">{won(result.monthlyGap ?? 0)}</p>
+            </div>
+          </div>
+
+          <NoticeBox variant="info">
+            이 계산기는 입력하신 견적을 비교할 뿐, 어느 보험사가 더 좋은지 판단하지 않습니다. 최저 견적
+            표시는 단순 사실 안내이며, 실제 가입 조건(보장 범위·특약·자기부담금)이 서로 같은지도 함께
             확인하시기 바랍니다.
-          </p>
+          </NoticeBox>
         </div>
       )}
     </div>

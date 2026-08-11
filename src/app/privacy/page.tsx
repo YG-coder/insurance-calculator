@@ -34,9 +34,15 @@ export default function PrivacyPage() {
 
           <h2>3. 쿠키 및 광고 서비스</h2>
           <p>
-            현재 본 사이트는 개인정보를 직접 수집하지 않습니다. 다만 향후 Google AdSense 등 광고
-            서비스가 도입될 경우, 광고 제공 과정에서 쿠키 또는 유사 기술이 사용될 수 있습니다.
-            이 경우 관련 내용은 본 개인정보 처리방침에 반영합니다.
+            본 사이트는 개인정보를 직접 수집하지 않습니다. 다만 운영 비용 충당을 위해 Google
+            AdSense 광고를 게재하고 있으며, 이 과정에서 Google 및 제휴 네트워크가 쿠키 또는 유사
+            기술을 사용해 이용자의 관심사에 기반한 광고를 제공할 수 있습니다.
+          </p>
+          <p>
+            이용자는 <a href="https://adssettings.google.com" className="text-brand-600 underline" target="_blank" rel="noopener noreferrer">Google 광고 설정</a>에서
+            맞춤 광고를 관리하거나 사용을 중지할 수 있으며, 브라우저 설정을 통해 쿠키 저장을 거부할
+            수 있습니다. 광고 쿠키는 광고 제공 목적에만 사용되며, 계산기 입력값 등 이용자가 입력한
+            정보와 결합되지 않습니다.
           </p>
 
           <h2>4. 개인정보 보호 책임</h2>

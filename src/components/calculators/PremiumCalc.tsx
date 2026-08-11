@@ -3,150 +3,80 @@
 import { useState } from "react";
 import ResultCard from "@/components/ResultCard";
 import AmountInput from "@/components/AmountInput";
+import NoticeBox from "@/components/NoticeBox";
+import { calcPremiumRatio } from "@/lib/insurance/decision/premiumRatio";
 
-type Gender = "male" | "female";
-
-const won = (n: number) =>
-  `${Math.max(0, Math.round(n)).toLocaleString("ko-KR")}원`;
+const won = (n: number) => `${Math.round(n).toLocaleString("ko-KR")}원`;
+const onlyNum = (s: string) => Number(s.replace(/[^0-9]/g, "")) || 0;
 
 export default function PremiumCalc() {
-  const [age, setAge] = useState<string>("35");
-  const [gender, setGender] = useState<Gender>("male");
-  const [smoker, setSmoker] = useState<boolean>(false);
-  const [coverage, setCoverage] = useState<string>("100000000"); // 1억
+  const [income, setIncome] = useState("");
+  const [premium, setPremium] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
-  const ageNum = Math.min(80, Math.max(0, Number(age) || 0));
-  const covNum = Number(coverage.replace(/[^0-9]/g, "")) || 0;
-
-  // 매우 단순화된 위험률 모델 (참고용)
-  // base: 보장금액 1천만 원당 월 800원
-  const base = (covNum / 10_000_000) * 800;
-
-  // 연령 가산: 30세 1.0배, 10년 +0.6배
-  const ageFactor = 1 + Math.max(0, ageNum - 30) * 0.06;
-
-  // 성별: 남성 1.0, 여성 0.85
-  const genderFactor = gender === "male" ? 1.0 : 0.85;
-
-  // 흡연: 1.3배
-  const smokeFactor = smoker ? 1.3 : 1.0;
-
-  const center = base * ageFactor * genderFactor * smokeFactor;
-  const low = center * 0.8;
-  const high = center * 1.25;
+  // 미입력 = 빈 문자열. "0"은 정상 입력.
+  const missing = income.trim() === "" || premium.trim() === "";
+  const result = missing
+    ? null
+    : calcPremiumRatio({ monthlyIncome: onlyNum(income), monthlyPremium: onlyNum(premium) });
 
   return (
     <div className="card">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div>
-          <label className="label-base" htmlFor="age">
-            나이 (만)
-          </label>
-          <input
-            id="age"
-            inputMode="numeric"
-            className="input-base"
-            value={age}
-            onChange={(e) => setAge(e.target.value.replace(/[^0-9]/g, ""))}
-            placeholder="예: 35"
-          />
+          <label className="label-base" htmlFor="pr-income">월 소득 (원)</label>
+          <AmountInput id="pr-income" value={income} onChange={setIncome} placeholder="예: 3,000,000" />
         </div>
-
         <div>
-          <label className="label-base">성별</label>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setGender("male")}
-              className={`px-4 py-3 rounded-xl border text-sm font-semibold transition ${
-                gender === "male"
-                  ? "bg-brand-600 text-white border-brand-600"
-                  : "bg-white text-slate-700 border-slate-300 hover:border-brand-300"
-              }`}
-            >
-              남성
-            </button>
-            <button
-              type="button"
-              onClick={() => setGender("female")}
-              className={`px-4 py-3 rounded-xl border text-sm font-semibold transition ${
-                gender === "female"
-                  ? "bg-brand-600 text-white border-brand-600"
-                  : "bg-white text-slate-700 border-slate-300 hover:border-brand-300"
-              }`}
-            >
-              여성
-            </button>
-          </div>
-        </div>
-
-        <div>
-          <label className="label-base">흡연 여부</label>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setSmoker(false)}
-              className={`px-4 py-3 rounded-xl border text-sm font-semibold transition ${
-                !smoker
-                  ? "bg-brand-600 text-white border-brand-600"
-                  : "bg-white text-slate-700 border-slate-300 hover:border-brand-300"
-              }`}
-            >
-              비흡연
-            </button>
-            <button
-              type="button"
-              onClick={() => setSmoker(true)}
-              className={`px-4 py-3 rounded-xl border text-sm font-semibold transition ${
-                smoker
-                  ? "bg-brand-600 text-white border-brand-600"
-                  : "bg-white text-slate-700 border-slate-300 hover:border-brand-300"
-              }`}
-            >
-              흡연
-            </button>
-          </div>
-        </div>
-
-        <div>
-          <label className="label-base" htmlFor="coverage">
-            보장금액 (원)
-          </label>
-          <AmountInput
-            id="coverage"
-            value={coverage}
-            onChange={setCoverage}
-            placeholder="예: 100,000,000"
-          />
+          <label className="label-base" htmlFor="pr-premium">월 보험료 (원)</label>
+          <AmountInput id="pr-premium" value={premium} onChange={setPremium} placeholder="내고 있는 보험료 합계" />
         </div>
       </div>
 
       <div className="mt-6">
         <button
           type="button"
-          className="btn-primary w-full sm:w-auto"
+          className="btn-primary w-full sm:w-auto disabled:opacity-40 disabled:cursor-not-allowed"
+          disabled={missing}
           onClick={() => setSubmitted(true)}
         >
-          예상 보험료 계산하기
+          보험료 비중 계산하기
         </button>
+        {missing && (
+          <p className="mt-2 text-xs text-slate-500">월 소득과 월 보험료를 모두 입력해 주세요.</p>
+        )}
       </div>
 
-      {submitted && covNum > 0 && ageNum > 0 && (
-        <div className="mt-8">
-          <ResultCard
-            title="예상 월 보험료 범위 (참고용 추정)"
-            items={[
-              { label: "최저 추정", value: won(low) },
-              { label: "중심값", value: won(center), highlight: true },
-              { label: "최고 추정", value: won(high) },
-            ]}
-          />
-          <p className="mt-3 text-xs text-slate-500">
-            ※ 본 계산은 일반적인 산정 요소를 단순화한 추정치이며, 실제 보험료는
-            보험사 상품·심사 결과·특약·납입 방식에 따라 크게 달라질 수
-            있습니다.
-          </p>
+      {submitted && result && (
+        <div className="mt-8 space-y-4">
+          {result.status === "NEED_INCOME" ? (
+            <NoticeBox variant="info">
+              보험료 비중을 계산하려면 월 소득을 입력해 주세요. (소득이 0이면 비율을 계산할 수 없습니다.)
+            </NoticeBox>
+          ) : (
+            <>
+              <div className="rounded-2xl border border-brand-200 bg-brand-50 p-6 text-center">
+                <p className="text-sm font-semibold text-slate-500 mb-1">보험료 비중</p>
+                <p className="text-4xl font-bold text-brand-700">
+                  {(result.ratioPercent ?? 0).toFixed(1)}%
+                </p>
+                <p className="text-sm text-slate-500 mt-2">월 소득 대비 월 보험료</p>
+              </div>
+              <ResultCard
+                title="입력·연간 환산"
+                items={[
+                  { label: "월 보험료", value: won(result.monthlyPremium) },
+                  { label: "월 소득", value: won(result.monthlyIncome) },
+                  { label: "연간 보험료", value: won(result.yearlyPremium) },
+                  { label: "연간 소득", value: won(result.yearlyIncome) },
+                ]}
+              />
+              <NoticeBox variant="info">
+                이 계산기는 입력하신 월 보험료가 소득에서 차지하는 비중만 계산합니다. 적정 비중이 몇 %인지는
+                사람마다 다르므로 제시하지 않습니다. 비중이 높은지 낮은지는 본인의 상황에 맞게 판단해 주세요.
+              </NoticeBox>
+            </>
+          )}
         </div>
       )}
     </div>

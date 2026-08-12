@@ -35,6 +35,16 @@ export default function CoverageGapPage() {
         </p>
       </header>
 
+      <div className="mb-6">
+        <a
+          href="/protection-planning"
+          className="flex items-center justify-between gap-3 rounded-xl border border-brand-200 bg-brand-50/50 px-5 py-3 text-sm font-semibold text-brand-800 transition hover:border-brand-300"
+        >
+          <span>← 보장 설계 허브에서 3단계 순서대로 안내받기</span>
+          <span aria-hidden>→</span>
+        </a>
+      </div>
+
       <CoverageGapCalc />
 
       <div className="mt-6">

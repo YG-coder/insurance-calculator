@@ -34,6 +34,16 @@ export default function CancelVsKeepPage() {
         </p>
       </header>
 
+      <div className="mb-6">
+        <a
+          href="/insurance-cancellation"
+          className="flex items-center justify-between gap-3 rounded-xl border border-brand-200 bg-brand-50/50 px-5 py-3 text-sm font-semibold text-brand-800 transition hover:border-brand-300"
+        >
+          <span>← 보험 해지 허브에서 3단계 순서대로 안내받기</span>
+          <span aria-hidden>→</span>
+        </a>
+      </div>
+
       <CancelVsKeepCalc />
 
       <div className="mt-6">

@@ -77,3 +77,48 @@ export const CALCULATORS = [
     icon: "🚗",
   },
 ] as const;
+
+// 의사결정 허브: 계산기들을 단계별 흐름으로 묶는 Topical Hub.
+// steps는 CALCULATORS의 href를 참조해 "추천 순서"를 구성한다.
+export const HUBS = [
+  {
+    slug: "insurance-cancellation",
+    title: "보험 해지 허브",
+    short: "보험 해지",
+    tagline: "해지 전에 확인할 세 가지 숫자를 순서대로 계산하세요.",
+    icon: "⚖️",
+    steps: [
+      "/surrender-value-calculator",
+      "/future-premium-calculator",
+      "/cancel-vs-keep-calculator",
+    ],
+    guideSlugs: ["surrender-value", "renewable-vs-non-renewable", "insurance-remodeling"] as string[],
+  },
+  {
+    slug: "protection-planning",
+    title: "보장 설계 허브",
+    short: "보장 설계",
+    tagline: "필요한 보장이 얼마인지 단계별로 계산해 부족분을 확인하세요.",
+    icon: "🛡️",
+    steps: [
+      "/family-living-calculator",
+      "/death-coverage-calculator",
+      "/coverage-gap-calculator",
+    ],
+    guideSlugs: ["whole-vs-term-life", "cancer-insurance-checklist"] as string[],
+  },
+  {
+    slug: "silson-guide",
+    title: "실손보험 허브",
+    short: "실손보험",
+    tagline: "내 실손보험 자기부담금을 계산하고 세대 차이와 청구까지 이해하세요.",
+    icon: "🏥",
+    steps: [
+      "/health-insurance-calculator",
+      "/5th-generation-health-insurance-calculator",
+      "/guide/silson-generations",
+      "/guide/health-insurance-claim",
+    ],
+    guideSlugs: ["silson-4th-generation", "silson-copayment", "silson-non-covered"] as string[],
+  },
+] as const;

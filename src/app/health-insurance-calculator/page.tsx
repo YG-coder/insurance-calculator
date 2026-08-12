@@ -57,6 +57,16 @@ export default function HealthPage() {
         </p>
       </header>
 
+      <div className="mb-6">
+        <a
+          href="/silson-guide"
+          className="flex items-center justify-between gap-3 rounded-xl border border-brand-200 bg-brand-50/50 px-5 py-3 text-sm font-semibold text-brand-800 transition hover:border-brand-300"
+        >
+          <span>← 실손보험 허브에서 계산·세대 차이·청구를 한 흐름으로 보기</span>
+          <span aria-hidden>→</span>
+        </a>
+      </div>
+
       <HealthCalc />
 
       <div className="mt-6">

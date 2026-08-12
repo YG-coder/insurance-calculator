@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import CalculatorCard from "@/components/CalculatorCard";
 import FAQ from "@/components/FAQ";
-import { CALCULATORS, SITE } from "@/lib/site";
+import { CALCULATORS, HUBS, SITE } from "@/lib/site";
 import { publishedGuides } from "@/lib/guides";
 
 export const metadata: Metadata = {
@@ -70,6 +70,32 @@ export default function HomePage() {
           ))}
         </div>
       </section>
+
+      {HUBS.length > 0 && (
+        <section className="container-base py-14">
+          <div className="text-center mb-10">
+            <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">단계별로 안내받기</h2>
+            <p className="mt-2 text-slate-600">
+              어떤 계산기를 먼저 써야 할지 모르겠다면, 주제별 허브가 순서대로 안내합니다.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            {HUBS.map((h) => (
+              <Link
+                key={h.slug}
+                href={`/${h.slug}`}
+                className="card hover:border-brand-300 hover:shadow-md transition flex items-start gap-4"
+              >
+                <span className="text-3xl" aria-hidden>{h.icon}</span>
+                <div>
+                  <div className="font-bold text-slate-900">{h.title}</div>
+                  <div className="text-sm text-slate-600 mt-1 leading-relaxed">{h.tagline}</div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="container-base py-14">
         <div className="card">

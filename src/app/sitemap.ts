@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { SITE, CALCULATORS } from "@/lib/site";
+import { SITE, CALCULATORS, HUBS } from "@/lib/site";
 import { publishedGuides } from "@/lib/guides";
 
 export default function sitemap(): MetadataRoute.Sitemap {
@@ -18,6 +18,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       lastModified: now,
       changeFrequency: "weekly" as const,
       priority: 0.9,
+    })),
+    ...HUBS.map((h) => ({
+      url: `${SITE.url}/${h.slug}`,
+      lastModified: now,
+      changeFrequency: "weekly" as const,
+      priority: 0.8,
     })),
     ...publishedGuides().map((g) => ({
       url: `${SITE.url}/guide/${g.slug}`,

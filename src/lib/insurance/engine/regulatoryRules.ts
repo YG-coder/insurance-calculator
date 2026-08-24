@@ -21,7 +21,7 @@ const GEN5_FSC_RELEASE: RegulatorySource = {
   issuer: "금융위원회·금융감독원",
   publishedOrEffective: "2026-05-06",
   url: "https://www.fsc.go.kr/no010101/86831",
-  locator: "본문 2.(1)·2.(2), <급여 관련 비교표>, <비급여 관련 비교표>",
+  locator: "첨부 보도자료 PDF p.4 본문 2.(1), <급여 관련 현행 4세대와 신규 5세대 비교>, <급여 통원(외래) 자기부담금 산출(예시)>; p.6 <비급여 관련 현행 4세대와 5세대 실손 비교>",
 };
 
 const confirmed = <T>(

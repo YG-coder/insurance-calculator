@@ -9,6 +9,10 @@ function check(name: string, cond: boolean, detail = "") {
 
 const rules = Object.values(REGULATORY_RULES);
 const ids = rules.map((rule) => rule.ruleId);
+const isConfirmedGradeValid = (rule: { status: string; evidenceGrade: string }) =>
+  rule.status !== "CONFIRMED" || rule.evidenceGrade === "A";
+const isHoldValueValid = (rule: { status: string; value: unknown }) =>
+  rule.status !== "HOLD" || rule.value === null;
 
 check("규제 규칙 ruleId 중복 없음", new Set(ids).size === ids.length);
 check("모든 규칙에 검증일 존재", rules.every((rule) => /^\d{4}-\d{2}-\d{2}$/.test(rule.verifiedAt)));
@@ -18,8 +22,11 @@ check("모든 규칙에 문서명·발행기관·일자·URL·위치 존재", ru
     && /^https?:\/\//.test(source.url)
   )
 ));
-check("CONFIRMED 규칙은 A등급", rules.filter((rule) => rule.status === "CONFIRMED").every((rule) => rule.evidenceGrade === "A"));
-check("HOLD 규칙은 계산값 미확정", rules.filter((rule) => rule.status === "HOLD").every((rule) => rule.value === null));
+check("CONFIRMED 규칙은 A등급", rules.every(isConfirmedGradeValid));
+check("CONFIRMED 등급 검사가 잘못된 REVIEW 사례를 거부", !isConfirmedGradeValid({ status: "CONFIRMED", evidenceGrade: "REVIEW" }));
+check("등록된 HOLD 규칙은 계산값 미확정", rules.every(isHoldValueValid));
+check("HOLD 값 검사가 잘못된 확정값 사례를 거부", !isHoldValueValid({ status: "HOLD", value: 10_000 }));
+check("5세대 급여 통원 최소공제 출처가 PDF 쪽수까지 기록", REGULATORY_RULES.GEN2026_BENEFIT_OUTPATIENT_MIN_DEDUCTIBLE.sources.every((source) => /PDF p\.4/.test(source.locator)));
 
 // 런타임 상수가 메타데이터의 값에서 파생되는지 대표 경로를 고정한다.
 check("4세대 급여 입원률 추적", GEN2021.rate.benefit.inpatient === REGULATORY_RULES.GEN2021_BENEFIT_INPATIENT_RATE.value);

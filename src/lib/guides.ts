@@ -38,12 +38,12 @@ export const CLUSTER_META: Record<
   premium: {
     label: "보험료·일반",
     calcHref: "/insurance-premium-calculator",
-    calcLabel: "보험료 계산기",
+    calcLabel: "보험료 비중 계산기",
   },
   car: {
     label: "자동차보험",
     calcHref: "/car-insurance-calculator",
-    calcLabel: "자동차보험 계산기",
+    calcLabel: "자동차보험 견적 비교 계산기",
   },
   hub: { label: "보험 기초" },
 };

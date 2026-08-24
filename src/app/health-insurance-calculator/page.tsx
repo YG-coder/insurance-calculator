@@ -225,14 +225,14 @@ export default function HealthPage() {
               href="/insurance-premium-calculator"
               className="text-brand-600 hover:underline"
           >
-            보험료 계산기
+            보험료 비중 계산기
           </a>
 
           <a
               href="/car-insurance-calculator"
               className="text-brand-600 hover:underline"
           >
-            자동차보험 계산기
+            자동차보험 견적 비교 계산기
           </a>
         </div>
       </div>

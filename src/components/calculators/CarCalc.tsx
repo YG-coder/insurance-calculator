@@ -48,7 +48,7 @@ export default function CarCalc() {
               />
             </div>
             <div>
-              {i === 0 && <label className="label-base">견적 금액 (원)</label>}
+              {i === 0 && <label className="label-base">연간 견적 금액 (원)</label>}
               <AmountInput id={`car-a-${i}`} value={r.amount} onChange={(v) => update(i, "amount", v)} placeholder="예: 850,000" />
             </div>
             <div>
@@ -110,15 +110,15 @@ export default function CarCalc() {
               <p className="text-xl font-bold text-slate-900">{won(result.gap ?? 0)}</p>
             </div>
             <div className="rounded-xl border border-slate-200 px-5 py-4">
-              <p className="text-xs text-slate-500 mb-1">월 환산 차액 (÷12)</p>
+              <p className="text-xs text-slate-500 mb-1">월 환산 차액 (연간 차액 ÷ 12개월)</p>
               <p className="text-xl font-bold text-slate-900">{won(result.monthlyGap ?? 0)}</p>
             </div>
           </div>
 
           <NoticeBox variant="info">
-            이 계산기는 입력하신 견적을 비교할 뿐, 어느 보험사가 더 좋은지 판단하지 않습니다. 최저 견적
-            표시는 단순 사실 안내이며, 실제 가입 조건(보장 범위·특약·자기부담금)이 서로 같은지도 함께
-            확인하시기 바랍니다.
+            입력 금액은 1년치 자동차보험 견적을 전제로 하며, 월 환산 차액은 연간 차액을 12개월로 단순
+            나눈 값입니다. 이 계산기는 어느 보험사가 더 좋은지 판단하지 않습니다. 최저 견적 표시는 단순
+            사실 안내이며, 실제 가입 조건(보장 범위·특약·자기부담금)이 서로 같은지도 함께 확인하시기 바랍니다.
           </NoticeBox>
         </div>
       )}

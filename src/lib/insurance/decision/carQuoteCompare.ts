@@ -5,7 +5,7 @@
 
 export interface CarQuote {
   name?: string;   // 견적 이름(선택) [C]
-  amount: number;  // 견적 금액(원) [C]
+  amount: number;  // 사용자가 받은 연간 견적 금액(원) [C]
 }
 
 export type CarQuoteStatus = "OK" | "NEED_MORE";
@@ -16,7 +16,7 @@ export interface CarQuoteResult {
   lowest: number | null;
   highest: number | null;
   gap: number | null;        // 최고 − 최저
-  monthlyGap: number | null; // 차액 ÷ 12
+  monthlyGap: number | null; // 연간 견적 차액 ÷ 12개월(단순 월 환산)
 }
 
 const nonNeg = (v: number) => (isFinite(v) && v > 0 ? Math.floor(v) : 0);

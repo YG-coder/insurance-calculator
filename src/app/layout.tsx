@@ -11,7 +11,7 @@ export const metadata: Metadata = {
     metadataBase: new URL(SITE.url),
 
     title: {
-        default: `${SITE.name} - 실손·자동차·보험료 무료 계산`,
+        default: `${SITE.name} - 실손·보장·보험 의사결정 무료 계산`,
         template: `%s | ${SITE.name}`,
     },
 
@@ -20,8 +20,8 @@ export const metadata: Metadata = {
     keywords: [
         "보험계산기",
         "실손보험 계산기",
-        "보험료 계산기",
-        "자동차보험 계산기",
+        "보험료 비중 계산기",
+        "자동차보험 견적 비교 계산기",
         "본인부담금",
         "보험료 비교",
     ],
@@ -35,7 +35,7 @@ export const metadata: Metadata = {
         locale: "ko_KR",
         url: SITE.url,
         siteName: SITE.name,
-        title: `${SITE.name} - 실손·자동차·보험료 무료 계산`,
+        title: `${SITE.name} - 실손·보장·보험 의사결정 무료 계산`,
         description: SITE.description,
     },
 

@@ -15,8 +15,8 @@ npm run start    # 프로덕션 실행
 
 - `/` 홈
 - `/health-insurance-calculator` 실손보험 자기부담금 계산기
-- `/insurance-premium-calculator` 보험료 계산기
-- `/car-insurance-calculator` 자동차보험 계산기
+- `/insurance-premium-calculator` 보험료 비중 계산기
+- `/car-insurance-calculator` 자동차보험 견적 비교 계산기
 - `/about` 사이트 소개
 - `/privacy` 개인정보 처리방침
 - `/terms` 이용약관

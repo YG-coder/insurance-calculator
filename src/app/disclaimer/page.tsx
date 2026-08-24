@@ -118,10 +118,11 @@ export default function DisclaimerPage() {
 
         <h2>2. 계산 결과의 한계</h2>
         <p>
-          해지환급금·앞으로 낼 보험료·사망보장·보장 공백 등 의사결정 계산기는 이용자가 입력한 값을 그대로
-          계산하므로, 입력이 정확하면 결과도 정확합니다. 반면 보험료·자동차보험 계산기 등 일부 도구는
-          일반적으로 알려진 산출 방식을 <strong>단순화한 참고용 모델</strong>이며, 실제 보험사의 요율은 다음과
-          같은 요인을 추가로 반영하므로 상당한 차이가 발생할 수 있습니다.
+          해지환급금·앞으로 낼 보험료·사망보장·보장 공백·보험료 비중·자동차보험 견적 비교 계산기는
+          이용자가 입력한 값을 산수로 계산합니다. 보험료 비중 계산기는 예상 보험료를 산출하지 않고,
+          자동차보험 견적 비교 계산기는 보험사에서 받은 견적만 비교합니다. 실손보험 자기부담금 계산기는
+          공개된 세대별 기준을 단순화해 적용한 참고용 도구이므로, 실제 지급보험금은 다음과 같은 요인에 따라
+          차이가 발생할 수 있습니다.
         </p>
         <ul>
           <li>
@@ -250,13 +251,13 @@ export default function DisclaimerPage() {
             href="/insurance-premium-calculator"
             className="text-brand-600 hover:underline"
           >
-            보험료 계산기
+            보험료 비중 계산기
           </a>
           <a
             href="/car-insurance-calculator"
             className="text-brand-600 hover:underline"
           >
-            자동차보험 계산기
+            자동차보험 견적 비교 계산기
           </a>
         </div>
       </div>

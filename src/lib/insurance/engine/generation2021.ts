@@ -13,8 +13,8 @@ import { settle, normalizeAmount } from "../common/settle";
 
 export function calc2021(input: ClaimInput): CalcResult {
   const amount = normalizeAmount(input.amount);
-  const rate = GEN2021.rate[input.coverage];
   const isOutpatient = input.visit === "outpatient";
+  const rate = GEN2021.rate[input.coverage][input.visit];
 
   let minDeductible = 0;
   if (isOutpatient) {

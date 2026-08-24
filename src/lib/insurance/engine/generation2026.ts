@@ -1,7 +1,7 @@
 // 5세대 실손 엔진 (Engine Core). v0.4 게이팅 기준.
 //   - 값이 박힌 계산은 금융위 원문 직독 A 확정 항목만.
-//   - #3 최소공제(급여 통원), #2 건보 본인부담률은 미확정 → HOLD.
-//     이 둘이 필요한 경로는 임의 상수를 쓰지 않고 PENDING_UNVERIFIED로 반환한다.
+//   - 급여 통원 최소공제는 금융위 2026-05-06 원문으로 확인됐다.
+//   - 건강보험 본인부담률은 건별 사용자 입력값이므로 미제공 시 PENDING_UNVERIFIED로 반환한다.
 // 2026-08-24: 전 경로의 금액 종결을 공통 settle()에 위임한다.
 //   - R-2: 원 단위 정수로 확정 → 표시 계층에서 합계가 어긋나지 않는다.
 //   - 급여 통원 경로의 클램프 누락(잠복 결함)도 함께 해소된다. HOLD 해제 시 재발하지 않는다.
@@ -38,18 +38,16 @@ export function calc2026(input: ClaimInput): CalcResult {
       const s = settle(amount, amount * rate);
       return ok(amount, s.ownPay, s.insurancePay, rate, 0);
     }
-    // 급여 통원: #2 구조 A = Max(건보율, 20%, 최소공제)
-    // 그러나 건보율(#2 입력) + 최소공제(#3 REVIEW) 둘 다 미확정 → 임의값 금지.
+    // 급여 통원: Max(건보율, 20%, 최소공제). 건보율은 건별 사용자 입력값이다.
     const holds: string[] = [];
     const nhis = input.nhisCoinsuranceRate;
-    const md = GEN2026.benefit.outpatient.minDeductible; // null이면 HOLD
+    const md = GEN2026.benefit.outpatient.minDeductible;
     if (nhis === undefined) holds.push("급여 통원: 건강보험 본인부담률 미제공 → 계산 불가(#2 입력 필요)");
-    if (md === null) holds.push("급여 통원: 최소공제 금액 미확정(#3 REVIEW) → 원문 직독 대기");
     if (holds.length) return pending(amount, holds);
 
     const rate = Math.max(nhis as number, GEN2026.benefit.outpatient.floorRate);
     const tier = input.tier ?? "clinic";
-    const deduct = (md as Record<string, number>)[tier];
+    const deduct = md[tier];
     const s = settle(amount, Math.max(amount * rate, deduct));
     return ok(amount, s.ownPay, s.insurancePay, rate, deduct);
   }

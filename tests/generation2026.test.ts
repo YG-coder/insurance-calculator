@@ -19,12 +19,14 @@ function checkInvariant(name: string, result: ReturnType<typeof calc2026>) {
   const r = calc2026({ amount: 300000, coverage: "benefit", visit: "inpatient" });
   check("급여 입원 20% (A)", r.status === "OK" && r.ownPay === 60000 && r.insurancePay === 240000, JSON.stringify(r));
 }
-// #3 HOLD: 급여 통원은 최소공제 미확정 → nhis 있어도 PENDING
+// 급여 통원: 금융위 원문으로 확인한 최소공제 + 건별 건보 본인부담률
 {
   const r = calc2026({ amount: 300000, coverage: "benefit", visit: "outpatient", tier: "clinic", nhisCoinsuranceRate: 0.4 });
-  check("급여 통원: #3 최소공제 HOLD → PENDING (임의값 금지)", r.status === "PENDING_UNVERIFIED" && r.ownPay === null, JSON.stringify(r));
+  check("급여 통원: Max(건보율 40%, 20%, 병·의원 1만원)", r.status === "OK" && r.ownPay === 120000 && r.insurancePay === 180000, JSON.stringify(r));
+  const hospitalMin = calc2026({ amount: 20000, coverage: "benefit", visit: "outpatient", tier: "hospital", nhisCoinsuranceRate: 0.2 });
+  check("급여 통원: 상급·종합병원 최소공제 2만원", hospitalMin.status === "OK" && hospitalMin.ownPay === 20000 && hospitalMin.insurancePay === 0, JSON.stringify(hospitalMin));
 }
-// 급여 통원: 건보율 미제공도 PENDING
+// 급여 통원: 건보율 미제공은 PENDING
 {
   const r = calc2026({ amount: 300000, coverage: "benefit", visit: "outpatient" });
   check("급여 통원: 건보율 미제공 → PENDING", r.status === "PENDING_UNVERIFIED", JSON.stringify(r));

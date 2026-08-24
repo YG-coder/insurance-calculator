@@ -72,10 +72,14 @@ export function calc2026(input: ClaimInput): CalcResult {
     }
     // 중증 통원: Max(30%, 3만), 통원 회당 20만(보험지급) 한도
     const rate = c.outpatientRate;
-    const ownPay = Math.max(amount * rate, c.outpatientMinDeductible);
+    let ownPay = Math.min(amount, Math.max(amount * rate, c.outpatientMinDeductible));
     let insurancePay = Math.max(amount - ownPay, 0);
     let cappedBy: string | undefined;
-    if (insurancePay > c.outpatientPerVisitLimit) { insurancePay = c.outpatientPerVisitLimit; cappedBy = "중증 통원 회당 20만 한도"; }
+    if (insurancePay > c.outpatientPerVisitLimit) {
+      insurancePay = c.outpatientPerVisitLimit;
+      ownPay = amount - insurancePay;
+      cappedBy = "중증 통원 회당 20만 한도";
+    }
     return ok(amount, ownPay, insurancePay, rate, c.outpatientMinDeductible, notes, cappedBy);
   }
 
@@ -83,17 +87,25 @@ export function calc2026(input: ClaimInput): CalcResult {
   const n = GEN2026.nonBenefit.nonCritical;
   if (input.visit === "inpatient") {
     const rate = n.inpatientRate; // 50% A
-    const ownPay = amount * rate;
+    let ownPay = amount * rate;
     let insurancePay = Math.max(amount - ownPay, 0);
     let cappedBy: string | undefined;
-    if (insurancePay > n.inpatientPerVisitLimit) { insurancePay = n.inpatientPerVisitLimit; cappedBy = "비중증 입원 회당 300만 한도"; }
+    if (insurancePay > n.inpatientPerVisitLimit) {
+      insurancePay = n.inpatientPerVisitLimit;
+      ownPay = amount - insurancePay;
+      cappedBy = "비중증 입원 회당 300만 한도";
+    }
     return ok(amount, ownPay, insurancePay, rate, 0, notes, cappedBy);
   }
   // 비중증 통원: Max(50%, 5만), 일당 20만 한도
   const rate = n.outpatientRate;
-  const ownPay = Math.max(amount * rate, n.outpatientMinDeductible);
+  let ownPay = Math.min(amount, Math.max(amount * rate, n.outpatientMinDeductible));
   let insurancePay = Math.max(amount - ownPay, 0);
   let cappedBy: string | undefined;
-  if (insurancePay > n.outpatientPerDayLimit) { insurancePay = n.outpatientPerDayLimit; cappedBy = "비중증 통원 일당 20만 한도"; }
+  if (insurancePay > n.outpatientPerDayLimit) {
+    insurancePay = n.outpatientPerDayLimit;
+    ownPay = amount - insurancePay;
+    cappedBy = "비중증 통원 일당 20만 한도";
+  }
   return ok(amount, ownPay, insurancePay, rate, n.outpatientMinDeductible, notes, cappedBy);
 }

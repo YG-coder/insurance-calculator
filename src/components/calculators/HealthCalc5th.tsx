@@ -23,9 +23,11 @@ export default function HealthCalc5th() {
   const [visit, setVisit] = useState<Visit>("inpatient");
   const [tier, setTier] = useState<Tier>("clinic");
   const [severity, setSeverity] = useState<Severity | null>(null);
+  const [priorAnnualPaid, setPriorAnnualPaid] = useState<string>("0");
   const [submitted, setSubmitted] = useState(false);
 
   const num = Number(amount.replace(/[^0-9]/g, "")) || 0;
+  const priorAnnualPaidNum = Number(priorAnnualPaid.replace(/[^0-9]/g, "")) || 0;
 
   // 비급여인데 중증/비중증 미선택이면 계산 자체를 시도하지 않는다(엔진 호출 전 UI 가드).
   const needsSeverity = coverage === "non_benefit" && severity === null;
@@ -38,6 +40,10 @@ export default function HealthCalc5th() {
         visit,
         tier,
         severity: coverage === "non_benefit" ? (severity as Severity) : undefined,
+        priorAnnualPaid:
+          coverage === "non_benefit" && severity === "critical" && visit === "inpatient"
+            ? priorAnnualPaidNum
+            : undefined,
       });
 
   return (
@@ -111,6 +117,33 @@ export default function HealthCalc5th() {
               </button>
             </div>
           </div>
+        )}
+
+        {coverage === "non_benefit" && severity === "critical" && visit === "inpatient" && (
+          <>
+            <div className="sm:col-span-2">
+              <label className="label-base">입원 의료기관</label>
+              <div className="grid grid-cols-2 gap-2 max-w-md">
+                <button type="button" onClick={() => setTier("clinic")} className={btn(tier === "clinic")}>
+                  병·의원급
+                </button>
+                <button type="button" onClick={() => setTier("hospital")} className={btn(tier === "hospital")}>
+                  상급종합·종합병원
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="label-base" htmlFor="med5-prior-annual-paid">
+                올해 기존 중증 비급여 자기부담금 (원)
+              </label>
+              <AmountInput
+                id="med5-prior-annual-paid"
+                value={priorAnnualPaid}
+                onChange={setPriorAnnualPaid}
+                placeholder="없으면 0"
+              />
+            </div>
+          </>
         )}
       </div>
 

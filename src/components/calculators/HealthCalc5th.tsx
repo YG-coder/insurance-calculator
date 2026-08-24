@@ -41,7 +41,7 @@ export default function HealthCalc5th() {
         tier,
         severity: coverage === "non_benefit" ? (severity as Severity) : undefined,
         priorAnnualPaid:
-          coverage === "non_benefit" && severity === "critical" && visit === "inpatient"
+          coverage === "non_benefit" && severity === "critical" && visit === "inpatient" && tier === "hospital"
             ? priorAnnualPaidNum
             : undefined,
       });
@@ -132,17 +132,31 @@ export default function HealthCalc5th() {
                 </button>
               </div>
             </div>
-            <div>
-              <label className="label-base" htmlFor="med5-prior-annual-paid">
-                올해 기존 중증 비급여 자기부담금 (원)
-              </label>
-              <AmountInput
-                id="med5-prior-annual-paid"
-                value={priorAnnualPaid}
-                onChange={setPriorAnnualPaid}
-                placeholder="없으면 0"
-              />
-            </div>
+            {/* 자기부담 상한(500만)은 상급종합·종합병원 입원에만 적용된다.
+                병·의원급에서 이 값을 받으면 계산에 반영되지 않아 사용자가 오인한다. */}
+            {tier === "hospital" ? (
+              <div>
+                <label className="label-base" htmlFor="med5-prior-annual-paid">
+                  올해 기존 중증 비급여 자기부담금 (원)
+                </label>
+                <AmountInput
+                  id="med5-prior-annual-paid"
+                  value={priorAnnualPaid}
+                  onChange={setPriorAnnualPaid}
+                  placeholder="없으면 0"
+                />
+                <p className="mt-2 text-xs text-slate-500">
+                  올해 이미 부담한 중증 비급여 입원 자기부담금을 입력하면 500만 원 상한에 누적 반영됩니다.
+                </p>
+              </div>
+            ) : (
+              <div className="sm:col-span-2">
+                <p className="text-xs text-slate-500">
+                  자기부담 상한(500만 원)은 상급종합·종합병원 입원에만 적용됩니다. 병·의원급 입원에는
+                  적용되지 않아 연간 누적 자기부담금을 입력받지 않습니다.
+                </p>
+              </div>
+            )}
           </>
         )}
       </div>

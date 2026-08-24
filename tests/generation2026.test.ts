@@ -74,5 +74,49 @@ function checkInvariant(name: string, result: ReturnType<typeof calc2026>) {
   checkInvariant("비중증 통원 한도 적용", big);
 }
 
+// ── 전 매트릭스 불변식 (settle() 정수화 이후이므로 === 비교가 안전하다) ──
+{
+  const amounts = [0, 1, 9999, 10000, 30000, 50000, 100000, 100001, 100003, 300001, 1000000, 10000000, 30000000, 99999999];
+  const coverages = ["benefit", "non_benefit"] as const;
+  const visits = ["outpatient", "inpatient"] as const;
+  const tiers = ["clinic", "hospital"] as const;
+  const severities = [undefined, "critical", "non_critical"] as const;
+  const priors = [0, 4000000, 5000000];
+
+  let cases = 0, bad = 0;
+  const firstFails: string[] = [];
+  for (const amount of amounts)
+    for (const coverage of coverages)
+      for (const visit of visits)
+        for (const tier of tiers)
+          for (const severity of severities)
+            for (const priorAnnualPaid of priors) {
+              cases++;
+              const r = calc2026({ amount, coverage, visit, tier, severity, priorAnnualPaid });
+              if (r.status !== "OK") continue; // PENDING은 금액을 반환하지 않는다
+              const own = r.ownPay ?? NaN;
+              const ins = r.insurancePay ?? NaN;
+              const ok =
+                own + ins === r.amount &&
+                own >= 0 && ins >= 0 && own <= r.amount &&
+                Number.isInteger(own) && Number.isInteger(ins);
+              if (!ok) {
+                bad++;
+                if (firstFails.length < 5)
+                  firstFails.push(`[${amount}/${coverage}/${visit}/${tier}/${severity}/prior:${priorAnnualPaid}] own=${own} ins=${ins} amount=${r.amount}`);
+              }
+            }
+  check(`전 매트릭스 불변식 (${cases}케이스): 합계·비음수·정수`, bad === 0, firstFails.join(" | "));
+}
+
+// ── 반올림 정책 고정 (settle.ts ROUNDING_POLICY: ownPay 확정 + round) ──
+// 이 테스트는 정책이 바뀌면 반드시 실패해야 한다. 실패 시 settle.ts 정책 블록을 먼저 확인할 것.
+{
+  const r = calc2026({ amount: 100001, coverage: "non_benefit", visit: "outpatient", severity: "non_critical" });
+  check("반올림 정책: ownPay 확정 + round(.5 올림) → 50,000.5 → 50,001", r.ownPay === 50001 && r.insurancePay === 50000, JSON.stringify(r));
+  const c = calc2026({ amount: 100005, coverage: "non_benefit", visit: "outpatient", severity: "critical" });
+  check("반올림 정책: 중증 30% 타이 → 30,001.5 → 30,002", c.ownPay === 30002 && c.insurancePay === 70003, JSON.stringify(c));
+}
+
 console.log(`\n[generation2026 코어] 통과 ${pass} / 실패 ${fail}`);
 if (fail) process.exit(1);

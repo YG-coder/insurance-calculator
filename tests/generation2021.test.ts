@@ -17,6 +17,7 @@ interface Divergence { ownPay: number; insurancePay: number; reason: string }
 // R-1: 자기부담금이 진료비를 초과하던 결함 수정(소액 통원 경계값). 2026-08-24 승인.
 //      7건 모두 보험 적용 금액은 변경 전후 0원 — 보험금 산출액은 바뀌지 않는다.
 const R1 = "R-1 자기부담금이 진료비를 초과할 수 없다 (2026-08-24)";
+const H2B = "H-2b 통원 회당 보험금 20만원 한도 적용 (2026-08-24)";
 const INTENDED_DIVERGENCES: Record<Key, Divergence> = {
   "0/benefit/outpatient/clinic":         { ownPay: 0,     insurancePay: 0, reason: R1 },
   "0/benefit/outpatient/hospital":       { ownPay: 0,     insurancePay: 0, reason: R1 },
@@ -25,6 +26,23 @@ const INTENDED_DIVERGENCES: Record<Key, Divergence> = {
   "15000/benefit/outpatient/hospital":   { ownPay: 15000, insurancePay: 0, reason: R1 },
   "15000/non_benefit/outpatient/clinic": { ownPay: 15000, insurancePay: 0, reason: R1 },
   "15000/non_benefit/outpatient/hospital": { ownPay: 15000, insurancePay: 0, reason: R1 },
+
+  // H-2b: 통원 회당 보험금 지급 한도 20만원 적용. 2026-08-24 승인.
+  //   근거: 급여 ABL생명 약관 제6조⑤ / 비급여 KDB생명 약관 제5조③ (constants.ts 참조)
+  //   자기부담금 공제 후 보험금이 20만원을 넘으면 20만원으로 자르고, 초과분은 본인부담이 된다.
+  //   12건 모두 보험금이 20만원으로 수렴하고 본인부담이 그만큼 증가한다.
+  "300000/benefit/outpatient/clinic":       { ownPay: 100000,  insurancePay: 200000, reason: H2B },
+  "300000/benefit/outpatient/hospital":     { ownPay: 100000,  insurancePay: 200000, reason: H2B },
+  "300000/non_benefit/outpatient/clinic":   { ownPay: 100000,  insurancePay: 200000, reason: H2B },
+  "300000/non_benefit/outpatient/hospital": { ownPay: 100000,  insurancePay: 200000, reason: H2B },
+  "1000000/benefit/outpatient/clinic":       { ownPay: 800000,  insurancePay: 200000, reason: H2B },
+  "1000000/benefit/outpatient/hospital":     { ownPay: 800000,  insurancePay: 200000, reason: H2B },
+  "1000000/non_benefit/outpatient/clinic":   { ownPay: 800000,  insurancePay: 200000, reason: H2B },
+  "1000000/non_benefit/outpatient/hospital": { ownPay: 800000,  insurancePay: 200000, reason: H2B },
+  "5000000/benefit/outpatient/clinic":       { ownPay: 4800000, insurancePay: 200000, reason: H2B },
+  "5000000/benefit/outpatient/hospital":     { ownPay: 4800000, insurancePay: 200000, reason: H2B },
+  "5000000/non_benefit/outpatient/clinic":   { ownPay: 4800000, insurancePay: 200000, reason: H2B },
+  "5000000/non_benefit/outpatient/hospital": { ownPay: 4800000, insurancePay: 200000, reason: H2B },
 };
 
 const amounts = [0, 15000, 30000, 50000, 100000, 300000, 1000000, 5000000]; // 8

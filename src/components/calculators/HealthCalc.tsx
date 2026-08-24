@@ -3,6 +3,7 @@
 import { useState } from "react";
 import ResultCard from "@/components/ResultCard";
 import AmountInput from "@/components/AmountInput";
+import NoticeBox from "@/components/NoticeBox";
 import { calculate } from "@/lib/insurance/engine/engine";
 
 type Coverage = "benefit" | "non_benefit"; // 급여 / 비급여
@@ -163,6 +164,19 @@ export default function HealthCalc() {
               { label: "보험 적용 금액", value: won(insurancePay) },
             ]}
           />
+          {result.cappedBy && (
+            <div className="mt-4">
+              <NoticeBox variant="info">
+                {result.cappedBy}가 적용되어 보험 적용 금액이 조정되었습니다. 통원 보험금은 외래와
+                처방조제비를 합해 1회당 20만 원이 상한입니다.
+              </NoticeBox>
+            </div>
+          )}
+          {result.notes.length > 0 && (
+            <div className="mt-3">
+              <NoticeBox variant="info">{result.notes[0]}</NoticeBox>
+            </div>
+          )}
           <p className="mt-3 text-xs text-slate-500">
             ※ 실제 보험금은 가입 상품, 약관, 한도, 차등제 등에 따라 달라질 수
             있습니다.

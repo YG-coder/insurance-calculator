@@ -19,12 +19,10 @@ export interface CarQuoteResult {
   monthlyGap: number | null; // 연간 견적 차액 ÷ 12개월(단순 월 환산)
 }
 
-const nonNeg = (v: number) => (isFinite(v) && v > 0 ? Math.floor(v) : 0);
-
 export function calcCarQuoteCompare(input: CarQuote[]): CarQuoteResult {
   // 유효 견적 = 금액 > 0
   const valid = (input ?? [])
-    .map((q, i) => ({ name: q.name?.trim() || `견적 ${String.fromCharCode(65 + i)}`, amount: nonNeg(q.amount) }))
+    .map((q, i) => ({ name: q.name?.trim() || `견적 ${String.fromCharCode(65 + i)}`, amount: nonNegativeInteger(q.amount) }))
     .filter((q) => q.amount > 0);
 
   if (valid.length < 2) {
@@ -45,3 +43,4 @@ export function calcCarQuoteCompare(input: CarQuote[]): CarQuoteResult {
 
   return { status: "OK", quotes, lowest, highest, gap, monthlyGap };
 }
+import { nonNegativeInteger } from "../common/number";

@@ -24,7 +24,7 @@ export default function FamilyLivingCalc() {
   const update = (i: number, key: keyof Row, val: string) => {
     setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, [key]: val } : r)));
   };
-  const addRow = () => setRows((prev) => [...prev, emptyRow()]);
+  const addRow = () => setRows((prev) => (prev.length < 6 ? [...prev, emptyRow()] : prev));
   const removeRow = (i: number) => setRows((prev) => prev.filter((_, idx) => idx !== i));
 
   // 미입력 판정(UI): 유효한 구간이 하나도 없으면 계산 안 함.
@@ -78,9 +78,11 @@ export default function FamilyLivingCalc() {
       </div>
 
       <div className="mt-4 flex flex-wrap gap-3">
-        <button type="button" onClick={addRow} className="px-4 py-2 rounded-xl border border-slate-300 text-sm font-semibold text-slate-700 hover:border-brand-300">
-          + 생활비 구간 추가
-        </button>
+        {rows.length < 6 && (
+          <button type="button" onClick={addRow} className="px-4 py-2 rounded-xl border border-slate-300 text-sm font-semibold text-slate-700 hover:border-brand-300">
+            + 생활비 구간 추가
+          </button>
+        )}
         <button
           type="button"
           className="btn-primary disabled:opacity-40 disabled:cursor-not-allowed"

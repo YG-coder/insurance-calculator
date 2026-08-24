@@ -6,6 +6,7 @@ import AmountInput from "@/components/AmountInput";
 import NoticeBox from "@/components/NoticeBox";
 import { calculate } from "@/lib/insurance/engine/engine";
 import { Coverage, Visit, Tier, Severity } from "@/lib/insurance/engine/types";
+import { CAP_LABELS } from "@/lib/insurance/engine/capLabels";
 
 const won = (n: number) =>
   `${Math.max(0, Math.round(n)).toLocaleString("ko-KR")}원`;
@@ -24,6 +25,7 @@ export default function HealthCalc5th() {
   const [tier, setTier] = useState<Tier>("clinic");
   const [severity, setSeverity] = useState<Severity | null>(null);
   const [priorAnnualPaid, setPriorAnnualPaid] = useState<string>("0");
+  const [nhisRate, setNhisRate] = useState<string>("");
   const [submitted, setSubmitted] = useState(false);
 
   const num = Number(amount.replace(/[^0-9]/g, "")) || 0;
@@ -43,6 +45,10 @@ export default function HealthCalc5th() {
         priorAnnualPaid:
           coverage === "non_benefit" && severity === "critical" && visit === "inpatient" && tier === "hospital"
             ? priorAnnualPaidNum
+            : undefined,
+        nhisCoinsuranceRate:
+          coverage === "benefit" && visit === "outpatient" && nhisRate.trim() !== ""
+            ? Math.min(100, Math.max(0, Number(nhisRate))) / 100
             : undefined,
       });
 
@@ -106,17 +112,34 @@ export default function HealthCalc5th() {
 
         {/* 급여 통원일 때만 의료기관 구분 (계산은 보류되지만 입력 흐름은 유지) */}
         {coverage === "benefit" && visit === "outpatient" && (
-          <div className="sm:col-span-2">
-            <label className="label-base">방문 의료기관</label>
-            <div className="grid grid-cols-2 gap-2 max-w-md">
-              <button type="button" onClick={() => setTier("clinic")} className={btn(tier === "clinic")}>
-                병·의원급
-              </button>
-              <button type="button" onClick={() => setTier("hospital")} className={btn(tier === "hospital")}>
-                상급종합·종합병원
-              </button>
+          <>
+            <div className="sm:col-span-2">
+              <label className="label-base">방문 의료기관</label>
+              <div className="grid grid-cols-2 gap-2 max-w-md">
+                <button type="button" onClick={() => setTier("clinic")} className={btn(tier === "clinic")}>
+                  병·의원급
+                </button>
+                <button type="button" onClick={() => setTier("hospital")} className={btn(tier === "hospital")}>
+                  상급종합·종합병원
+                </button>
+              </div>
             </div>
-          </div>
+            <div className="sm:col-span-2 max-w-md">
+              <label className="label-base" htmlFor="med5-nhis-rate">건강보험 본인부담률 (%)</label>
+              <input
+                id="med5-nhis-rate"
+                type="number"
+                min="0"
+                max="100"
+                step="0.1"
+                value={nhisRate}
+                onChange={(e) => setNhisRate(e.target.value)}
+                placeholder="진료비 영수증·보험사 안내에서 확인"
+                className="input-base w-full"
+              />
+              <p className="mt-2 text-xs text-slate-500">건강보험 본인부담률을 모르면 정확한 급여 통원 계산을 제공하지 않습니다.</p>
+            </div>
+          </>
         )}
 
         {coverage === "non_benefit" && severity === "critical" && visit === "inpatient" && (
@@ -178,8 +201,7 @@ export default function HealthCalc5th() {
 
           {result && result.status === "PENDING_UNVERIFIED" && (
             <NoticeBox variant="warning">
-              현재 5세대 급여 통원의 최소공제 기준을 공식 원문으로 추가 확인 중이라, 이 항목은 계산을
-              제공하지 않습니다. 확인이 완료되는 대로 계산 기능을 열 예정입니다.
+              급여 통원 계산에 필요한 건강보험 본인부담률을 입력해 주세요.
             </NoticeBox>
           )}
 
@@ -199,10 +221,13 @@ export default function HealthCalc5th() {
                   { label: "보험 적용 금액", value: won(result.insurancePay ?? 0) },
                 ]}
               />
-              {result.cappedBy && (
+              {result.appliedCaps.length > 0 && (
                 <NoticeBox variant="info">
-                  {result.cappedBy}이 적용되어 보험 적용/본인부담 금액이 조정되었습니다.
+                  적용된 한도: {result.appliedCaps.map((code) => CAP_LABELS[code]).join(", ")}. 보험 적용/본인부담 금액이 조정되었습니다.
                 </NoticeBox>
+              )}
+              {result.notes.length > 0 && (
+                <NoticeBox variant="info">{result.notes.join(" ")}</NoticeBox>
               )}
               <p className="text-xs text-slate-500">
                 ※ 실제 보험금은 가입 상품, 약관, 연간 누적 사용액, 차등제 등에 따라 달라질 수 있습니다.

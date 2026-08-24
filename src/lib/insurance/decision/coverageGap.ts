@@ -19,11 +19,9 @@ export interface CoverageGapResult {
   surplus: number;     // 초과 보장금액 = max(current - needed, 0)
 }
 
-const nonNeg = (v: number) => (isFinite(v) && v > 0 ? Math.floor(v) : 0);
-
 export function calcCoverageGap(input: CoverageGapInput): CoverageGapResult {
-  const needed = nonNeg(input.needed);
-  const current = nonNeg(input.current);
+  const needed = nonNegativeInteger(input.needed);
+  const current = nonNegativeInteger(input.current);
 
   const shortfall = Math.max(needed - current, 0);
   const surplus = Math.max(current - needed, 0);
@@ -32,3 +30,4 @@ export function calcCoverageGap(input: CoverageGapInput): CoverageGapResult {
 
   return { needed, current, direction, shortfall, surplus };
 }
+import { nonNegativeInteger } from "../common/number";

@@ -19,11 +19,9 @@ export interface PremiumRatioResult {
   yearlyPremium: number;       // 월 보험료 × 12
 }
 
-const nonNeg = (v: number) => (isFinite(v) && v > 0 ? Math.floor(v) : 0);
-
 export function calcPremiumRatio(input: PremiumRatioInput): PremiumRatioResult {
-  const monthlyIncome = nonNeg(input.monthlyIncome);
-  const monthlyPremium = nonNeg(input.monthlyPremium);
+  const monthlyIncome = nonNegativeInteger(input.monthlyIncome);
+  const monthlyPremium = nonNegativeInteger(input.monthlyPremium);
   const yearlyIncome = monthlyIncome * 12;
   const yearlyPremium = monthlyPremium * 12;
 
@@ -43,3 +41,4 @@ export function calcPremiumRatio(input: PremiumRatioInput): PremiumRatioResult {
     monthlyIncome, monthlyPremium, yearlyIncome, yearlyPremium,
   };
 }
+import { nonNegativeInteger } from "../common/number";

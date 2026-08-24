@@ -13,6 +13,8 @@ export default function CancelVsKeepCalc() {
   const [future, setFuture] = useState("21600000");
   const [submitted, setSubmitted] = useState(false);
 
+  const missing = surrender.trim() === "" || future.trim() === "";
+
   const result = calcCancelVsKeep({
     surrenderValue: onlyNum(surrender),
     futurePremium: onlyNum(future),
@@ -32,9 +34,10 @@ export default function CancelVsKeepCalc() {
       </div>
 
       <div className="mt-6">
-        <button type="button" className="btn-primary w-full sm:w-auto" onClick={() => setSubmitted(true)}>
+        <button type="button" className="btn-primary w-full sm:w-auto disabled:opacity-40 disabled:cursor-not-allowed" disabled={missing} onClick={() => setSubmitted(true)}>
           두 금액 나란히 보기
         </button>
+        {missing && <p className="mt-2 text-xs text-slate-500">두 금액을 모두 입력해 주세요. 0원은 숫자 0으로 입력할 수 있습니다.</p>}
       </div>
 
       {submitted && (

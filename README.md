@@ -1,6 +1,6 @@
 # 보험계산기
 
-Next.js 16.2.x App Router 기반 보험 계산기 사이트.
+Next.js 16.3.1 App Router 기반 보험 계산기 사이트.
 
 ## 실행
 
@@ -15,6 +15,13 @@ npm run start    # 프로덕션 실행
 
 - `/` 홈
 - `/health-insurance-calculator` 실손보험 자기부담금 계산기
+- `/5th-generation-health-insurance-calculator` 5세대 실손보험 자기부담금 계산기
+- `/surrender-value-calculator` 해지환급금 계산기
+- `/future-premium-calculator` 앞으로 낼 보험료 계산기
+- `/cancel-vs-keep-calculator` 보험 해지 vs 유지 계산기
+- `/coverage-gap-calculator` 보장 공백 계산기
+- `/death-coverage-calculator` 사망보장 계산기
+- `/family-living-calculator` 유족 생활비 계산기
 - `/insurance-premium-calculator` 보험료 비중 계산기
 - `/car-insurance-calculator` 자동차보험 견적 비교 계산기
 - `/about` 사이트 소개

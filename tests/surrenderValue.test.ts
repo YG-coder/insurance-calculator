@@ -38,10 +38,10 @@ function check(name: string, cond: boolean, detail = "") {
   check("estimate 환급률50% → 환급금 = 200만×50% = 100만", r.surrenderValue === 1000000, JSON.stringify(r));
   check("estimate → reference true", r.reference === true);
 }
-// Mode estimate: 예상 환급금 직접
+// Mode estimate: 100% 초과는 입력 오류
 {
-  const r = calcSurrender({ monthlyPremium: 100000, paidMonths: 20, mode: "estimate", estimatedValue: 800000 });
-  check("estimate 환급금 직접 → 800,000", r.surrenderValue === 800000);
+  const r = calcSurrender({ monthlyPremium: 100000, paidMonths: 20, mode: "estimate", estimatedRatePercent: 300 });
+  check("estimate 환급률 300% → NEED_INPUT", r.status === "NEED_INPUT", JSON.stringify(r));
 }
 // 유효성: 기납입 0
 {

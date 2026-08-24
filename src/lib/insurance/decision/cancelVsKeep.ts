@@ -17,27 +17,18 @@ export interface CancelVsKeepResult {
   // 의도적으로 차액(difference)을 계산/노출하지 않는다 — v0.2 결정.
 }
 
-const normalize = (v: number) => (isFinite(v) && v > 0 ? Math.floor(v) : 0);
-
 export function calcCancelVsKeep(input: CancelVsKeepInput): CancelVsKeepResult {
   // 음수/비정상 입력은 0으로 정규화
-  const surrenderValue = normalize(input.surrenderValue);
-  const futurePremium = normalize(input.futurePremium);
-
-  // 둘 중 하나라도 값이 없으면(0이면) 비교 불가로 본다
-  if (surrenderValue === 0 || futurePremium === 0) {
-    return {
-      status: "NEED_INPUT",
-      surrenderValue: null,
-      futurePremium: null,
-      notes: ["현재 해지환급금과 앞으로 낼 보험료를 모두 입력하면 두 금액을 나란히 보여드립니다."],
-    };
-  }
+  const surrenderValue = nonNegativeInteger(input.surrenderValue);
+  const futurePremium = nonNegativeInteger(input.futurePremium);
 
   return {
     status: "OK",
     surrenderValue,
     futurePremium,
-    notes: [],
+    notes: surrenderValue === 0
+      ? ["현재 해지환급금이 0원인 계약도 입력한 값 그대로 비교합니다."]
+      : [],
   };
 }
+import { nonNegativeInteger } from "../common/number";

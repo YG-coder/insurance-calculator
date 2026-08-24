@@ -60,7 +60,7 @@ export default function PremiumCalc() {
                 <p className="text-4xl font-bold text-brand-700">
                   {(result.ratioPercent ?? 0).toFixed(1)}%
                 </p>
-                <p className="text-sm text-slate-500 mt-2">월 소득 대비 월 보험료</p>
+                <p className="text-sm text-slate-500 mt-2">입력한 월 소득 기준(세전·세후 중 사용자가 선택)</p>
               </div>
               <ResultCard
                 title="입력·연간 환산"

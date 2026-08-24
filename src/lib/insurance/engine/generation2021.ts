@@ -51,6 +51,6 @@ export function calc2021(input: ClaimInput): CalcResult {
     rateApplied: rate,
     minDeductible,
     notes,
-    cappedBy: s.capped ? "통원 회당 보험금 20만 한도" : undefined,
+    appliedCaps: s.capped ? ["GEN2021_OUTPATIENT_PER_VISIT"] : [],
   };
 }

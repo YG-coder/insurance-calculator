@@ -5,6 +5,11 @@ function check(name: string, cond: boolean, detail = "") {
   if (cond) { pass++; console.log("  ✅ " + name); }
   else { fail++; console.log("  ❌ " + name + "  " + detail); }
 }
+// 중간 빈 행이 있어도 UI 행 이름(A/C)을 보존
+{
+  const r = calcCarQuoteCompare([{ amount: 800000 }, { amount: 0 }, { amount: 900000 }]);
+  check("중간 빈 견적 뒤 자동 이름 보존", r.quotes[0].name === "견적 A" && r.quotes[1].name === "견적 C", JSON.stringify(r));
+}
 const 만 = 10000;
 
 // 견적 3개: 80만, 95만, 88만 → 최저80 최고95 차액15 월환산 12500

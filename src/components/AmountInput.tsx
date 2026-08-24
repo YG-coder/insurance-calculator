@@ -11,6 +11,8 @@ type Props = {
 const formatWithComma = (digits: string) =>
   digits ? Number(digits).toLocaleString("ko-KR") : "";
 
+const MAX_AMOUNT_DIGITS = 15;
+
 /**
  * 금액 입력 공통 컴포넌트
  * - 입력 중 천 단위 콤마 자동 적용 (표시 전용)
@@ -33,7 +35,8 @@ export default function AmountInput({
         autoComplete="off"
         className="input-base pr-12"
         value={formatWithComma(value)}
-        onChange={(e) => onChange(e.target.value.replace(/[^0-9]/g, ""))}
+        maxLength={19}
+        onChange={(e) => onChange(e.target.value.replace(/[^0-9]/g, "").slice(0, MAX_AMOUNT_DIGITS))}
         placeholder={placeholder}
       />
       <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-sm font-medium text-slate-500">

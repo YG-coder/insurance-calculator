@@ -21,14 +21,11 @@ export interface FuturePremiumResult {
   notes: string[];
 }
 
-const nonNegInt = (v: number | undefined) =>
-  typeof v === "number" && isFinite(v) ? Math.max(0, Math.floor(v)) : 0;
-
 export function calcFuturePremium(input: FuturePremiumInput): FuturePremiumResult {
-  const monthlyPremium = Math.max(0, isFinite(input.monthlyPremium) ? input.monthlyPremium : 0);
-  const remainingMonths = nonNegInt(input.remainingMonths);
+  const monthlyPremium = nonNegativeInteger(input.monthlyPremium);
+  const remainingMonths = nonNegativeInteger(input.remainingMonths);
   const hasPaid = typeof input.paidMonths === "number";
-  const paidMonths = nonNegInt(input.paidMonths);
+  const paidMonths = nonNegativeInteger(input.paidMonths);
 
   const base: FuturePremiumResult = {
     status: "OK",
@@ -60,3 +57,4 @@ export function calcFuturePremium(input: FuturePremiumInput): FuturePremiumResul
 
   return { ...base, status: "OK", futurePremium, paidSoFar, totalAtCompletion, futureSharePercent };
 }
+import { nonNegativeInteger } from "../common/number";

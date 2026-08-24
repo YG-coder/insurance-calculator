@@ -25,9 +25,8 @@ export default function CarCalc() {
   const canCalc = validCount >= 2;
 
   const result = canCalc
-    ? calcCarQuoteCompare(
+      ? calcCarQuoteCompare(
         rows
-          .filter((r) => r.amount.trim() !== "")
           .map((r) => ({ name: r.name, amount: onlyNum(r.amount) }))
       )
     : null;

@@ -82,4 +82,4 @@ export const GEN2026 = {
       annualLimit: R.GEN2026_NONCRITICAL_ANNUAL_LIMIT.value,
     },
   },
-};
+} as const;

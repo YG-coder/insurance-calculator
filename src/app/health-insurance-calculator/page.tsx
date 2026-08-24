@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import HealthCalc from "@/components/calculators/HealthCalc";
+import PolicyGenerationGuide from "@/components/calculators/PolicyGenerationGuide";
 import NoticeBox from "@/components/NoticeBox";
 import CTABox from "@/components/CTABox";
 import FAQ from "@/components/FAQ";
@@ -67,6 +68,7 @@ export default function HealthPage() {
         </a>
       </div>
 
+      <PolicyGenerationGuide />
       <HealthCalc />
 
       <div className="mt-6">

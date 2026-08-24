@@ -5,7 +5,7 @@
 // 2026-08-24: 전 경로의 금액 종결을 공통 settle()에 위임한다.
 //   - R-2: 원 단위 정수로 확정 → 표시 계층에서 합계가 어긋나지 않는다.
 //   - 급여 통원 경로의 클램프 누락(잠복 결함)도 함께 해소된다. HOLD 해제 시 재발하지 않는다.
-import { ClaimInput, CalcResult } from "./types";
+import { CapCode, ClaimInput, CalcResult } from "./types";
 import { GEN2026 } from "./constants";
 import { settle, normalizeAmount } from "../common/settle";
 
@@ -16,14 +16,14 @@ function ok(
   rateApplied: number,
   minDeductible: number,
   notes: string[] = [],
-  cappedBy?: string,
+  appliedCaps: CapCode[] = [],
 ): CalcResult {
-  return { status: "OK", generation: "2026", amount, ownPay, insurancePay, rateBased: Math.round(amount * rateApplied), rateApplied, minDeductible, notes, cappedBy };
+  return { status: "OK", generation: "2026", amount, ownPay, insurancePay, rateBased: Math.round(amount * rateApplied), rateApplied, minDeductible, notes, appliedCaps };
 }
 
 function pending(amount: number, reasons: string[]): CalcResult {
   return { status: "PENDING_UNVERIFIED", generation: "2026", amount,
-    ownPay: null, insurancePay: null, rateBased: null, rateApplied: null, minDeductible: null, notes: reasons };
+    ownPay: null, insurancePay: null, rateBased: null, rateApplied: null, minDeductible: null, notes: reasons, appliedCaps: [] };
 }
 
 export function calc2026(input: ClaimInput): CalcResult {
@@ -60,38 +60,40 @@ export function calc2026(input: ClaimInput): CalcResult {
 
   if (input.severity === "critical") {
     const c = GEN2026.nonBenefit.critical;
+    notes.push(`연간 보상한도 ${c.annualLimit.toLocaleString("ko-KR")}원은 이번 1건 계산에 반영되지 않습니다.`);
     if (input.visit === "inpatient") {
       const rate = c.inpatientRate; // 30% A
       let ownPayRaw = amount * rate;
-      let cappedBy: string | undefined;
+      const appliedCaps: CapCode[] = [];
       // #6 상급종합·종합 입원 자기부담 상한 500만(연 누적).
       // 이 상한은 ownPay 측 구속이므로 settle의 insuranceCap이 아니라 ownPayRaw를 깎는다.
       if (input.tier === "hospital") {
         const remaining = Math.max(c.annualOwnPayCap - prior, 0);
-        if (ownPayRaw > remaining) { ownPayRaw = remaining; cappedBy = "중증 입원 자기부담 상한 500만(상급종합·종합·연 누적)"; }
+        if (ownPayRaw > remaining) { ownPayRaw = remaining; appliedCaps.push("GEN2026_CRITICAL_INPATIENT_OWN_PAY_ANNUAL"); }
         notes.push("500만 상한은 연간 누적 기준(priorAnnualPaid 반영).");
       }
       const s = settle(amount, ownPayRaw);
-      return ok(amount, s.ownPay, s.insurancePay, rate, 0, notes, cappedBy);
+      return ok(amount, s.ownPay, s.insurancePay, rate, 0, notes, appliedCaps);
     }
     // 중증 통원: Max(30%, 3만), 통원 회당 20만(보험지급) 한도
     const rate = c.outpatientRate;
     const s = settle(amount, Math.max(amount * rate, c.outpatientMinDeductible), c.outpatientPerVisitLimit);
-    const cappedBy = s.capped ? "중증 통원 회당 20만 한도" : undefined;
-    return ok(amount, s.ownPay, s.insurancePay, rate, c.outpatientMinDeductible, notes, cappedBy);
+    const appliedCaps: CapCode[] = s.capped ? ["GEN2026_CRITICAL_OUTPATIENT_PER_VISIT"] : [];
+    return ok(amount, s.ownPay, s.insurancePay, rate, c.outpatientMinDeductible, notes, appliedCaps);
   }
 
   // 비중증(특약2)
   const n = GEN2026.nonBenefit.nonCritical;
+  notes.push(`연간 보상한도 ${n.annualLimit.toLocaleString("ko-KR")}원은 이번 1건 계산에 반영되지 않습니다.`);
   if (input.visit === "inpatient") {
     const rate = n.inpatientRate; // 50% A
     const s = settle(amount, amount * rate, n.inpatientPerVisitLimit);
-    const cappedBy = s.capped ? "비중증 입원 회당 300만 한도" : undefined;
-    return ok(amount, s.ownPay, s.insurancePay, rate, 0, notes, cappedBy);
+    const appliedCaps: CapCode[] = s.capped ? ["GEN2026_NONCRITICAL_INPATIENT_PER_VISIT"] : [];
+    return ok(amount, s.ownPay, s.insurancePay, rate, 0, notes, appliedCaps);
   }
   // 비중증 통원: Max(50%, 5만), 일당 20만 한도
   const rate = n.outpatientRate;
   const s = settle(amount, Math.max(amount * rate, n.outpatientMinDeductible), n.outpatientPerDayLimit);
-  const cappedBy = s.capped ? "비중증 통원 일당 20만 한도" : undefined;
-  return ok(amount, s.ownPay, s.insurancePay, rate, n.outpatientMinDeductible, notes, cappedBy);
+  const appliedCaps: CapCode[] = s.capped ? ["GEN2026_NONCRITICAL_OUTPATIENT_PER_DAY"] : [];
+  return ok(amount, s.ownPay, s.insurancePay, rate, n.outpatientMinDeductible, notes, appliedCaps);
 }

@@ -5,7 +5,7 @@ function check(name: string, cond: boolean, detail = "") {
   if (cond) { pass++; console.log("  ✅ " + name); }
   else { fail++; console.log("  ❌ " + name + "  " + detail); }
 }
-const 만 = 10000, 억 = 100000000;
+const 만 = 10000;
 
 {
   const r = calcFamilyLiving([

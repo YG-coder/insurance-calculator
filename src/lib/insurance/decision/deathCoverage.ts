@@ -21,16 +21,13 @@ export interface DeathCoverageResult {
   isCovered: boolean;      // 추가 필요 없음(준비 >= 필요)
 }
 
-const nonNeg = (v: number | undefined) =>
-  typeof v === "number" && isFinite(v) && v > 0 ? Math.floor(v) : 0;
-
 export function calcDeathCoverage(input: DeathCoverageInput): DeathCoverageResult {
-  const monthlyLiving = nonNeg(input.monthlyLiving);
-  const coverageMonths = nonNeg(input.coverageMonths);
-  const debt = nonNeg(input.debt);
-  const otherFunds = nonNeg(input.otherFunds);
-  const existingDeathBenefit = nonNeg(input.existingDeathBenefit);
-  const usableAssets = nonNeg(input.usableAssets);
+  const monthlyLiving = nonNegativeInteger(input.monthlyLiving);
+  const coverageMonths = nonNegativeInteger(input.coverageMonths);
+  const debt = nonNegativeInteger(input.debt);
+  const otherFunds = nonNegativeInteger(input.otherFunds);
+  const existingDeathBenefit = nonNegativeInteger(input.existingDeathBenefit);
+  const usableAssets = nonNegativeInteger(input.usableAssets);
 
   const livingTotal = monthlyLiving * coverageMonths;
   const neededTotal = livingTotal + debt + otherFunds;
@@ -46,9 +43,5 @@ export function calcDeathCoverage(input: DeathCoverageInput): DeathCoverageResul
   };
 }
 
-// UI 보조: 연 + 추가 개월 → 개월 정수 (추가 개월 미입력=0)
-export function toMonths(years: number, extraMonths: number = 0): number {
-  const y = isFinite(years) && years > 0 ? Math.floor(years) : 0;
-  const m = isFinite(extraMonths) && extraMonths > 0 ? Math.floor(extraMonths) : 0;
-  return y * 12 + m;
-}
+import { nonNegativeInteger } from "../common/number";
+export { toMonths } from "../common/time";

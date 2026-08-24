@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { CALCULATORS } from "@/lib/site";
+import Script from "next/script";
+import { CALCULATORS, SITE } from "@/lib/site";
 
 type Props = {
   currentHref: string;
@@ -7,8 +8,27 @@ type Props = {
 
 export default function RelatedCalculators({ currentHref }: Props) {
   const related = CALCULATORS.filter((c) => c.href !== currentHref);
+  const current = CALCULATORS.find((c) => c.href === currentHref);
+  const jsonLd = current ? {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    name: current.title,
+    description: current.description,
+    url: `${SITE.url}${current.href}`,
+    applicationCategory: "FinanceApplication",
+    operatingSystem: "Any",
+    offers: { "@type": "Offer", price: "0", priceCurrency: "KRW" },
+  } : null;
+
   return (
     <section className="mt-12">
+      {jsonLd && (
+        <Script
+          id={`calculator-jsonld-${currentHref.replaceAll("/", "-")}`}
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replaceAll("<", "\\u003c") }}
+        />
+      )}
       <h2 className="text-xl font-bold text-slate-900 mb-4">관련 계산기</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {related.map((c) => (

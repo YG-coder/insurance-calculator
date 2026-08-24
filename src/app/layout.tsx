@@ -26,10 +26,6 @@ export const metadata: Metadata = {
         "보험료 비교",
     ],
 
-    alternates: {
-        canonical: SITE.url,
-    },
-
     openGraph: {
         type: "website",
         locale: "ko_KR",

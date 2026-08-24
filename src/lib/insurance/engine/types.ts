@@ -19,6 +19,12 @@ export interface ClaimInput {
 
 // OK = 계산 완료 / PENDING_UNVERIFIED = 미확정 상수로 계산 불가(HOLD)
 export type CalcStatus = "OK" | "PENDING_UNVERIFIED";
+export type CapCode =
+  | "GEN2021_OUTPATIENT_PER_VISIT"
+  | "GEN2026_CRITICAL_INPATIENT_OWN_PAY_ANNUAL"
+  | "GEN2026_CRITICAL_OUTPATIENT_PER_VISIT"
+  | "GEN2026_NONCRITICAL_INPATIENT_PER_VISIT"
+  | "GEN2026_NONCRITICAL_OUTPATIENT_PER_DAY";
 
 export interface CalcResult {
   status: CalcStatus;
@@ -30,5 +36,5 @@ export interface CalcResult {
   rateApplied: number | null;   // 적용 자기부담률
   minDeductible: number | null; // 적용 최소공제
   notes: string[];              // HOLD/상한/미확정 사유
-  cappedBy?: string;            // 한도/상한 적용 표기
+  appliedCaps: CapCode[];       // 실제로 구속된 한도 코드
 }

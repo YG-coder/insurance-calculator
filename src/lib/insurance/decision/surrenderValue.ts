@@ -13,7 +13,6 @@ export interface SurrenderInput {
   surrenderValue?: number;
   // mode "estimate": 사용자가 직접 넣은 값 중 하나 (둘 중 하나만)
   estimatedRatePercent?: number; // 예상 환급률(%)
-  estimatedValue?: number;       // 예상 해지환급금(원)
   // 선택: 남은 납입 개월 수 → 미래 부담까지 계산
   remainingMonths?: number;
 }
@@ -36,11 +35,9 @@ export interface SurrenderResult {
   notes: string[];
 }
 
-const n = (v: number | undefined) => (typeof v === "number" && isFinite(v) ? v : 0);
-
 export function calcSurrender(input: SurrenderInput): SurrenderResult {
-  const monthlyPremium = Math.max(0, n(input.monthlyPremium));
-  const paidMonths = Math.max(0, Math.floor(n(input.paidMonths)));
+  const monthlyPremium = nonNegativeNumber(input.monthlyPremium);
+  const paidMonths = nonNegativeInteger(input.paidMonths);
   const notes: string[] = [];
   const reference = input.mode === "estimate";
 
@@ -69,13 +66,15 @@ export function calcSurrender(input: SurrenderInput): SurrenderResult {
     surrenderValue = Math.max(0, input.surrenderValue);
   } else {
     // estimate: 예상 환급률(%) 또는 예상 환급금 중 사용자가 넣은 값만 사용
-    if (typeof input.estimatedValue === "number") {
-      surrenderValue = Math.max(0, input.estimatedValue);
-    } else if (typeof input.estimatedRatePercent === "number") {
-      surrenderValue = totalPaid * (Math.max(0, input.estimatedRatePercent) / 100);
+    if (typeof input.estimatedRatePercent === "number") {
+      if (!isFinite(input.estimatedRatePercent) || input.estimatedRatePercent < 0 || input.estimatedRatePercent > 100) {
+        return { ...base, status: "NEED_INPUT", totalPaid,
+          notes: ["예상 환급률은 0%에서 100% 사이로 입력해 주세요."] };
+      }
+      surrenderValue = totalPaid * (input.estimatedRatePercent / 100);
     } else {
       return { ...base, status: "NEED_INPUT", totalPaid,
-        notes: ["예상 환급률(%) 또는 예상 해지환급금을 직접 입력해 주세요."] };
+        notes: ["예상 환급률(%)을 직접 입력해 주세요."] };
     }
     notes.push("참고용: 사용자가 입력한 가정값 기반 계산입니다.");
   }
@@ -89,7 +88,7 @@ export function calcSurrender(input: SurrenderInput): SurrenderResult {
   let futurePremium: number | null = null;
   let totalAtCompletion: number | null = null;
   if (typeof input.remainingMonths === "number" && input.remainingMonths > 0) {
-    const remaining = Math.floor(input.remainingMonths);
+    const remaining = nonNegativeInteger(input.remainingMonths);
     futurePremium = monthlyPremium * remaining;
     totalAtCompletion = totalPaid + futurePremium;
   }
@@ -99,3 +98,4 @@ export function calcSurrender(input: SurrenderInput): SurrenderResult {
     refundRatePercent, monthlyAvgLoss, futurePremium, totalAtCompletion, notes,
   };
 }
+import { nonNegativeInteger, nonNegativeNumber } from "../common/number";

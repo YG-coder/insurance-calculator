@@ -12,24 +12,24 @@ function check(name: string, cond: boolean, detail = "") {
   check("정상 → OK, 두 값 그대로", r.status === "OK" && r.surrenderValue === 3000000 && r.futurePremium === 21600000, JSON.stringify(r));
   check("차액 필드 없음 (병렬 표시만)", !("difference" in r));
 }
-// 한쪽 0 → NEED_INPUT
+// 해지환급금 0원 계약도 유효한 사실값
 {
   const r = calcCancelVsKeep({ surrenderValue: 0, futurePremium: 21600000 });
-  check("해지환급금 0 → NEED_INPUT", r.status === "NEED_INPUT" && r.surrenderValue === null, JSON.stringify(r));
+  check("해지환급금 0 → OK", r.status === "OK" && r.surrenderValue === 0 && r.futurePremium === 21600000, JSON.stringify(r));
 }
 {
   const r = calcCancelVsKeep({ surrenderValue: 3000000, futurePremium: 0 });
-  check("앞으로 낼 보험료 0 → NEED_INPUT", r.status === "NEED_INPUT");
+  check("앞으로 낼 보험료 0 → OK", r.status === "OK" && r.futurePremium === 0);
 }
-// 둘 다 미입력(0)
+// 둘 다 0도 엔진에서는 유효한 명시값(UI가 빈 문자열을 구분)
 {
   const r = calcCancelVsKeep({ surrenderValue: 0, futurePremium: 0 });
-  check("둘 다 0 → NEED_INPUT", r.status === "NEED_INPUT");
+  check("둘 다 0 → OK", r.status === "OK" && r.surrenderValue === 0 && r.futurePremium === 0);
 }
-// 음수 정규화 → 0 취급 → NEED_INPUT
+// 음수 정규화 → 0
 {
   const r = calcCancelVsKeep({ surrenderValue: -500000, futurePremium: 21600000 });
-  check("음수 → 0 정규화 → NEED_INPUT", r.status === "NEED_INPUT", JSON.stringify(r));
+  check("음수 → 0 정규화", r.status === "OK" && r.surrenderValue === 0, JSON.stringify(r));
 }
 // 큰 금액
 {

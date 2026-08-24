@@ -58,9 +58,9 @@ for (const amount of amounts)
 {
   // 급여 통원(병·의원): ownPay = max(0.2a, 1만), ins = 0.8a. ins가 20만이 되는 지점 = 25만
   const atLimit = calc2021({ amount: 250000, coverage: "benefit", visit: "outpatient", tier: "clinic" });
-  check("급여 통원 경계: 25만원 → 보험금 정확히 20만, 한도 미표기", atLimit.insurancePay === 200000 && !atLimit.cappedBy, JSON.stringify(atLimit));
+  check("급여 통원 경계: 25만원 → 보험금 정확히 20만, 한도 미표기", atLimit.insurancePay === 200000 && atLimit.appliedCaps.length === 0, JSON.stringify(atLimit));
   const overLimit = calc2021({ amount: 250001, coverage: "benefit", visit: "outpatient", tier: "clinic" });
-  check("급여 통원 경계+1: 보험금 20만 고정 + 한도 표기", overLimit.insurancePay === 200000 && !!overLimit.cappedBy, JSON.stringify(overLimit));
+  check("급여 통원 경계+1: 보험금 20만 고정 + 한도 표기", overLimit.insurancePay === 200000 && overLimit.appliedCaps.includes("GEN2021_OUTPATIENT_PER_VISIT"), JSON.stringify(overLimit));
   check("급여 통원 경계+1: 초과분은 본인부담", overLimit.ownPay === 250001 - 200000, JSON.stringify(overLimit));
 
   // 비급여 통원: ownPay = max(0.3a, 3만), ins = 0.7a. ins가 20만이 되는 지점 ≒ 285,714
@@ -69,9 +69,9 @@ for (const amount of amounts)
 
   // 입원에는 회당 한도가 없다
   const inp = calc2021({ amount: 5000000, coverage: "benefit", visit: "inpatient", tier: "clinic" });
-  check("급여 입원 500만원: 회당 한도 없음", inp.insurancePay === 4000000 && !inp.cappedBy, JSON.stringify(inp));
+  check("급여 입원 500만원: 회당 한도 없음", inp.insurancePay === 4000000 && inp.appliedCaps.length === 0, JSON.stringify(inp));
   const inpNb = calc2021({ amount: 5000000, coverage: "non_benefit", visit: "inpatient", tier: "clinic" });
-  check("비급여 입원 500만원: 회당 한도 없음", inpNb.insurancePay === 3500000 && !inpNb.cappedBy, JSON.stringify(inpNb));
+  check("비급여 입원 500만원: 회당 한도 없음", inpNb.insurancePay === 3500000 && inpNb.appliedCaps.length === 0, JSON.stringify(inpNb));
 
 }
 

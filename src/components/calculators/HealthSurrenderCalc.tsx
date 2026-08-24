@@ -122,7 +122,7 @@ export default function HealthSurrenderCalc() {
                   { label: result.reference ? "예상 해지환급금" : "현재 해지환급금", value: won(result.surrenderValue ?? 0) },
                   result.isGain
                     ? { label: "환급금이 납입액을 초과 (이익)", value: won(Math.abs(result.loss ?? 0)), highlight: true }
-                    : { label: "손해액", value: won(result.loss ?? 0), highlight: true },
+                    : { label: "납입액과 환급금 차이", value: won(result.loss ?? 0), highlight: true },
                   { label: "환급률", value: pct(result.refundRatePercent ?? 0) },
                   { label: result.isGain ? "월평균 이익" : "월평균 손실", value: won(Math.abs(result.monthlyAvgLoss ?? 0)) },
                   ...(result.futurePremium !== null
@@ -138,11 +138,11 @@ export default function HealthSurrenderCalc() {
                   {result.reference ? (
                     <>입력하신 예상 기준, 지금까지 낸 보험료 중 약{" "}
                       <b className="text-brand-700">{pct(result.refundRatePercent)}</b>를 돌려받고, 약{" "}
-                      <b className="text-brand-700">{pct(100 - result.refundRatePercent)}</b>는 환급되지 않습니다.</>
+                      <b className="text-brand-700">{pct(100 - result.refundRatePercent)}</b>는 현재 환급금에 포함되지 않습니다.</>
                   ) : (
                     <>지금까지 낸 보험료 중{" "}
                       <b className="text-brand-700">{pct(result.refundRatePercent)}</b>를 돌려받고,{" "}
-                      <b className="text-brand-700">{pct(100 - result.refundRatePercent)}</b>는 소멸됩니다.</>
+                      <b className="text-brand-700">{pct(100 - result.refundRatePercent)}</b>는 현재 해지환급금에 포함되지 않습니다.</>
                   )}
                 </div>
               )}

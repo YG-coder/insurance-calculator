@@ -5,6 +5,11 @@ function check(name: string, cond: boolean, detail = "") {
   if (cond) { pass++; console.log("  ✅ " + name); }
   else { fail++; console.log("  ❌ " + name + "  " + detail); }
 }
+// 월 보험료 소수 → 정수 원 단위로 내림
+{
+  const r = calcFuturePremium({ monthlyPremium: 100000.9, remainingMonths: 2 });
+  check("월 보험료 소수 → floor", r.futurePremium === 200000, JSON.stringify(r));
+}
 
 // 월 18만, 남은 120개월
 {

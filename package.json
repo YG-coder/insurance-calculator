@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "test:insurance": "tsx tests/generation2021.test.ts && tsx tests/generation2021.correctness.test.ts && tsx tests/generation2026.test.ts",
-    "test:all": "node scripts/check-test-registration.mjs && tsx tests/generation2021.test.ts && tsx tests/generation2021.correctness.test.ts && tsx tests/generation2026.test.ts && tsx tests/surrenderValue.test.ts && tsx tests/futurePremium.test.ts && tsx tests/cancelVsKeep.test.ts && tsx tests/coverageGap.test.ts && tsx tests/deathCoverage.test.ts && tsx tests/familyLiving.test.ts && tsx tests/premiumRatio.test.ts && tsx tests/carQuoteCompare.test.ts",
+    "test:all": "node scripts/check-test-registration.mjs && tsx tests/generation2021.test.ts && tsx tests/generation2021.correctness.test.ts && tsx tests/generation2026.test.ts && tsx tests/surrenderValue.test.ts && tsx tests/futurePremium.test.ts && tsx tests/cancelVsKeep.test.ts && tsx tests/coverageGap.test.ts && tsx tests/deathCoverage.test.ts && tsx tests/familyLiving.test.ts && tsx tests/premiumRatio.test.ts && tsx tests/carQuoteCompare.test.ts && tsx tests/uiCopy.test.ts",
     "test:registration": "node scripts/check-test-registration.mjs"
   },
   "dependencies": {

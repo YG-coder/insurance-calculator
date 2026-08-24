@@ -137,7 +137,7 @@ export default function HealthCalc5th() {
             {tier === "hospital" ? (
               <div>
                 <label className="label-base" htmlFor="med5-prior-annual-paid">
-                  올해 기존 중증 비급여 자기부담금 (원)
+                  약관상 누적기간 내 이미 부담한 중증 비급여 입원 자기부담금 (원)
                 </label>
                 <AmountInput
                   id="med5-prior-annual-paid"
@@ -146,7 +146,8 @@ export default function HealthCalc5th() {
                   placeholder="없으면 0"
                 />
                 <p className="mt-2 text-xs text-slate-500">
-                  올해 이미 부담한 중증 비급여 입원 자기부담금을 입력하면 500만 원 상한에 누적 반영됩니다.
+                  약관상 누적기간 내 이미 부담한 중증 비급여 입원 자기부담금을 입력하면 500만 원 상한에
+                  누적 반영됩니다. 누적기간의 기산점은 가입하신 상품의 약관을 확인해 주세요.
                 </p>
               </div>
             ) : (

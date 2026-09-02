@@ -33,44 +33,44 @@ function checkInvariant(name: string, result: ReturnType<typeof calc2026>) {
 }
 // 비급여인데 severity 미지정 → PENDING
 {
-  const r = calc2026({ amount: 300000, coverage: "non_benefit", visit: "inpatient" });
+  const r = calc2026({ amount: 300000, coverage: "non_benefit", nonBenefitItem: "general", visit: "inpatient" });
   check("비급여 severity 미지정 → PENDING", r.status === "PENDING_UNVERIFIED", JSON.stringify(r));
 }
 // #4·5 중증 통원 Max(30%,3만) + 1회당 가입금액(계약자 선택값)
 //   2026-09-03: 별표15 2026.5.6 특별약관1 제5조③ 직독 결과 20만원은 "이내에서 계약자가
 //   선택한 금액"의 상한선이다. 상수로 자동 적용하지 않고, 사용자가 준 경우에만 적용한다.
 {
-  const belowMinimum = calc2026({ amount: 10000, coverage: "non_benefit", visit: "outpatient", severity: "critical" });
+  const belowMinimum = calc2026({ amount: 10000, coverage: "non_benefit", nonBenefitItem: "general", visit: "outpatient", severity: "critical" });
   check("중증 통원: 진료비가 최소공제액보다 작으면 진료비까지만 부담", belowMinimum.ownPay === 10000 && belowMinimum.insurancePay === 0, JSON.stringify(belowMinimum));
   checkInvariant("중증 통원 최소공제 경계값", belowMinimum);
-  const small = calc2026({ amount: 50000, coverage: "non_benefit", visit: "outpatient", severity: "critical" });
+  const small = calc2026({ amount: 50000, coverage: "non_benefit", nonBenefitItem: "general", visit: "outpatient", severity: "critical" });
   check("중증 통원 Max(30%,3만): 5만→본인 3만", small.ownPay === 30000 && small.insurancePay === 20000, JSON.stringify(small));
-  const noLimit = calc2026({ amount: 1000000, coverage: "non_benefit", visit: "outpatient", severity: "critical" });
+  const noLimit = calc2026({ amount: 1000000, coverage: "non_benefit", nonBenefitItem: "general", visit: "outpatient", severity: "critical" });
   check("중증 통원: 가입금액 미입력이면 한도를 적용하지 않음", noLimit.ownPay === 300000 && noLimit.insurancePay === 700000 && noLimit.appliedCaps.length === 0, JSON.stringify(noLimit));
   check("중증 통원: 미입력 시 미적용 고지", noLimit.notes.some((n) => n.includes("입력하지 않아 적용하지 않았습니다")));
   checkInvariant("중증 통원 한도 미적용", noLimit);
-  const big = calc2026({ amount: 1000000, coverage: "non_benefit", visit: "outpatient", severity: "critical", perVisitCoverageLimit: 200000 });
+  const big = calc2026({ amount: 1000000, coverage: "non_benefit", nonBenefitItem: "general", visit: "outpatient", severity: "critical", perVisitCoverageLimit: 200000 });
   check("중증 통원: 가입금액 20만 입력 시 구속", big.ownPay === 800000 && big.insurancePay === 200000 && big.appliedCaps.includes("GEN2026_CRITICAL_OUTPATIENT_PER_VISIT"), JSON.stringify(big));
   checkInvariant("중증 통원 한도 적용", big);
-  const chosen = calc2026({ amount: 1000000, coverage: "non_benefit", visit: "outpatient", severity: "critical", perVisitCoverageLimit: 100000 });
+  const chosen = calc2026({ amount: 1000000, coverage: "non_benefit", nonBenefitItem: "general", visit: "outpatient", severity: "critical", perVisitCoverageLimit: 100000 });
   check("중증 통원: 계약자가 10만으로 정한 경우 그 값으로 구속", chosen.insurancePay === 100000 && chosen.ownPay === 900000, JSON.stringify(chosen));
-  const overMax = calc2026({ amount: 1000000, coverage: "non_benefit", visit: "outpatient", severity: "critical", perVisitCoverageLimit: 500000 });
+  const overMax = calc2026({ amount: 1000000, coverage: "non_benefit", nonBenefitItem: "general", visit: "outpatient", severity: "critical", perVisitCoverageLimit: 500000 });
   check("중증 통원: 약관 상한선 20만을 넘겨 입력하면 20만으로 깎음", overMax.insurancePay === 200000, JSON.stringify(overMax));
 }
 // #6 중증 입원 상한 500만 (상급종합·종합만)
 {
-  const hosp = calc2026({ amount: 30000000, coverage: "non_benefit", visit: "inpatient", severity: "critical", tier: "hospital" });
+  const hosp = calc2026({ amount: 30000000, coverage: "non_benefit", nonBenefitItem: "general", visit: "inpatient", severity: "critical", tier: "hospital" });
   check("중증 입원 상한 500만 (상급종합·종합)", hosp.ownPay === 5000000 && hosp.appliedCaps.includes("GEN2026_CRITICAL_INPATIENT_OWN_PAY_ANNUAL"), JSON.stringify(hosp));
   checkInvariant("중증 입원 상한 적용", hosp);
-  const accumulated = calc2026({ amount: 10000000, coverage: "non_benefit", visit: "inpatient", severity: "critical", tier: "hospital", priorAnnualPaid: 4000000 });
+  const accumulated = calc2026({ amount: 10000000, coverage: "non_benefit", nonBenefitItem: "general", visit: "inpatient", severity: "critical", tier: "hospital", priorAnnualPaid: 4000000 });
   check("중증 입원 상한에 연 누적 자기부담 반영", accumulated.ownPay === 1000000 && accumulated.insurancePay === 9000000, JSON.stringify(accumulated));
   checkInvariant("중증 입원 연 누적 상한 적용", accumulated);
-  const clinic = calc2026({ amount: 30000000, coverage: "non_benefit", visit: "inpatient", severity: "critical", tier: "clinic" });
+  const clinic = calc2026({ amount: 30000000, coverage: "non_benefit", nonBenefitItem: "general", visit: "inpatient", severity: "critical", tier: "clinic" });
   check("중증 입원 상한: 병·의원급엔 미적용", clinic.ownPay === 9000000 && clinic.appliedCaps.length === 0, JSON.stringify(clinic));
 }
 // #7·9 비중증 입원 50% + 회당 300만 한도
 {
-  const r = calc2026({ amount: 10000000, coverage: "non_benefit", visit: "inpatient", severity: "non_critical" });
+  const r = calc2026({ amount: 10000000, coverage: "non_benefit", nonBenefitItem: "general", visit: "inpatient", severity: "non_critical" });
   check("비중증 입원 50% + 회당 300만 한도", r.ownPay === 7000000 && r.insurancePay === 3000000 && r.appliedCaps.includes("GEN2026_NONCRITICAL_INPATIENT_PER_VISIT"), JSON.stringify(r));
   checkInvariant("비중증 입원 한도 적용", r);
 }
@@ -78,15 +78,15 @@ function checkInvariant(name: string, result: ReturnType<typeof calc2026>) {
 //   약관(특별약관2 제3조)이 "통원 1일당(외래 및 처방·조제비 합산)"으로 규정하므로
 //   한 건은 하루치 합산액이며 최소공제도 하루에 한 번만 적용된다.
 {
-  const belowMinimum = calc2026({ amount: 10000, coverage: "non_benefit", visit: "outpatient", severity: "non_critical" });
+  const belowMinimum = calc2026({ amount: 10000, coverage: "non_benefit", nonBenefitItem: "general", visit: "outpatient", severity: "non_critical" });
   check("비중증 통원: 진료비가 최소공제액보다 작으면 진료비까지만 부담", belowMinimum.ownPay === 10000 && belowMinimum.insurancePay === 0, JSON.stringify(belowMinimum));
   checkInvariant("비중증 통원 최소공제 경계값", belowMinimum);
-  const small = calc2026({ amount: 100000, coverage: "non_benefit", visit: "outpatient", severity: "non_critical" });
+  const small = calc2026({ amount: 100000, coverage: "non_benefit", nonBenefitItem: "general", visit: "outpatient", severity: "non_critical" });
   check("비중증 통원 Max(50%,5만): 10만→본인 5만", small.ownPay === 50000 && small.insurancePay === 50000, JSON.stringify(small));
-  const noLimit = calc2026({ amount: 500000, coverage: "non_benefit", visit: "outpatient", severity: "non_critical" });
+  const noLimit = calc2026({ amount: 500000, coverage: "non_benefit", nonBenefitItem: "general", visit: "outpatient", severity: "non_critical" });
   check("비중증 통원: 가입금액 미입력이면 한도를 적용하지 않음", noLimit.ownPay === 250000 && noLimit.insurancePay === 250000 && noLimit.appliedCaps.length === 0, JSON.stringify(noLimit));
   checkInvariant("비중증 통원 한도 미적용", noLimit);
-  const big = calc2026({ amount: 500000, coverage: "non_benefit", visit: "outpatient", severity: "non_critical", perVisitCoverageLimit: 200000 });
+  const big = calc2026({ amount: 500000, coverage: "non_benefit", nonBenefitItem: "general", visit: "outpatient", severity: "non_critical", perVisitCoverageLimit: 200000 });
   check("비중증 통원: 가입금액 20만 입력 시 구속", big.ownPay === 300000 && big.insurancePay === 200000 && big.appliedCaps.includes("GEN2026_NONCRITICAL_OUTPATIENT_PER_DAY"), JSON.stringify(big));
   checkInvariant("비중증 통원 한도 적용", big);
 }
@@ -109,7 +109,9 @@ function checkInvariant(name: string, result: ReturnType<typeof calc2026>) {
           for (const severity of severities)
             for (const priorAnnualPaid of priors) {
               cases++;
-              const r = calc2026({ amount, coverage, visit, tier, severity, priorAnnualPaid });
+              const r = coverage === "benefit"
+                ? calc2026({ amount, coverage: "benefit", visit, tier })
+                : calc2026({ amount, coverage: "non_benefit", nonBenefitItem: "general", visit, tier, severity, priorAnnualPaid });
               if (r.status !== "OK") continue; // PENDING은 금액을 반환하지 않는다
               const own = r.ownPay ?? NaN;
               const ins = r.insurancePay ?? NaN;
@@ -129,23 +131,23 @@ function checkInvariant(name: string, result: ReturnType<typeof calc2026>) {
 // ── 반올림 정책 고정 (settle.ts ROUNDING_POLICY: ownPay 확정 + round) ──
 // 이 테스트는 정책이 바뀌면 반드시 실패해야 한다. 실패 시 settle.ts 정책 블록을 먼저 확인할 것.
 {
-  const r = calc2026({ amount: 100001, coverage: "non_benefit", visit: "outpatient", severity: "non_critical" });
+  const r = calc2026({ amount: 100001, coverage: "non_benefit", nonBenefitItem: "general", visit: "outpatient", severity: "non_critical" });
   check("반올림 정책: ownPay 확정 + round(.5 올림) → 50,000.5 → 50,001", r.ownPay === 50001 && r.insurancePay === 50000, JSON.stringify(r));
-  const c = calc2026({ amount: 100005, coverage: "non_benefit", visit: "outpatient", severity: "critical" });
+  const c = calc2026({ amount: 100005, coverage: "non_benefit", nonBenefitItem: "general", visit: "outpatient", severity: "critical" });
   check("반올림 정책: 중증 30% 타이 → 30,001.5 → 30,002", c.ownPay === 30002 && c.insurancePay === 70003, JSON.stringify(c));
 }
 
 
 // 단건 계산의 미반영 고지와 가입금액 경계 (2026-09-03)
 {
-  const r = calc2026({ amount: 300000, coverage: "non_benefit", visit: "outpatient", severity: "critical" });
+  const r = calc2026({ amount: 300000, coverage: "non_benefit", nonBenefitItem: "general", visit: "outpatient", severity: "critical" });
   check("단건: 중증 통원 연 100회 미반영 고지", r.notes.some((n) => n.includes("100회가 한도이지만") && n.includes("1건 계산에는 반영되지 않습니다")), JSON.stringify(r.notes));
   check("단건: 연간 가입금액이 계약 시 정한 금액임을 고지", r.notes.some((n) => n.includes("계약 시 정한 금액")));
 
-  const zero = calc2026({ amount: 1000000, coverage: "non_benefit", visit: "outpatient", severity: "critical", perVisitCoverageLimit: 0 });
+  const zero = calc2026({ amount: 1000000, coverage: "non_benefit", nonBenefitItem: "general", visit: "outpatient", severity: "critical", perVisitCoverageLimit: 0 });
   check("단건: 가입금액 0은 미입력으로 처리", zero.insurancePay === 700000 && zero.appliedCaps.length === 0, JSON.stringify(zero));
   check("단건: 0일 때도 미적용 고지", zero.notes.some((n) => n.includes("입력하지 않아 적용하지 않았습니다")));
-  const neg = calc2026({ amount: 1000000, coverage: "non_benefit", visit: "outpatient", severity: "critical", perVisitCoverageLimit: -1 });
+  const neg = calc2026({ amount: 1000000, coverage: "non_benefit", nonBenefitItem: "general", visit: "outpatient", severity: "critical", perVisitCoverageLimit: -1 });
   check("단건: 가입금액 음수도 미입력으로 처리", neg.insurancePay === 700000);
 }
 

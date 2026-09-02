@@ -4,12 +4,18 @@ import { useState } from "react";
 import ResultCard from "@/components/ResultCard";
 import AmountInput from "@/components/AmountInput";
 import NoticeBox from "@/components/NoticeBox";
-import { calculate } from "@/lib/insurance/engine/engine";
-import { Coverage, Visit, Tier, Severity } from "@/lib/insurance/engine/types";
+import { calc2026, GEN2026_NON_BENEFIT_ITEM_LABEL } from "@/lib/insurance/engine/generation2026";
+import { Coverage, Visit, Tier, Severity, Gen2026NonBenefitItem } from "@/lib/insurance/engine/types";
 import { CAP_LABELS } from "@/lib/insurance/engine/capLabels";
 
 const won = (n: number) =>
   `${Math.max(0, Math.round(n)).toLocaleString("ko-KR")}원`;
+
+// 화면 표기 순서. ⚠ 기본 선택이 없다 — 사용자가 MRI·주사료·병실료임을 모른 채
+//    "일반 비급여"로 계산되는 일을 막는 것이 이 축의 목적이다.
+const NON_BENEFIT_ITEMS: Gen2026NonBenefitItem[] = [
+  "general", "musculoskeletal_esw", "injection", "mri", "room_charge",
+];
 
 const btn = (active: boolean) =>
   `px-4 py-3 rounded-xl border text-sm font-semibold transition ${
@@ -24,6 +30,8 @@ export default function HealthCalc5th() {
   const [visit, setVisit] = useState<Visit>("inpatient");
   const [tier, setTier] = useState<Tier>("clinic");
   const [severity, setSeverity] = useState<Severity | null>(null);
+  // 초기값은 미선택이어야 한다. "general"을 기본값으로 두면 안전 차단이 무력화된다.
+  const [nonBenefitItem, setNonBenefitItem] = useState<Gen2026NonBenefitItem | null>(null);
   const [priorAnnualPaid, setPriorAnnualPaid] = useState<string>("0");
   const [outpatientLimit, setOutpatientLimit] = useState<string>("");
   const [nhisRate, setNhisRate] = useState<string>("");
@@ -32,30 +40,43 @@ export default function HealthCalc5th() {
   const num = Number(amount.replace(/[^0-9]/g, "")) || 0;
   const priorAnnualPaidNum = Number(priorAnnualPaid.replace(/[^0-9]/g, "")) || 0;
 
-  // 비급여인데 중증/비중증 미선택이면 계산 자체를 시도하지 않는다(엔진 호출 전 UI 가드).
-  const needsSeverity = coverage === "non_benefit" && severity === null;
+  // 비급여는 ①치료유형 ②중증/비중증을 모두 고른 뒤에만 계산한다(엔진 호출 전 UI 가드).
+  //   치료유형이 "일반 비급여"가 아니면 질환 구분과 무관하게 엔진이 차단한다.
+  const needsItem = coverage === "non_benefit" && nonBenefitItem === null;
+  const needsSeverity =
+    coverage === "non_benefit" && nonBenefitItem === "general" && severity === null;
 
-  const result = needsSeverity
-    ? null
-    : calculate("2026", {
-        amount: num,
-        coverage,
-        visit,
-        tier,
-        severity: coverage === "non_benefit" ? (severity as Severity) : undefined,
-        priorAnnualPaid:
-          coverage === "non_benefit" && severity === "critical" && visit === "inpatient" && tier === "hospital"
-            ? priorAnnualPaidNum
-            : undefined,
-        nhisCoinsuranceRate:
-          coverage === "benefit" && visit === "outpatient" && nhisRate.trim() !== ""
-            ? Math.min(100, Math.max(0, Number(nhisRate))) / 100
-            : undefined,
-        perVisitCoverageLimit:
-          coverage === "non_benefit" && visit === "outpatient" && outpatientLimit.trim() !== ""
-            ? Number(outpatientLimit.replace(/[^0-9]/g, "")) || 0
-            : undefined,
-      });
+  // calc2026을 직접 호출한다 — 비급여에서 치료유형 누락이 컴파일 에러가 되는 경로다.
+  const result =
+    coverage === "benefit"
+      ? calc2026({
+          amount: num,
+          coverage: "benefit",
+          visit,
+          tier,
+          nhisCoinsuranceRate:
+            visit === "outpatient" && nhisRate.trim() !== ""
+              ? Math.min(100, Math.max(0, Number(nhisRate))) / 100
+              : undefined,
+        })
+      : needsItem || needsSeverity
+        ? null
+        : calc2026({
+            amount: num,
+            coverage: "non_benefit",
+            visit,
+            tier,
+            severity: severity ?? undefined,
+            nonBenefitItem: nonBenefitItem as Gen2026NonBenefitItem,
+            priorAnnualPaid:
+              severity === "critical" && visit === "inpatient" && tier === "hospital"
+                ? priorAnnualPaidNum
+                : undefined,
+            perVisitCoverageLimit:
+              visit === "outpatient" && outpatientLimit.trim() !== ""
+                ? Number(outpatientLimit.replace(/[^0-9]/g, "")) || 0
+                : undefined,
+          });
 
   return (
     <div className="card">
@@ -96,8 +117,33 @@ export default function HealthCalc5th() {
           </div>
         </div>
 
-        {/* 비급여일 때만 중증/비중증 노출 (조건부) */}
+        {/* 비급여일 때만 치료유형 노출. 기본 선택 없음 — 고르기 전에는 계산하지 않는다. */}
         {coverage === "non_benefit" && (
+          <div className="sm:col-span-2">
+            <label className="label-base">치료유형</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {NON_BENEFIT_ITEMS.map((it) => (
+                <button
+                  key={it}
+                  type="button"
+                  onClick={() => setNonBenefitItem(it)}
+                  className={btn(nonBenefitItem === it)}
+                >
+                  {GEN2026_NON_BENEFIT_ITEM_LABEL[it]}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-slate-500">
+              5세대 비급여는 <b>보장종목이 나뉘어</b> 있습니다. 근골격계 이학요법·체외충격파,
+              비급여 주사료, 비급여 MRI는 약관상 <b>별도 보장종목</b>이라 일반 상해·질병 비급여에서
+              제외되고, 상급병실료 차액도 입원 의료비와 별도 산식입니다. 이 계산기는 현재
+              <b> 일반 비급여만</b> 계산하므로 치료유형을 먼저 선택해 주세요.
+            </p>
+          </div>
+        )}
+
+        {/* 일반 비급여일 때만 중증/비중증 노출 (조건부) */}
+        {coverage === "non_benefit" && nonBenefitItem === "general" && (
           <div className="sm:col-span-2">
             <label className="label-base">질환 구분</label>
             <div className="grid grid-cols-2 gap-2 max-w-md">
@@ -147,7 +193,7 @@ export default function HealthCalc5th() {
           </>
         )}
 
-        {coverage === "non_benefit" && visit === "outpatient" && (
+        {coverage === "non_benefit" && nonBenefitItem === "general" && visit === "outpatient" && (
           <div className="sm:col-span-2 max-w-md">
             <label className="label-base" htmlFor="med5-outpatient-limit">
               통원 가입금액 (선택)
@@ -166,7 +212,7 @@ export default function HealthCalc5th() {
           </div>
         )}
 
-        {coverage === "non_benefit" && severity === "critical" && visit === "inpatient" && (
+        {coverage === "non_benefit" && nonBenefitItem === "general" && severity === "critical" && visit === "inpatient" && (
           <>
             <div className="sm:col-span-2">
               <label className="label-base">입원 의료기관</label>
@@ -217,16 +263,22 @@ export default function HealthCalc5th() {
 
       {submitted && (
         <div className="mt-8 space-y-4">
+          {needsItem && (
+            <NoticeBox variant="warning">
+              비급여는 <b>치료유형</b>에 따라 적용되는 보장종목과 산식이 다릅니다. 치료유형을 먼저
+              선택해 주세요. 선택 전에는 계산하지 않습니다.
+            </NoticeBox>
+          )}
+
           {needsSeverity && (
             <NoticeBox variant="info">
               비급여는 <b>중증 / 비중증</b>에 따라 자기부담률과 한도가 다릅니다. 질환 구분을 선택해 주세요.
             </NoticeBox>
           )}
 
+          {/* 차단 사유는 엔진이 만든 문구를 그대로 보여준다. 화면에서 지어내지 않는다. */}
           {result && result.status === "PENDING_UNVERIFIED" && (
-            <NoticeBox variant="warning">
-              급여 통원 계산에 필요한 건강보험 본인부담률을 입력해 주세요.
-            </NoticeBox>
+            <NoticeBox variant="warning">{result.notes.join(" ")}</NoticeBox>
           )}
 
           {result && result.status === "OK" && num > 0 && (
@@ -253,7 +305,7 @@ export default function HealthCalc5th() {
               {result.notes.length > 0 && (
                 <NoticeBox variant="info">{result.notes.join(" ")}</NoticeBox>
               )}
-              {coverage === "non_benefit" && visit === "outpatient" && (
+              {coverage === "non_benefit" && nonBenefitItem === "general" && visit === "outpatient" && (
                 <NoticeBox variant="info">
                   {severity === "non_critical"
                     ? "비중증 통원은 약관상 '통원 1일당(외래 및 처방·조제비 합산)' 기준입니다. 같은 날 여러 번 다녀왔다면 하루치를 합산한 금액을 입력해 주세요."

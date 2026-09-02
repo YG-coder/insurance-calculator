@@ -34,6 +34,55 @@ check("5세대 페이지: 단건 통원 가입금액 반영 안내",
 check("5세대 페이지: 단건 미반영 범위를 연간 항목으로 한정",
   gen5Page.includes("연간 횟수와 연간 보험가입금액은 반영하지"));
 
+// ── 5세대 비급여 치료유형 안전 차단 (2026-09-04) ───────────────────
+// 근거: 별표15 특별약관1 제3조 (2)①("3대비급여는 제외"), 특별약관2 제3조 (1)①
+//       ("비급여 자기공명영상진단은 제외"), 특약1·2 입원 표("비급여 병실료는 제외").
+// 화면이 이 네 항목을 일반 경로로 계산하도록 유도하면 잘못된 보험금이 표시된다.
+{
+  // 기본값이 "general"이면 사용자가 인식하지 못한 채 계산된다 — 반드시 미선택이어야 한다.
+  for (const [name, src] of [["단건", gen5], ["다회", gen5Multi]] as const) {
+    check(`5세대 ${name} UI: 치료유형 초기값이 미선택`,
+      /useState<Gen2026NonBenefitItem \| (?:null>\(null\)|"">\(""\))/.test(src), src.slice(0, 0));
+    check(`5세대 ${name} UI: 치료유형이 "general"로 자동 선택되지 않음`,
+      !/useState<[^>]*>\(\s*"general"\s*\)/.test(src));
+    check(`5세대 ${name} UI: 치료유형 선택 전에는 계산하지 않음`, src.includes("needsItem"));
+    check(`5세대 ${name} UI: 치료유형 라벨 5종 노출`,
+      src.includes("NON_BENEFIT_ITEMS") && src.includes("GEN2026_NON_BENEFIT_ITEM_LABEL"));
+    check(`5세대 ${name} UI: 미선택 시 계산 차단 안내`,
+      src.includes("치료유형을 먼저") && src.includes("선택 전에는 계산하지 않습니다"));
+    // 입력이 실제 엔진에 전달되는지 — 화면에 선택지만 있고 엔진이 받지 않으면 차단이 무의미하다.
+    check(`5세대 ${name} UI: 치료유형이 엔진 입력으로 전달됨`, /nonBenefitItem:\s*nonBenefitItem/.test(src));
+  }
+
+  // 결과 안내는 엔진이 만든 사유를 그대로 보여준다(화면에서 지어내지 않는다).
+  check("5세대 단건 UI: PENDING 사유를 엔진 notes로 표시",
+    gen5.includes("{result.notes.join(\" \")}"));
+  check("5세대 단건 UI: 급여 통원 사유를 모든 PENDING에 붙이지 않음",
+    !gen5.includes("급여 통원 계산에 필요한 건강보험 본인부담률을 입력해 주세요."));
+
+  // 공개 페이지가 네 항목의 미지원 범위를 밝힌다("참고용" 일반 면책으로 대신하지 않는다).
+  for (const label of ["근골격계 이학요법·체외충격파", "비급여 주사료", "비급여 MRI", "상급병실료 차액"]) {
+    check(`5세대 페이지: 미지원 항목 "${label}" 명시`, gen5Page.includes(label));
+  }
+  check("5세대 페이지: 중증 3대비급여가 일반 보장종목에서 제외됨을 명시",
+    gen5Page.includes("3대비급여") && gen5Page.includes("명시적으로 제외"));
+  check("5세대 페이지: 비중증 MRI가 별도 보장종목임을 명시",
+    gen5Page.includes("비중증의 비급여 자기공명영상진단"));
+  check("5세대 페이지: 상급병실료 별도 산식 명시",
+    gen5Page.includes("비급여 병실료의 50%") && gen5Page.includes("1일 평균 10만 원 한도"));
+  check("5세대 페이지: 현재 계산하지 않는다는 사실 명시", gen5Page.includes("현재 계산하지"));
+  check("5세대 페이지: 계산 범위를 (1)(2) 보장종목으로 한정", gen5Page.includes("(1)상해비급여·(2)질병비급여"));
+
+  // 낡은 안내 — 네 항목을 일반 경로로 계산해도 된다는 취지의 문구가 남으면 안 된다.
+  for (const stale of [
+    "도수치료·체외충격파·비급여 주사도 중증·비중증 구분만 선택하면",
+    "MRI도 일반 비급여로 계산",
+    "상급병실료도 입원 의료비에 합산해 입력",
+  ]) {
+    check(`5세대 페이지: 낡은 안내 "${stale}" 없음`, !gen5Page.includes(stale));
+  }
+}
+
 check("4세대 계산기: 홈 카드가 세대를 명시", site.includes('title: "4세대 실손보험 자기부담금 계산기"'));
 check("4세대 계산기: 페이지 제목이 세대를 명시", gen4Page.includes("4세대 실손보험 자기부담금 계산기"));
 check("4세대 계산기: 가이드 링크가 세대를 명시", healthGuides.includes('calcLabel: "4세대 실손보험 자기부담금 계산기"'));

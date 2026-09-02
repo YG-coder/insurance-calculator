@@ -12,6 +12,24 @@ export type Severity = "critical" | "non_critical"; // 중증 / 비중증 (5세�
 export type Cause = "injury" | "disease"; // 상해 / 질병 (4세대 연간 한도 구분축)
 export type Gen2021Rider = "none" | "manual_therapy" | "injection" | "mri";
 
+// 5세대 비급여 치료유형 축.
+//   별표15(2026.8.28 현행본) 특별약관1·2는 비급여를 **보장종목 3종**으로 나눈다.
+//     특별약관1(중증)  — (1)상해비급여 / (2)질병비급여 / (3)3대비급여
+//     특별약관2(비중증) — (1)상해비급여 / (2)질병비급여 / (3)비급여 자기공명영상진단
+//   원문이 서로를 명시적으로 배제한다.
+//     특약1 제3조 (2)질병비급여① "비급여의료비(3대비급여는 제외합니다)"        — 인쇄 p.261
+//     특약2 제3조 (1)상해비급여① "비급여의료비(비급여 자기공명영상진단은 제외합니다)" — 인쇄 p.288
+//   따라서 3대비급여·MRI 청구를 (1)(2) 경로로 계산하는 것은 근사가 아니라 약관이 금지한 계산이다.
+//   상급병실료 차액도 입원 보상 대상에서 제외되고 별도 산식(50%, 1일 평균 10만원 한도)을 갖는다.
+//   (3) 보장종목과 병실료는 아직 미구현이므로, 이 축으로 식별해 계산 자체를 차단한다.
+//   ⚠ 기본값을 두지 않는다. "general"이 자동 선택되면 차단의 의미가 없다.
+export type Gen2026NonBenefitItem =
+  | "general"             // 일반 비급여 — (1)상해비급여 / (2)질병비급여
+  | "musculoskeletal_esw" // 근골격계 이학요법·체외충격파 (중증 3대비급여)
+  | "injection"           // 비급여 주사료 (중증 3대비급여)
+  | "mri"                 // 비급여 MRI (중증 3대비급여 / 비중증 별도 보장종목)
+  | "room_charge";        // 상급병실료 차액
+
 // 2·3세대 표준약관 <표1 항목별 공제금액>의 분류축.
 //   ⚠ 4·5세대의 Tier와 다른 축이다. 종합병원이 2·3세대에서는 1만5천원(hospital)이지만
 //     4세대에서는 상급종합과 같은 2만원(Tier "hospital")으로 묶인다. 섞어 쓰면 안 된다.
@@ -34,7 +52,36 @@ export interface ClaimInput {
   // 계약자가 정한 회(건)당 보험가입금액(원). 2·3세대 통원의 30만원 이내 설정값이 대표적이다.
   // 상수화할 수 없는 계약별 값이므로 사용자가 준 경우에만 적용하고, 미제공 시 미적용 고지만 한다.
   perVisitCoverageLimit?: number;
+  // 5세대 비급여 치료유형. **제네릭 진입점(calculate)의 통로일 뿐** 여기서는 선택 필드다.
+  // 타입 수준 강제는 Gen2026NonBenefitInput / Gen2026MultiNonBenefitInput이 담당하고,
+  // 이 경로로 들어온 값은 calc2026이 런타임에서 검사해 미지정이면 PENDING_UNVERIFIED로 막는다.
+  nonBenefitItem?: Gen2026NonBenefitItem;
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// 5세대 전용 입력. 비급여에서는 치료유형이 **필수**라서 누락이 컴파일 에러가 된다.
+//   급여에는 요구하지 않는다(coverage로 판별되는 유니온).
+// ─────────────────────────────────────────────────────────────────────
+interface Gen2026CommonInput {
+  amount: number;
+  visit: Visit;
+  tier?: Tier;
+}
+
+export interface Gen2026BenefitInput extends Gen2026CommonInput {
+  coverage: "benefit";
+  nhisCoinsuranceRate?: number;
+}
+
+export interface Gen2026NonBenefitInput extends Gen2026CommonInput {
+  coverage: "non_benefit";
+  severity?: Severity;                    // 미지정 시 런타임에서 PENDING_UNVERIFIED
+  nonBenefitItem: Gen2026NonBenefitItem;  // 필수
+  priorAnnualPaid?: number;
+  perVisitCoverageLimit?: number;
+}
+
+export type Gen2026ClaimInput = Gen2026BenefitInput | Gen2026NonBenefitInput;
 
 // OK = 계산 완료 / PENDING_UNVERIFIED = 미확정 상수 또는 필수 입력 누락으로 계산 불가(HOLD)
 export type CalcStatus = "OK" | "PENDING_UNVERIFIED";
@@ -136,17 +183,26 @@ export interface Gen2021MultiClaimInput {
   priorAnnualRiderVisits?: number;
 }
 
-export interface Gen2026MultiClaimInput {
+// 5세대 다회 청구. 단건과 같은 정책 — 비급여에서 치료유형은 필수다.
+interface Gen2026MultiCommonInput {
   // 5세대 연간 보험가입금액과 자기부담 누적은 (1)상해비급여 / (2)질병비급여 **각 축에 대해
   // 따로** 정해진다(특별약관1·2 제5조①). 한 계산 묶음은 하나의 원인 축만 포함한다.
   cause: Cause;
-  coverage: Coverage;
   visit: Visit;
   tier?: Tier;
-  severity?: Severity;
-  nhisCoinsuranceRate?: number;
   amounts: number[];
   priorAnnualInsurancePaid?: number;
+}
+
+export interface Gen2026MultiBenefitInput extends Gen2026MultiCommonInput {
+  coverage: "benefit";
+  nhisCoinsuranceRate?: number;
+}
+
+export interface Gen2026MultiNonBenefitInput extends Gen2026MultiCommonInput {
+  coverage: "non_benefit";
+  severity?: Severity;
+  nonBenefitItem: Gen2026NonBenefitItem; // 필수
   priorAnnualOwnPay?: number;
   // 통원 가입금액(중증은 1회당, 비중증은 1일당). 약관상 20만원 "이내에서 계약자가 선택한 금액"
   // 이므로 상수화할 수 없다. 미제공 시 적용하지 않고 미적용 사실만 알린다.
@@ -156,3 +212,7 @@ export interface Gen2026MultiClaimInput {
   // 상수화할 수 없다. 상해비급여·질병비급여 각 축에 대해 따로 정해진다.
   annualCoverageLimit?: number;
 }
+
+export type Gen2026MultiClaimInput =
+  | Gen2026MultiBenefitInput
+  | Gen2026MultiNonBenefitInput;

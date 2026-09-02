@@ -19,7 +19,7 @@ const GEN4_NON_BENEFIT_TERMS: RegulatorySource = {
 
 const GEN4_RIDER_TERMS: RegulatorySource = {
   ...GEN4_SOURCE_BASE,
-  locator: "3대비급여 특별약관 각 제3조(보상내용): 도수치료·체외충격파·증식치료, 주사료, MRI/MRA",
+  locator: "3대비급여 특별약관 제3조(보장종목별 보상내용) 제1항 <공제금액 및 보장한도> 표, 인쇄 p.251",
 };
 
 const GEN5_FSC_RELEASE: RegulatorySource = {
@@ -115,6 +115,14 @@ const confirmed0902 = <T>(
   sources: readonly RegulatorySource[],
   note?: string,
 ) => confirmed(ruleId, generation, value, sources, note, "2026-09-02");
+
+/** 2026-09-03 별표15 2021.7.1 연혁본 인쇄 p.251을 재대조한 4세대 3대비급여 규칙. */
+const confirmed0903 = <T>(
+  ruleId: string,
+  value: T,
+  sources: readonly RegulatorySource[],
+  note?: string,
+) => confirmed(ruleId, "2021", value, sources, note, "2026-09-03");
 
 // 각 사용 지점마다 ruleId를 분리한다. 값이 같아도 적용 대상·한도 성격이 다르면 다른 규칙이다.
 export const REGULATORY_RULES = {
@@ -289,27 +297,27 @@ export const REGULATORY_RULES = {
     [GEN4_BENEFIT_TERMS, GEN4_NON_BENEFIT_TERMS],
     "상해·질병별 보장 안에서 입원·통원 합산",
   ),
-  GEN2021_MANUAL_THERAPY_ANNUAL_LIMIT: confirmed0902(
-    "GEN2021-MANUAL-THERAPY-ANNUAL-LIMIT", "2021", 3_500_000, [GEN4_RIDER_TERMS],
+  GEN2021_MANUAL_THERAPY_ANNUAL_LIMIT: confirmed0903(
+    "GEN2021-MANUAL-THERAPY-ANNUAL-LIMIT", 3_500_000, [GEN4_RIDER_TERMS],
   ),
-  GEN2021_INJECTION_ANNUAL_LIMIT: confirmed0902(
-    "GEN2021-INJECTION-ANNUAL-LIMIT", "2021", 2_500_000, [GEN4_RIDER_TERMS],
+  GEN2021_INJECTION_ANNUAL_LIMIT: confirmed0903(
+    "GEN2021-INJECTION-ANNUAL-LIMIT", 2_500_000, [GEN4_RIDER_TERMS],
   ),
-  GEN2021_MRI_ANNUAL_LIMIT: confirmed0902(
-    "GEN2021-MRI-ANNUAL-LIMIT", "2021", 3_000_000, [GEN4_RIDER_TERMS],
+  GEN2021_MRI_ANNUAL_LIMIT: confirmed0903(
+    "GEN2021-MRI-ANNUAL-LIMIT", 3_000_000, [GEN4_RIDER_TERMS],
   ),
-  GEN2021_RIDER_DEDUCT_RATE: confirmed0902(
-    "GEN2021-RIDER-DEDUCT-RATE", "2021", 0.3, [GEN4_RIDER_TERMS],
-    "3대비급여: 1회당 2만원과 보장대상의료비 30% 중 큰 금액",
+  GEN2021_RIDER_DEDUCT_RATE: confirmed0903(
+    "GEN2021-RIDER-DEDUCT-RATE", 0.3, [GEN4_RIDER_TERMS],
+    "3대비급여: 1회당 3만원과 보장대상의료비 30% 중 큰 금액",
   ),
-  GEN2021_RIDER_MIN_DEDUCTIBLE: confirmed0902(
-    "GEN2021-RIDER-MIN-DEDUCTIBLE", "2021", 20_000, [GEN4_RIDER_TERMS],
+  GEN2021_RIDER_MIN_DEDUCTIBLE: confirmed0903(
+    "GEN2021-RIDER-MIN-DEDUCTIBLE", 30_000, [GEN4_RIDER_TERMS],
   ),
-  GEN2021_MANUAL_THERAPY_ANNUAL_VISITS: confirmed0902(
-    "GEN2021-MANUAL-THERAPY-ANNUAL-VISITS", "2021", 50, [GEN4_RIDER_TERMS],
+  GEN2021_MANUAL_THERAPY_ANNUAL_VISITS: confirmed0903(
+    "GEN2021-MANUAL-THERAPY-ANNUAL-VISITS", 50, [GEN4_RIDER_TERMS],
   ),
-  GEN2021_INJECTION_ANNUAL_VISITS: confirmed0902(
-    "GEN2021-INJECTION-ANNUAL-VISITS", "2021", 50, [GEN4_RIDER_TERMS],
+  GEN2021_INJECTION_ANNUAL_VISITS: confirmed0903(
+    "GEN2021-INJECTION-ANNUAL-VISITS", 50, [GEN4_RIDER_TERMS],
   ),
 
   GEN2026_BENEFIT_INPATIENT_RATE: confirmed(

@@ -48,6 +48,12 @@ function check(name: string, ok: boolean, detail = "") {
 
 // 3대비급여: 공통 공제, 항목별 금액·횟수 한도.
 {
+  const deductibleBoundary = calculateMany2021({
+    cause: "disease", coverage: "non_benefit", visit: "outpatient", rider: "manual_therapy",
+    amounts: [50_000],
+  });
+  check("3대비급여 5만원은 최소공제 3만원 적용", deductibleBoundary.totalOwnPay === 30_000 && deductibleBoundary.totalInsurancePay === 20_000);
+
   const manual = calculateMany2021({
     cause: "disease", coverage: "non_benefit", visit: "outpatient", rider: "manual_therapy",
     amounts: [100_000, 100_000], priorAnnualRiderVisits: 49,

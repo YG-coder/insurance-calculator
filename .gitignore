@@ -27,3 +27,6 @@ coverage/
 # IDE
 .idea/
 .vscode/
+
+# TypeScript incremental build cache
+*.tsbuildinfo

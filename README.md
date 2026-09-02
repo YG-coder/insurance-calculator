@@ -108,7 +108,6 @@ docs/insurance/               개발 문서 (아래 색인)
 
 ## 개발 문서
 
-- [`docs/insurance/README.md`](./docs/insurance/README.md) — 문서 색인
 - [`docs/insurance/audit-status.md`](./docs/insurance/audit-status.md) — 감사 최종 상태, 설계 원칙, 남은 HOLD
 - [`docs/insurance/insurance-gen123-engine-design.md`](./docs/insurance/insurance-gen123-engine-design.md) — 1~3세대 엔진 근거 조사·구현 설계
 - [`docs/insurance/multi-claim-design.md`](./docs/insurance/multi-claim-design.md) — 다회 청구 설계(방문별 행, 연간 횟수 한도, 자기부담 상한 누적)

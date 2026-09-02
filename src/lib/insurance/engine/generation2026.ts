@@ -2,6 +2,11 @@
 //   - 값이 박힌 계산은 금융위 원문 직독 A 확정 항목만.
 //   - 급여 통원 최소공제는 금융위 2026-05-06 원문으로 확인됐다.
 //   - 건강보험 본인부담률은 건별 사용자 입력값이므로 미제공 시 PENDING_UNVERIFIED로 반환한다.
+// 2026-09-03: 별표15 2026.5.6 연혁본(5세대 표준약관) 직독 반영.
+//   - 통원 한도(중증 1회당 / 비중증 1일당)는 약관 제5조③이 "20만원 이내에서 회사가 정한
+//     금액 중 계약자가 선택한 금액"으로 규정한다. 상한선이지 계약값이 아니므로
+//     사용자가 증권의 값을 준 경우에만 적용하고, 없으면 미적용 사실을 알린다.
+//   - 자기부담 상한 500만원의 '연간'은 제5조②가 계약일 기준으로 정의한다(역년 아님).
 // 2026-08-24: 전 경로의 금액 종결을 공통 settle()에 위임한다.
 //   - R-2: 원 단위 정수로 확정 → 표시 계층에서 합계가 어긋나지 않는다.
 //   - 급여 통원 경로의 클램프 누락(잠복 결함)도 함께 해소된다. HOLD 해제 시 재발하지 않는다.
@@ -19,6 +24,19 @@ function ok(
   appliedCaps: CapCode[] = [],
 ): CalcResult {
   return { status: "OK", generation: "2026", amount, ownPay, insurancePay, rateBased: Math.round(amount * rateApplied), rateApplied, minDeductible, notes, appliedCaps };
+}
+
+/**
+ * 계약자가 선택한 통원 가입금액. 약관상 상한선을 넘겨 입력하면 상한선으로 깎는다.
+ *
+ * 정책 — 0·음수·비정상 값은 **미입력으로 본다**.
+ *   0을 실제 한도로 적용하면 보험금이 0원이 되는데, 이는 "가입금액을 0으로 정한 계약"이
+ *   아니라 입력하지 않았다는 뜻일 가능성이 압도적으로 높다. 조용히 0원 한도를 적용하는
+ *   것보다 미적용 사실을 알리는 쪽이 안전하다.
+ */
+function outpatientLimit(value: number | undefined, max: number): number | undefined {
+  if (value === undefined || !Number.isFinite(value) || value <= 0) return undefined;
+  return Math.min(Math.floor(value), max);
 }
 
 function pending(amount: number, reasons: string[]): CalcResult {
@@ -60,7 +78,7 @@ export function calc2026(input: ClaimInput): CalcResult {
 
   if (input.severity === "critical") {
     const c = GEN2026.nonBenefit.critical;
-    notes.push(`연간 보상한도 ${c.annualLimit.toLocaleString("ko-KR")}원은 이번 1건 계산에 반영되지 않습니다.`);
+    notes.push(`연간 보험가입금액(약관상 ${c.annualLimitMax.toLocaleString("ko-KR")}원 이내에서 계약 시 정한 금액, 상해·질병 각각)은 1건 계산에 반영되지 않습니다.`);
     if (input.visit === "inpatient") {
       const rate = c.inpatientRate; // 30% A
       let ownPayRaw = amount * rate;
@@ -70,30 +88,40 @@ export function calc2026(input: ClaimInput): CalcResult {
       if (input.tier === "hospital") {
         const remaining = Math.max(c.annualOwnPayCap - prior, 0);
         if (ownPayRaw > remaining) { ownPayRaw = remaining; appliedCaps.push("GEN2026_CRITICAL_INPATIENT_OWN_PAY_ANNUAL"); }
-        notes.push("500만 상한은 연간 누적 기준(priorAnnualPaid 반영).");
+        notes.push("자기부담 상한 500만원은 계약일 또는 매년 계약해당일부터 1년간 누적 기준입니다(priorAnnualPaid 반영).");
       }
       const s = settle(amount, ownPayRaw);
       return ok(amount, s.ownPay, s.insurancePay, rate, 0, notes, appliedCaps);
     }
-    // 중증 통원: Max(30%, 3만), 통원 회당 20만(보험지급) 한도
+    // 중증 통원: Max(30%, 3만). 1회당 가입금액은 계약자 선택값이라 있을 때만 적용한다.
     const rate = c.outpatientRate;
-    const s = settle(amount, Math.max(amount * rate, c.outpatientMinDeductible), c.outpatientPerVisitLimit);
+    const limit = outpatientLimit(input.perVisitCoverageLimit, c.outpatientPerVisitLimitMax);
+    if (limit === undefined) {
+      notes.push(`통원 1회당 가입금액(약관상 ${c.outpatientPerVisitLimitMax.toLocaleString("ko-KR")}원 이내에서 계약 시 정한 금액)은 입력하지 않아 적용하지 않았습니다.`);
+    }
+    notes.push(`중증 통원은 약관상 계약해당일 기준 1년간 ${c.outpatientAnnualVisits}회가 한도이지만, 1건 계산에는 반영되지 않습니다. 횟수를 반영하려면 여러 건 합산 계산을 이용해 주세요.`);
+    const s = settle(amount, Math.max(amount * rate, c.outpatientMinDeductible), limit);
     const appliedCaps: CapCode[] = s.capped ? ["GEN2026_CRITICAL_OUTPATIENT_PER_VISIT"] : [];
     return ok(amount, s.ownPay, s.insurancePay, rate, c.outpatientMinDeductible, notes, appliedCaps);
   }
 
   // 비중증(특약2)
   const n = GEN2026.nonBenefit.nonCritical;
-  notes.push(`연간 보상한도 ${n.annualLimit.toLocaleString("ko-KR")}원은 이번 1건 계산에 반영되지 않습니다.`);
+  notes.push(`연간 보험가입금액(약관상 ${n.annualLimitMax.toLocaleString("ko-KR")}원 이내에서 계약 시 정한 금액, 상해·질병 각각)은 1건 계산에 반영되지 않습니다.`);
   if (input.visit === "inpatient") {
     const rate = n.inpatientRate; // 50% A
     const s = settle(amount, amount * rate, n.inpatientPerVisitLimit);
     const appliedCaps: CapCode[] = s.capped ? ["GEN2026_NONCRITICAL_INPATIENT_PER_VISIT"] : [];
     return ok(amount, s.ownPay, s.insurancePay, rate, 0, notes, appliedCaps);
   }
-  // 비중증 통원: Max(50%, 5만), 일당 20만 한도
+  // 비중증 통원: Max(50%, 5만). 약관이 "통원 1일당(외래 및 처방·조제비 합산)"으로 규정하므로
+  // 한 건은 하루치를 합산한 금액이며, 최소공제도 하루에 한 번만 적용된다.
   const rate = n.outpatientRate;
-  const s = settle(amount, Math.max(amount * rate, n.outpatientMinDeductible), n.outpatientPerDayLimit);
+  const dayLimit = outpatientLimit(input.perVisitCoverageLimit, n.outpatientPerDayLimitMax);
+  if (dayLimit === undefined) {
+    notes.push(`통원 1일당 가입금액(약관상 ${n.outpatientPerDayLimitMax.toLocaleString("ko-KR")}원 이내에서 계약 시 정한 금액)은 입력하지 않아 적용하지 않았습니다.`);
+  }
+  const s = settle(amount, Math.max(amount * rate, n.outpatientMinDeductible), dayLimit);
   const appliedCaps: CapCode[] = s.capped ? ["GEN2026_NONCRITICAL_OUTPATIENT_PER_DAY"] : [];
   return ok(amount, s.ownPay, s.insurancePay, rate, n.outpatientMinDeductible, notes, appliedCaps);
 }

@@ -59,6 +59,7 @@ export type CapCode =
   | "GEN2026_CRITICAL_OUTPATIENT_PER_VISIT"
   | "GEN2026_NONCRITICAL_INPATIENT_PER_VISIT"
   | "GEN2026_NONCRITICAL_OUTPATIENT_PER_DAY"
+  | "GEN2026_CRITICAL_OUTPATIENT_ANNUAL_VISITS"
   | "GEN2026_CRITICAL_ANNUAL_COVERAGE"
   | "GEN2026_NONCRITICAL_ANNUAL_COVERAGE";
 
@@ -136,6 +137,9 @@ export interface Gen2021MultiClaimInput {
 }
 
 export interface Gen2026MultiClaimInput {
+  // 5세대 연간 보험가입금액과 자기부담 누적은 (1)상해비급여 / (2)질병비급여 **각 축에 대해
+  // 따로** 정해진다(특별약관1·2 제5조①). 한 계산 묶음은 하나의 원인 축만 포함한다.
+  cause: Cause;
   coverage: Coverage;
   visit: Visit;
   tier?: Tier;
@@ -144,4 +148,11 @@ export interface Gen2026MultiClaimInput {
   amounts: number[];
   priorAnnualInsurancePaid?: number;
   priorAnnualOwnPay?: number;
+  // 통원 가입금액(중증은 1회당, 비중증은 1일당). 약관상 20만원 "이내에서 계약자가 선택한 금액"
+  // 이므로 상수화할 수 없다. 미제공 시 적용하지 않고 미적용 사실만 알린다.
+  outpatientCoverageLimit?: number;
+  priorAnnualOutpatientVisits?: number; // 중증 통원 연간 100회 한도용
+  // 연간 보험가입금액. 약관 제5조①이 "N원 이내에서 계약자가 선택한 금액"으로 규정하므로
+  // 상수화할 수 없다. 상해비급여·질병비급여 각 축에 대해 따로 정해진다.
+  annualCoverageLimit?: number;
 }

@@ -47,5 +47,21 @@ check("5세대 급여 통원 최소공제 추적", GEN2026.benefit.outpatient.mi
 check("5세대 중증 자기부담 상한 추적", GEN2026.nonBenefit.critical.annualOwnPayCap === REGULATORY_RULES.GEN2026_CRITICAL_ANNUAL_OWN_PAY_CAP.value);
 check("5세대 비중증 입원 한도 추적", GEN2026.nonBenefit.nonCritical.inpatientPerVisitLimit === REGULATORY_RULES.GEN2026_NONCRITICAL_INPATIENT_PER_VISIT_LIMIT.value);
 
+
+// 2026-09-03 별표15 2026.5.6 연혁본(5세대 표준약관) 재대조분
+const gen5Bylaw = rules.filter((rule) => rule.generation === "2026" && rule.sources[0]?.document.includes("2026. 5. 6. 연혁본"));
+check(`5세대 표준약관 근거 규칙에 재대조일 기록 (${gen5Bylaw.length}건)`,
+  gen5Bylaw.length >= 12 && gen5Bylaw.every((rule) => rule.verifiedAt === "2026-09-03"));
+check("5세대 '연간' 기산점이 계약해당일 기준으로 등록",
+  REGULATORY_RULES.GEN2026_ANNUAL_PERIOD_BASIS.value === "contract_anniversary");
+check("5세대 기산점 근거가 제5조 제2항을 특정",
+  REGULATORY_RULES.GEN2026_ANNUAL_PERIOD_BASIS.sources.every((s) => s.locator.includes("제5조")));
+check("같은 날 통원 합산 규정 등록", REGULATORY_RULES.GEN2026_SAME_DAY_OUTPATIENT_MERGED.value === true);
+check("5세대 통원 가입금액은 상한선으로 등록(계약값 아님)",
+  GEN2026.nonBenefit.critical.outpatientPerVisitLimitMax === REGULATORY_RULES.GEN2026_CRITICAL_OUTPATIENT_PER_VISIT_LIMIT_MAX.value
+  && Boolean(REGULATORY_RULES.GEN2026_CRITICAL_OUTPATIENT_PER_VISIT_LIMIT_MAX.note?.includes("계약값이 아니다")));
+check("5세대 중증 통원 연간 횟수 추적",
+  GEN2026.nonBenefit.critical.outpatientAnnualVisits === REGULATORY_RULES.GEN2026_CRITICAL_OUTPATIENT_ANNUAL_VISITS.value);
+
 console.log(`\n[regulatoryRules] 규칙 ${rules.length}개 · 통과 ${pass} / 실패 ${fail}`);
 if (fail) process.exit(1);

@@ -35,34 +35,59 @@ check("실손 계산기: 소개 페이지가 2·3·4·5세대를 모두 명시",
 check("4세대 계산기: 세대 없는 옛 링크 라벨 없음", !/>\s*실손보험 계산기\s*</.test(footer) && !/>\s*실손보험 계산기\s*</.test(disclaimer));
 check("4세대 계산기: 가이드 본문에 세대 없는 옛 명칭 없음", !/(?<!4세대 )실손보험 자기부담금 계산기(?:로|를)/.test(healthGuides));
 
-// 이 입력과 안내에서 사용하던 역년 단정 문구가 되돌아오지 않아야 한다.
-// 컴포넌트 전체에서 "올해" 같은 일반 단어를 금지하면 무관한 문구까지 실패하므로
-// 문제가 된 원문만 정확히 차단한다.
+// 2026-09-03: 기산점이 확정되었다. 별표15 2026.5.6 연혁본 특별약관1 제5조② —
+//   "'연간'이라 함은 계약일로부터 매 1년 단위로 도래하는 계약해당일 전일까지의 기간".
+//   따라서 이제는 중립 표현이 아니라 **계약일·계약해당일 기준을 명시**해야 한다.
+//   역년 단정 금지는 그대로 유지한다(약관이 역년을 배제하므로 더 강한 근거가 생겼다).
 for (const banned of [
   "올해 기존 중증 비급여 자기부담금",
   "올해 이미 부담한 중증 비급여 입원 자기부담금",
+  "1월 1일부터",
+  "역년 기준으로",
 ]) {
-  check(`5세대 UI: 근거 없는 역년 단정 문구 "${banned}" 없음`, !gen5.includes(banned));
+  check(`5세대 UI: 역년 단정 문구 "${banned}" 없음`, !gen5.includes(banned));
 }
+check("5세대 UI: 자기부담 상한 기간을 계약일·계약해당일 기준으로 명시",
+  gen5.includes("계약일 또는 매년 계약해당일부터 1년"));
+check("5세대 UI: 근거 조항 표시", gen5.includes("특별약관1 제5조"));
+// 기산점이 확정되었으므로 "약관을 확인하라"는 보류 안내는 더 이상 쓰지 않는다.
+check("5세대 UI: 낡은 보류 안내 제거", !gen5.includes("기산점은 가입하신 상품의 약관을 확인"));
 
-// 판매약관 확인 전에는 계약해당일 기준도 이 입력 안내에 새로 단정하지 않는다.
-for (const banned of ["계약해당일부터 이미 부담한", "계약일부터 이미 부담한"]) {
-  check(`5세대 UI: 근거 없는 계약 기산점 문구 "${banned}" 없음`, !gen5.includes(banned));
+// 통원 가입금액은 약관상 20만원 "이내에서 계약자가 선택한 금액"이라 상수로 단정하지 않는다.
+check("5세대 UI: 통원 가입금액은 계약 시 정한 금액임을 명시", gen5.includes("계약 시 정한 금액"));
+check("5세대 UI: 미입력 시 미적용", gen5.includes("입력하지 않으면 적용하지 않"));
+// 0원을 실제 한도로 조용히 적용하지 않는다는 정책이 화면에도 드러나야 한다.
+check("5세대 UI: 0원은 미입력 처리 안내", gen5.includes("0원을 입력해도 미입력으로 처리"));
+check("5세대 다회 UI: 연간 가입금액도 계약 시 정한 금액임을 명시", gen5Multi.includes("이내에서 계약 시 정한 금액"));
+
+// 다회 화면도 같은 근거 수준을 유지한다.
+// "역년 기준이 아닙니다" 같은 부정문은 오히려 지켜야 할 문구이므로, 단정형만 금지한다.
+for (const banned of ["올해", "1월 1일부터", "역년 기준으로"]) {
+  check(`5세대 다회 UI: 역년 단정 문구 "${banned}" 없음`, !gen5Multi.includes(banned));
 }
-
-// 중립 표현과 약관 확인 안내가 있어야 한다
-check("5세대 UI: 누적 범위를 '약관상 누적기간'으로 한정", gen5.includes("약관상 누적기간"));
-check("5세대 UI: 기산점은 약관 확인 안내", gen5.includes("기산점은 가입하신 상품의 약관을 확인"));
-
-// 다회 청구 화면도 동일한 근거 수준을 유지해야 한다. 단건 화면만 보호하면
-// 새 화면에서 역년 또는 계약해당일을 다시 단정할 수 있다.
-for (const banned of ["올해", "계약해당일부터 누적", "계약일부터 누적"]) {
-  check(`5세대 다회 UI: 근거 없는 기산점 문구 "${banned}" 없음`, !gen5Multi.includes(banned));
+check("5세대 다회 UI: 역년 기준이 아님을 명시", gen5Multi.includes("역년 기준이 아닙니다"));
+check("5세대 다회 UI: 연간 기준을 계약일·계약해당일로 명시",
+  gen5Multi.includes("계약일 또는 매년 계약해당일부터 1년"));
+check("5세대 다회 UI: 낡은 보류 안내 제거", !gen5Multi.includes("약관상 누적기간"));
+// 같은 날 통원은 약관이 1건으로 규정하므로 합산 입력을 안내해야 한다(미지원 고지가 아니라).
+// ⚠ "합쳐 입력" 문구가 있는지만 보면 조건 누락을 통과시킨다(2026-09-03 실행에서 확인).
+//    약관은 중증에 조건을 달고 있으므로, 조건과 예외까지 화면에 있어야 한다.
+//    중증 합산 조건은 단건·다회 화면 양쪽에서 강제한다.
+const SAME_DAY_CONDITIONS: [string, string][] = [
+  ["동일한 의료기관", "동일 의료기관 조건"],
+  ["같은 치료를 목적으로", "같은 치료 목적 조건"],
+  ["치료 목적이 다르거나 다른 의료기관이면", "합산 대상이 아닌 경우의 예외"],
+];
+for (const [needle, label] of SAME_DAY_CONDITIONS) {
+  check(`5세대 단건 UI: 중증 합산 안내에 ${label}`, gen5.includes(needle));
+  check(`5세대 다회 UI: 중증 합산 안내에 ${label}`, gen5Multi.includes(needle));
 }
-check("5세대 다회 UI: 누적 범위를 '약관상 누적기간'으로 한정", gen5Multi.includes("약관상 누적기간"));
-check("5세대 다회 UI: 기산점은 가입 상품 약관 확인 안내", gen5Multi.includes("누적기간의 기산점은 가입 상품 약관을 확인"));
-check("5세대 다회 UI: 역년·계약해당일 추정 금지", gen5Multi.includes("역년이나 계약해당일로 추정하지 않습니다"));
-check("5세대 다회 UI: 같은 날 통원 합산을 지시하지 않음", !gen5Multi.includes("같은 날") || !gen5Multi.includes("합쳐 입력"));
+check("5세대 다회 UI: 같은 날 통원 합산 입력 안내", gen5Multi.includes("한 행으로 합쳐 입력"));
+// 조건 없이 "같은 날이면 무조건 합치라"고 읽히는 문구가 되돌아오지 않아야 한다.
+for (const banned of ["모든 같은 날", "같은 날이면 무조건"]) {
+  check(`5세대 UI: 무조건 합산 지시 "${banned}" 없음`, !gen5.includes(banned) && !gen5Multi.includes(banned));
+}
+check("5세대 다회 UI: 미지원 고지 제거", !gen5Multi.includes("현재 지원하지 않습니다"));
 
 const std = readFileSync("src/components/calculators/HealthCalcStandardized.tsx", "utf8");
 
@@ -94,6 +119,22 @@ check("H-4: 자동차 페이지가 연간 견적 입력을 명시", carPage.incl
 check("H-4: 입력 라벨이 연간 견적 금액", carCalc.includes("연간 견적 금액 (원)"));
 check("H-4: 월 환산 산식과 12개월 전제 표시", carCalc.includes("연간 차액 ÷ 12개월"));
 check("H-4: 결과 안내가 1년치 견적 전제 표시", carCalc.includes("1년치 자동차보험 견적을 전제로"));
+
+
+// ── 문서(README) 과잉 일반화 방지 ───────────────────────────────────
+// 화면 문구만 지키고 README가 "같은 날이면 무조건 합산"으로 뭉뚱그리면 같은 오해가 남는다.
+const readme = readFileSync("README.md", "utf8");
+for (const banned of [
+  "같은 날 통원은 약관이 1건으로 규정하므로",
+  "같은 날 통원은 한 행으로 합쳐 입력합니다",
+]) {
+  check(`README: 무조건 합산 문구 "${banned}" 없음`, !readme.includes(banned));
+}
+check("README: 중증/비중증 합산 조건을 구분", readme.includes("중증과 비중증의 조건이 다릅니다"));
+check("README: 중증 합산에 같은 치료 목적 조건", readme.includes("같은 치료를 목적으로"));
+check("README: 중증 합산 예외 명시", readme.includes("치료 목적이 다르거나 다른 의료기관이면"));
+check("README: 비중증은 1일당 기준 명시", readme.includes("통원 1일당(외래 및 처방·조제비 합산)"));
+check("README: 연간 가입금액이 상해·질병 각 축임을 명시", readme.includes("상해비급여·질병비급여 각 축에 대해 따로"));
 
 console.log(`\n[uiCopy] 통과 ${pass} / 실패 ${fail}`);
 if (fail) process.exit(1);

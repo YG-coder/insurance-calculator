@@ -46,7 +46,8 @@ export function calculateMany2021(input: Gen2021MultiClaimInput): MultiClaimResu
   const results: ClaimLineResult[] = [];
   let paid = nonNegInt(rider === "none" ? input.priorAnnualInsurancePaid : input.priorAnnualRiderPaid);
   let visits = nonNegInt(rider === "none" ? input.priorAnnualOutpatientVisits : input.priorAnnualRiderVisits);
-  const selectedLimit = input.annualCoverageLimit === undefined
+  // 0·음수·비정상 값은 미입력으로 본다(0을 한도로 적용하면 보험금이 0원이 된다).
+  const selectedLimit = input.annualCoverageLimit === undefined || nonNegInt(input.annualCoverageLimit) <= 0
     ? undefined
     : Math.min(nonNegInt(input.annualCoverageLimit), GEN2021.annualLimitMaximum);
 

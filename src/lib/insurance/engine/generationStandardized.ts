@@ -30,9 +30,13 @@ const TABLE = {
   },
 } as const;
 
-/** 계약자가 정한 회(건)당 가입금액. 값이 없으면 undefined를 돌려 한도를 적용하지 않는다. */
+/**
+ * 계약자가 정한 회(건)당 가입금액.
+ * 0·음수·비정상 값은 미입력으로 본다 — 0을 한도로 적용하면 보험금이 0원이 되는데,
+ * 이는 계약 내용이 아니라 미입력일 가능성이 압도적으로 높다.
+ */
 function perVisitLimit(value: number | undefined): number | undefined {
-  if (value === undefined || !Number.isFinite(value) || value < 0) return undefined;
+  if (value === undefined || !Number.isFinite(value) || value <= 0) return undefined;
   return Math.floor(value);
 }
 

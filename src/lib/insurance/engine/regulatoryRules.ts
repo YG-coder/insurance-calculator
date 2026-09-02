@@ -22,6 +22,7 @@ const GEN4_RIDER_TERMS: RegulatorySource = {
   locator: "3대비급여 특별약관 제3조(보장종목별 보상내용) 제1항 <공제금액 및 보장한도> 표, 인쇄 p.251",
 };
 
+
 const GEN5_FSC_RELEASE: RegulatorySource = {
   document: "5월 6일부터 치료비 부담이 큰 중증질환의 보장을 강화하고, 보험료는 낮춘 5세대 실손의료보험이 새롭게 출시·판매됩니다.",
   issuer: "금융위원회·금융감독원",
@@ -89,6 +90,55 @@ const GEN3_RIDER_MRI: RegulatorySource = {
   locator: "□ 비급여 자기공명영상진단(MRI/MRA) 실손의료보험 특별약관 제3조(보상내용) <구분·내용>(인쇄 p.242)",
 };
 
+// ─────────────────────────────────────────────────────────────────────
+// 5세대 근거 — 금융감독원 보험업감독업무시행세칙 [별표 15] 표준약관 2026.5.6 연혁본.
+//   5세대 표준약관은 이 별표에 실려 있다. 종전에 "판매약관 미확보"를 이유로 HOLD였던
+//   항목들(자기부담 상한 기산점, 같은 날 통원 적용 단위)은 이 원문으로 확정된다.
+//   재현 절차: 아래 URL → "[별표 15] 표준약관(제5-13조제1항관련)" → 별표연혁에서 2026. 5. 6. 선택.
+// ─────────────────────────────────────────────────────────────────────
+const GEN5_SOURCE_BASE = {
+  document: "보험업감독업무시행세칙 [별표 15] 표준약관 — 2026. 5. 6. 연혁본",
+  issuer: "금융감독원",
+  publishedOrEffective: "2026-05-06",
+  url: FSS_BYLAW15_URL,
+};
+
+const GEN5_CRITICAL_TERMS: RegulatorySource = {
+  ...GEN5_SOURCE_BASE,
+  locator: "□ 실손의료보험 특별약관1(중증 비급여 실손의료비) 제3조(보장종목별 보상내용) <구분·보상금액> 및 <표1> 통원 항목별 공제금액, 인쇄 p.258",
+};
+
+const GEN5_CRITICAL_LIMIT_TERMS: RegulatorySource = {
+  ...GEN5_SOURCE_BASE,
+  locator: "□ 실손의료보험 특별약관1 제5조(보험가입금액 한도 등) 제2항·제3항·제5항, 인쇄 p.280",
+};
+
+const GEN5_CRITICAL_SAMEDAY_TERMS: RegulatorySource = {
+  ...GEN5_SOURCE_BASE,
+  locator: "□ 실손의료보험 특별약관1 제3조 (1)상해비급여 제6항·제7항, 인쇄 p.259",
+};
+
+const GEN5_NONCRITICAL_TERMS: RegulatorySource = {
+  ...GEN5_SOURCE_BASE,
+  locator: "□ 실손의료보험 특별약관2(비중증 비급여 실손의료비) 제3조(보장종목별 보상내용) <구분·보상금액>, 인쇄 p.287",
+};
+
+const GEN5_CRITICAL_ANNUAL_TERMS: RegulatorySource = {
+  ...GEN5_SOURCE_BASE,
+  locator: "□ 실손의료보험 특별약관1 제5조(보험가입금액 한도 등) 제1항, 인쇄 p.279",
+};
+
+const GEN5_NONCRITICAL_ANNUAL_TERMS: RegulatorySource = {
+  ...GEN5_SOURCE_BASE,
+  locator: "□ 실손의료보험 특별약관2 제5조(보험가입금액 한도 등) 제1항, 인쇄 p.308",
+};
+
+const GEN5_NONCRITICAL_LIMIT_TERMS: RegulatorySource = {
+  ...GEN5_SOURCE_BASE,
+  locator: "□ 실손의료보험 특별약관2 제5조(보험가입금액 한도 등) 제2항·제3항, 인쇄 p.309",
+};
+
+
 const confirmed = <T>(
   ruleId: string,
   generation: "2009" | "2017" | "2021" | "2026",
@@ -123,6 +173,15 @@ const confirmed0903 = <T>(
   sources: readonly RegulatorySource[],
   note?: string,
 ) => confirmed(ruleId, "2021", value, sources, note, "2026-09-03");
+
+
+/** 2026-09-03 별표15 2026.5.6 연혁본(5세대 표준약관) 직독으로 확인한 규칙. */
+const confirmed5th = <T>(
+  ruleId: string,
+  value: T,
+  sources: readonly RegulatorySource[],
+  note?: string,
+) => confirmed(ruleId, "2026", value, sources, note, "2026-09-03");
 
 // 각 사용 지점마다 ruleId를 분리한다. 값이 같아도 적용 대상·한도 성격이 다르면 다른 규칙이다.
 export const REGULATORY_RULES = {
@@ -332,45 +391,74 @@ export const REGULATORY_RULES = {
     { clinic: 10_000, hospital: 20_000 }, [GEN5_FSC_RELEASE],
     "병·의원+약국 1만원, 상급종합·종합병원+약국 2만원",
   ),
-  GEN2026_CRITICAL_INPATIENT_RATE: confirmed(
-    "GEN2026-CRITICAL-INPATIENT-RATE", "2026", 0.3, [GEN5_FSC_RELEASE],
+  GEN2026_CRITICAL_INPATIENT_RATE: confirmed5th(
+    "GEN2026-CRITICAL-INPATIENT-RATE", 0.3, [GEN5_CRITICAL_TERMS],
+    "약관은 '비급여 의료비의 70%에 해당하는 금액'으로 규정한다 → 자기부담 30%",
   ),
-  GEN2026_CRITICAL_OUTPATIENT_RATE: confirmed(
-    "GEN2026-CRITICAL-OUTPATIENT-RATE", "2026", 0.3, [GEN5_FSC_RELEASE],
+  GEN2026_CRITICAL_OUTPATIENT_RATE: confirmed5th(
+    "GEN2026-CRITICAL-OUTPATIENT-RATE", 0.3, [GEN5_CRITICAL_TERMS],
+    "<표1> 3만원과 보장대상 의료비의 30% 중 큰 금액",
   ),
-  GEN2026_CRITICAL_OUTPATIENT_MIN: confirmed(
-    "GEN2026-CRITICAL-OUTPATIENT-MIN", "2026", 30_000, [GEN5_FSC_RELEASE],
+  GEN2026_CRITICAL_OUTPATIENT_MIN: confirmed5th(
+    "GEN2026-CRITICAL-OUTPATIENT-MIN", 30_000, [GEN5_CRITICAL_TERMS],
   ),
-  GEN2026_CRITICAL_OUTPATIENT_PER_VISIT_LIMIT: confirmed(
-    "GEN2026-CRITICAL-OUTPATIENT-PER-VISIT-LIMIT", "2026", 200_000, [GEN5_FSC_RELEASE],
-    "보험금 지급액 상한",
+  GEN2026_CRITICAL_OUTPATIENT_ANNUAL_VISITS: confirmed5th(
+    "GEN2026-CRITICAL-OUTPATIENT-ANNUAL-VISITS", 100, [GEN5_CRITICAL_TERMS],
+    "매년 계약해당일부터 1년간 통원 100회를 한도로 한다",
   ),
-  GEN2026_CRITICAL_ANNUAL_LIMIT: confirmed(
-    "GEN2026-CRITICAL-ANNUAL-LIMIT", "2026", 50_000_000, [GEN5_FSC_RELEASE],
+  // ⚠ 상수가 아니라 상한선이다. 약관 제5조③: "통원 1회당 20만원 이내에서 회사가 정한
+  //    금액 중 계약자가 선택한 금액". 계약자가 그보다 낮게 정했을 수 있으므로
+  //    사용자가 증권의 값을 준 경우에만 적용한다.
+  GEN2026_CRITICAL_OUTPATIENT_PER_VISIT_LIMIT_MAX: confirmed5th(
+    "GEN2026-CRITICAL-OUTPATIENT-PER-VISIT-LIMIT-MAX", 200_000, [GEN5_CRITICAL_LIMIT_TERMS],
+    "통원 1회당 가입금액의 상한선. 계약값이 아니다",
   ),
-  GEN2026_CRITICAL_ANNUAL_OWN_PAY_CAP: confirmed(
-    "GEN2026-CRITICAL-ANNUAL-OWN-PAY-CAP", "2026", 5_000_000, [GEN5_FSC_RELEASE],
-    "상급종합·종합병원 중증 비급여 입원 자기부담 상한. 기산점은 판매약관 확인 전 미확정",
+  // ⚠ 상수가 아니라 상한선이다. 제5조①: 상해비급여·질병비급여 각각에 대하여 입원과 통원의
+  //    보상금액을 합산하여 "5천만원 이내에서 회사가 정한 금액 중 계약자가 선택한 금액".
+  GEN2026_CRITICAL_ANNUAL_LIMIT_MAX: confirmed5th(
+    "GEN2026-CRITICAL-ANNUAL-LIMIT-MAX", 50_000_000, [GEN5_CRITICAL_ANNUAL_TERMS],
+    "상해비급여·질병비급여 각 축의 연간 보험가입금액 상한선. 계약값이 아니다",
   ),
-  GEN2026_NONCRITICAL_INPATIENT_RATE: confirmed(
-    "GEN2026-NONCRITICAL-INPATIENT-RATE", "2026", 0.5, [GEN5_FSC_RELEASE],
+  GEN2026_CRITICAL_ANNUAL_OWN_PAY_CAP: confirmed5th(
+    "GEN2026-CRITICAL-ANNUAL-OWN-PAY-CAP", 5_000_000, [GEN5_CRITICAL_LIMIT_TERMS],
+    "제5조⑤ — 상급종합·종합병원 입원의 공제금액이 계약일 또는 매년 계약해당일부터 기산하여 연간 500만원을 초과하면 500만원까지만 공제",
   ),
-  GEN2026_NONCRITICAL_OUTPATIENT_RATE: confirmed(
-    "GEN2026-NONCRITICAL-OUTPATIENT-RATE", "2026", 0.5, [GEN5_FSC_RELEASE],
+  // 5세대 약관이 '연간'을 스스로 정의한다. 역년이 아니다.
+  GEN2026_ANNUAL_PERIOD_BASIS: confirmed5th(
+    "GEN2026-ANNUAL-PERIOD-BASIS", "contract_anniversary",
+    [GEN5_CRITICAL_LIMIT_TERMS, GEN5_NONCRITICAL_LIMIT_TERMS],
+    "제5조② — '연간'이라 함은 계약일로부터 매 1년 단위로 도래하는 계약해당일 전일까지의 기간",
   ),
-  GEN2026_NONCRITICAL_OUTPATIENT_MIN: confirmed(
-    "GEN2026-NONCRITICAL-OUTPATIENT-MIN", "2026", 50_000, [GEN5_FSC_RELEASE],
+  // 같은 날 통원의 합산. ⚠ 무조건 합산이 아니다 — 중증은 약관이 조건을 달고 있다.
+  GEN2026_SAME_DAY_OUTPATIENT_MERGED: confirmed5th(
+    "GEN2026-SAME-DAY-OUTPATIENT-MERGED", true,
+    [GEN5_CRITICAL_SAMEDAY_TERMS, GEN5_NONCRITICAL_TERMS],
+    "중증(제3조⑥⑦): ①동일한 의료기관에서 같은 날 받은 외래와 처방조제를 합산해 통원 1회로, ②하루에 같은 치료를 목적으로 2회 이상 받은 통원을 1회의 통원으로 본다. 치료 목적이 다르거나 다른 의료기관이면 합산 대상이 아니다. 비중증(제3조): 조건 없이 통원 1일당(외래 및 처방·조제비 합산)",
   ),
-  GEN2026_NONCRITICAL_INPATIENT_PER_VISIT_LIMIT: confirmed(
-    "GEN2026-NONCRITICAL-INPATIENT-PER-VISIT-LIMIT", "2026", 3_000_000, [GEN5_FSC_RELEASE],
-    "병·의원 입원 회당 보험금 지급액 상한",
+  GEN2026_NONCRITICAL_INPATIENT_RATE: confirmed5th(
+    "GEN2026-NONCRITICAL-INPATIENT-RATE", 0.5, [GEN5_NONCRITICAL_TERMS],
+    "약관은 '비급여 의료비의 50%에 해당하는 금액'으로 규정한다 → 자기부담 50%",
   ),
-  GEN2026_NONCRITICAL_OUTPATIENT_PER_DAY_LIMIT: confirmed(
-    "GEN2026-NONCRITICAL-OUTPATIENT-PER-DAY-LIMIT", "2026", 200_000, [GEN5_FSC_RELEASE],
-    "통원 일당 보험금 지급액 상한",
+  GEN2026_NONCRITICAL_OUTPATIENT_RATE: confirmed5th(
+    "GEN2026-NONCRITICAL-OUTPATIENT-RATE", 0.5, [GEN5_NONCRITICAL_TERMS],
   ),
-  GEN2026_NONCRITICAL_ANNUAL_LIMIT: confirmed(
-    "GEN2026-NONCRITICAL-ANNUAL-LIMIT", "2026", 10_000_000, [GEN5_FSC_RELEASE],
+  GEN2026_NONCRITICAL_OUTPATIENT_MIN: confirmed5th(
+    "GEN2026-NONCRITICAL-OUTPATIENT-MIN", 50_000, [GEN5_NONCRITICAL_TERMS],
+    "통원 1일당(외래 및 처방·조제비 합산) 기준으로 한 번 적용한다",
+  ),
+  GEN2026_NONCRITICAL_INPATIENT_PER_VISIT_LIMIT: confirmed5th(
+    "GEN2026-NONCRITICAL-INPATIENT-PER-VISIT-LIMIT", 3_000_000, [GEN5_NONCRITICAL_TERMS],
+    "「의료법」 제3조제2항 의료기관(종합병원 제외)에서 발생한 비급여 의료비는 1회당 300만원 한도",
+  ),
+  // ⚠ 상수가 아니라 상한선이다. 약관 제5조③: "통원 1일당 20만원 이내에서 회사가 정한
+  //    금액 중 계약자가 선택한 금액".
+  GEN2026_NONCRITICAL_OUTPATIENT_PER_DAY_LIMIT_MAX: confirmed5th(
+    "GEN2026-NONCRITICAL-OUTPATIENT-PER-DAY-LIMIT-MAX", 200_000, [GEN5_NONCRITICAL_LIMIT_TERMS],
+    "통원 1일당 가입금액의 상한선. 계약값이 아니다",
+  ),
+  GEN2026_NONCRITICAL_ANNUAL_LIMIT_MAX: confirmed5th(
+    "GEN2026-NONCRITICAL-ANNUAL-LIMIT-MAX", 10_000_000, [GEN5_NONCRITICAL_ANNUAL_TERMS],
+    "상해비급여·질병비급여 각 축의 연간 보험가입금액 상한선. 계약값이 아니다",
   ),
 } as const;
 

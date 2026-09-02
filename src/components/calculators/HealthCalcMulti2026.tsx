@@ -5,7 +5,7 @@ import NoticeBox from "@/components/NoticeBox";
 import ResultCard from "@/components/ResultCard";
 import { calculateMany2026 } from "@/lib/insurance/engine/multiClaim2026";
 import { CAP_LABELS } from "@/lib/insurance/engine/capLabels";
-import { Coverage, Severity, Tier, Visit } from "@/lib/insurance/engine/types";
+import { Cause, Coverage, Severity, Tier, Visit } from "@/lib/insurance/engine/types";
 
 const num = (v: string) => Number(v.replace(/[^0-9.]/g, "")) || 0;
 const won = (v: number) => `${v.toLocaleString("ko-KR")}원`;
@@ -13,6 +13,7 @@ const smallButton = "rounded-xl border border-slate-300 bg-white px-4 py-3 text-
 
 export default function HealthCalcMulti2026() {
   const [amounts, setAmounts] = useState(["300000", "300000"]);
+  const [cause, setCause] = useState<Cause>("disease");
   const [coverage, setCoverage] = useState<Coverage>("non_benefit");
   const [visit, setVisit] = useState<Visit>("outpatient");
   const [severity, setSeverity] = useState<Severity>("critical");
@@ -20,33 +21,44 @@ export default function HealthCalcMulti2026() {
   const [nhisRate, setNhisRate] = useState("");
   const [priorInsurance, setPriorInsurance] = useState("0");
   const [priorOwnPay, setPriorOwnPay] = useState("0");
+  const [outpatientLimit, setOutpatientLimit] = useState("");
+  const [priorVisits, setPriorVisits] = useState("0");
+  const [annualLimit, setAnnualLimit] = useState("");
   const [copyCount, setCopyCount] = useState("3");
   const [submitted, setSubmitted] = useState(false);
 
   const result = calculateMany2026({
-    coverage, visit, severity: coverage === "non_benefit" ? severity : undefined, tier,
+    cause, coverage, visit, severity: coverage === "non_benefit" ? severity : undefined, tier,
     nhisCoinsuranceRate: coverage === "benefit" && visit === "outpatient" && nhisRate !== "" ? Math.min(100, num(nhisRate)) / 100 : undefined,
     amounts: amounts.map(num),
     priorAnnualInsurancePaid: coverage === "non_benefit" ? num(priorInsurance) : undefined,
     priorAnnualOwnPay: coverage === "non_benefit" && severity === "critical" && visit === "inpatient" && tier === "hospital" ? num(priorOwnPay) : undefined,
+    outpatientCoverageLimit: coverage === "non_benefit" && visit === "outpatient" && outpatientLimit !== "" ? num(outpatientLimit) : undefined,
+    priorAnnualOutpatientVisits: coverage === "non_benefit" && severity === "critical" && visit === "outpatient" ? num(priorVisits) : undefined,
+    annualCoverageLimit: coverage === "non_benefit" && annualLimit !== "" ? num(annualLimit) : undefined,
   });
 
   return <div className="card mt-8">
     <h2 className="text-xl font-bold text-slate-900">여러 건 합산 계산</h2>
-    <p className="mt-2 text-sm text-slate-600">회당·일당 한도와 약관상 누적기간의 연간 한도를 건 사이에 이어서 계산합니다.</p>
+    <p className="mt-2 text-sm text-slate-600">연간 한도와 자기부담 상한을 건 사이에 이어서 계산합니다. 연간 기준은 약관상 <b>계약일 또는 매년 계약해당일부터 1년</b>입니다.</p>
+    <p className="mt-2 text-sm text-slate-600">연간 보험가입금액은 약관상 <b>상해비급여·질병비급여 각각에 대해 따로</b> 정해집니다. 입력한 모든 행과 기존 지급보험금·자기부담금이 <b>같은 원인 보장축</b>의 것이어야 하며, 다른 원인의 청구는 따로 계산해 주세요.</p>
     <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <label className="text-sm font-semibold">원인<select className="input-base mt-1" value={cause} onChange={(e) => setCause(e.target.value as Cause)}><option value="disease">질병</option><option value="injury">상해</option></select></label>
       <label className="text-sm font-semibold">급여 구분<select className="input-base mt-1" value={coverage} onChange={(e) => setCoverage(e.target.value as Coverage)}><option value="benefit">급여</option><option value="non_benefit">비급여</option></select></label>
       <label className="text-sm font-semibold">치료 형태<select className="input-base mt-1" value={visit} onChange={(e) => setVisit(e.target.value as Visit)}><option value="outpatient">통원</option><option value="inpatient">입원</option></select></label>
       {coverage === "non_benefit" && <label className="text-sm font-semibold">질환 구분<select className="input-base mt-1" value={severity} onChange={(e) => setSeverity(e.target.value as Severity)}><option value="critical">중증</option><option value="non_critical">비중증</option></select></label>}
       {(coverage === "benefit" && visit === "outpatient" || coverage === "non_benefit" && severity === "critical" && visit === "inpatient") && <label className="text-sm font-semibold">의료기관<select className="input-base mt-1" value={tier} onChange={(e) => setTier(e.target.value as Tier)}><option value="clinic">병·의원급</option><option value="hospital">상급종합·종합병원</option></select></label>}
     </div>
     {coverage === "benefit" && visit === "outpatient" && <label className="mt-4 block max-w-sm text-sm font-semibold">건강보험 본인부담률 (%)<input className="input-base mt-1" type="number" min="0" max="100" step="0.1" value={nhisRate} onChange={(e) => setNhisRate(e.target.value)} /></label>}
-    {coverage === "non_benefit" && severity === "non_critical" && visit === "outpatient" && <div className="mt-4"><NoticeBox variant="warning">같은 날 여러 번 통원한 경우는 현재 지원하지 않습니다. 각 행에는 서로 다른 날짜의 청구만 입력해 주세요.</NoticeBox></div>}
+    {coverage === "non_benefit" && visit === "outpatient" && <div className="mt-4"><NoticeBox variant="info">{severity === "non_critical" ? "비중증 통원은 약관상 '통원 1일당(외래 및 처방·조제비 합산)' 기준입니다. 같은 날 청구는 한 행으로 합쳐 입력해 주세요." : "약관은 ①동일한 의료기관에서 같은 날 받은 외래와 처방조제, ②하루에 같은 치료를 목적으로 2회 이상 받은 통원을 각각 1회의 통원으로 봅니다. 이 경우에만 한 행으로 합쳐 입력해 주세요. 치료 목적이 다르거나 다른 의료기관이면 행을 나눠 입력합니다."}</NoticeBox></div>}
+    {coverage === "non_benefit" && visit === "outpatient" && <label className="mt-4 block max-w-sm text-sm font-semibold">통원 가입금액 (선택)<input className="input-base mt-1" inputMode="numeric" value={outpatientLimit} onChange={(e) => setOutpatientLimit(e.target.value)} placeholder="예: 200000 — 모르면 비워두세요" /><span className="mt-2 block text-xs font-normal text-slate-500">약관상 20만 원 이내에서 계약 시 정한 금액입니다(중증 1회당·비중증 1일당). 입력하지 않으면 적용하지 않습니다.</span></label>}
+    {coverage === "non_benefit" && <label className="mt-4 block max-w-sm text-sm font-semibold">연간 보험가입금액 (선택)<input className="input-base mt-1" inputMode="numeric" value={annualLimit} onChange={(e) => setAnnualLimit(e.target.value)} placeholder={severity === "critical" ? "예: 50000000 — 모르면 비워두세요" : "예: 10000000 — 모르면 비워두세요"} /><span className="mt-2 block text-xs font-normal text-slate-500">약관은 {severity === "critical" ? "5천만" : "1천만"} 원 <b>이내에서 계약 시 정한 금액</b>으로 규정하며, 상해비급여·질병비급여 각각에 대해 따로 정해집니다. 입력하지 않으면 적용하지 않습니다.</span></label>}
+    {coverage === "non_benefit" && severity === "critical" && visit === "outpatient" && <label className="mt-4 block max-w-sm text-sm font-semibold">이미 사용한 통원 횟수 (선택)<input className="input-base mt-1" type="number" min="0" value={priorVisits} onChange={(e) => setPriorVisits(e.target.value)} /><span className="mt-2 block text-xs font-normal text-slate-500">중증 통원은 계약해당일 기준 1년간 100회가 한도입니다.</span></label>}
 
     <div className="mt-5 space-y-3">{amounts.map((amount, i) => <div className="flex items-end gap-2" key={i}><label className="flex-1 text-sm font-semibold">{i + 1}건 진료비<input className="input-base mt-1" inputMode="numeric" value={amount} onChange={(e) => setAmounts((old) => old.map((v, j) => j === i ? e.target.value : v))} /></label><button className={smallButton} disabled={amounts.length === 1} onClick={() => setAmounts((old) => old.filter((_, j) => j !== i))}>삭제</button></div>)}</div>
     <div className="mt-3 flex flex-wrap gap-2"><button className={smallButton} onClick={() => setAmounts((old) => [...old, ""])}>행 추가</button><input className="input-base w-20" value={copyCount} onChange={(e) => setCopyCount(e.target.value)} aria-label="복사할 횟수" /><button className={smallButton} onClick={() => setAmounts(Array.from({ length: Math.max(1, Math.min(100, Math.floor(num(copyCount)))) }, () => amounts[0] ?? ""))}>첫 금액 × N회</button></div>
 
-    {coverage === "non_benefit" && <div className="mt-5 grid gap-3 sm:grid-cols-2"><label className="text-sm font-semibold">약관상 누적기간 내 기존 지급보험금<input className="input-base mt-1" inputMode="numeric" value={priorInsurance} onChange={(e) => setPriorInsurance(e.target.value)} /></label>{severity === "critical" && visit === "inpatient" && tier === "hospital" && <label className="text-sm font-semibold">약관상 누적기간 내 기존 자기부담금<input className="input-base mt-1" inputMode="numeric" value={priorOwnPay} onChange={(e) => setPriorOwnPay(e.target.value)} /></label>}<p className="text-xs text-slate-500 sm:col-span-2">누적기간의 기산점은 가입 상품 약관을 확인해 주세요. 역년이나 계약해당일로 추정하지 않습니다.</p></div>}
+    {coverage === "non_benefit" && <div className="mt-5 grid gap-3 sm:grid-cols-2"><label className="text-sm font-semibold">계약해당일 기준 1년간 기존 지급보험금<input className="input-base mt-1" inputMode="numeric" value={priorInsurance} onChange={(e) => setPriorInsurance(e.target.value)} /></label>{severity === "critical" && visit === "inpatient" && tier === "hospital" && <label className="text-sm font-semibold">계약해당일 기준 1년간 기존 자기부담금<input className="input-base mt-1" inputMode="numeric" value={priorOwnPay} onChange={(e) => setPriorOwnPay(e.target.value)} /></label>}<p className="text-xs text-slate-500 sm:col-span-2">연간 한도와 자기부담 상한은 약관상 <b>계약일 또는 매년 계약해당일부터 1년</b> 단위로 누적됩니다(표준약관 특별약관1·2 제5조 제2항). 역년 기준이 아닙니다.</p></div>}
 
     <button className="btn-primary mt-6" onClick={() => setSubmitted(true)}>여러 건 계산하기</button>
     {submitted && result.status === "PENDING_UNVERIFIED" && <div className="mt-5"><NoticeBox variant="warning">{result.notes.join(" ")}</NoticeBox></div>}

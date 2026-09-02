@@ -78,8 +78,10 @@ export const GEN2026 = {
       inpatientRate: R.GEN2026_CRITICAL_INPATIENT_RATE.value,
       outpatientRate: R.GEN2026_CRITICAL_OUTPATIENT_RATE.value,
       outpatientMinDeductible: R.GEN2026_CRITICAL_OUTPATIENT_MIN.value,
-      outpatientPerVisitLimit: R.GEN2026_CRITICAL_OUTPATIENT_PER_VISIT_LIMIT.value,
-      annualLimit: R.GEN2026_CRITICAL_ANNUAL_LIMIT.value,
+      // 계약자가 정하는 값의 상한선. 사용자가 증권의 값을 주지 않으면 적용하지 않는다.
+      outpatientPerVisitLimitMax: R.GEN2026_CRITICAL_OUTPATIENT_PER_VISIT_LIMIT_MAX.value,
+      outpatientAnnualVisits: R.GEN2026_CRITICAL_OUTPATIENT_ANNUAL_VISITS.value,
+      annualLimitMax: R.GEN2026_CRITICAL_ANNUAL_LIMIT_MAX.value,
       annualOwnPayCap: R.GEN2026_CRITICAL_ANNUAL_OWN_PAY_CAP.value,
     },
     nonCritical: {
@@ -87,8 +89,8 @@ export const GEN2026 = {
       outpatientRate: R.GEN2026_NONCRITICAL_OUTPATIENT_RATE.value,
       outpatientMinDeductible: R.GEN2026_NONCRITICAL_OUTPATIENT_MIN.value,
       inpatientPerVisitLimit: R.GEN2026_NONCRITICAL_INPATIENT_PER_VISIT_LIMIT.value,
-      outpatientPerDayLimit: R.GEN2026_NONCRITICAL_OUTPATIENT_PER_DAY_LIMIT.value,
-      annualLimit: R.GEN2026_NONCRITICAL_ANNUAL_LIMIT.value,
+      outpatientPerDayLimitMax: R.GEN2026_NONCRITICAL_OUTPATIENT_PER_DAY_LIMIT_MAX.value,
+      annualLimitMax: R.GEN2026_NONCRITICAL_ANNUAL_LIMIT_MAX.value,
     },
   },
 } as const;

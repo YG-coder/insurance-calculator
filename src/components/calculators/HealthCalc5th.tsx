@@ -25,6 +25,7 @@ export default function HealthCalc5th() {
   const [tier, setTier] = useState<Tier>("clinic");
   const [severity, setSeverity] = useState<Severity | null>(null);
   const [priorAnnualPaid, setPriorAnnualPaid] = useState<string>("0");
+  const [outpatientLimit, setOutpatientLimit] = useState<string>("");
   const [nhisRate, setNhisRate] = useState<string>("");
   const [submitted, setSubmitted] = useState(false);
 
@@ -49,6 +50,10 @@ export default function HealthCalc5th() {
         nhisCoinsuranceRate:
           coverage === "benefit" && visit === "outpatient" && nhisRate.trim() !== ""
             ? Math.min(100, Math.max(0, Number(nhisRate))) / 100
+            : undefined,
+        perVisitCoverageLimit:
+          coverage === "non_benefit" && visit === "outpatient" && outpatientLimit.trim() !== ""
+            ? Number(outpatientLimit.replace(/[^0-9]/g, "")) || 0
             : undefined,
       });
 
@@ -142,6 +147,25 @@ export default function HealthCalc5th() {
           </>
         )}
 
+        {coverage === "non_benefit" && visit === "outpatient" && (
+          <div className="sm:col-span-2 max-w-md">
+            <label className="label-base" htmlFor="med5-outpatient-limit">
+              통원 가입금액 (선택)
+            </label>
+            <AmountInput
+              id="med5-outpatient-limit"
+              value={outpatientLimit}
+              onChange={setOutpatientLimit}
+              placeholder="예: 200,000 — 모르면 비워두세요"
+            />
+            <p className="mt-2 text-xs text-slate-500">
+              약관은 통원 가입금액을 <b>20만 원 이내에서 계약 시 정한 금액</b>으로 규정합니다
+              (중증은 1회당, 비중증은 1일당). 계약마다 다른 값이라 입력하지 않으면 적용하지 않으며,
+              0원을 입력해도 미입력으로 처리합니다.
+            </p>
+          </div>
+        )}
+
         {coverage === "non_benefit" && severity === "critical" && visit === "inpatient" && (
           <>
             <div className="sm:col-span-2">
@@ -160,7 +184,7 @@ export default function HealthCalc5th() {
             {tier === "hospital" ? (
               <div>
                 <label className="label-base" htmlFor="med5-prior-annual-paid">
-                  약관상 누적기간 내 이미 부담한 중증 비급여 입원 자기부담금 (원)
+                  계약해당일 기준 1년간 이미 부담한 중증 비급여 입원 자기부담금 (원)
                 </label>
                 <AmountInput
                   id="med5-prior-annual-paid"
@@ -169,8 +193,8 @@ export default function HealthCalc5th() {
                   placeholder="없으면 0"
                 />
                 <p className="mt-2 text-xs text-slate-500">
-                  약관상 누적기간 내 이미 부담한 중증 비급여 입원 자기부담금을 입력하면 500만 원 상한에
-                  누적 반영됩니다. 누적기간의 기산점은 가입하신 상품의 약관을 확인해 주세요.
+                  자기부담 상한 500만 원은 <b>계약일 또는 매년 계약해당일부터 1년</b> 단위로 누적됩니다
+                  (표준약관 특별약관1 제5조). 그 기간에 이미 부담한 금액을 입력하면 상한에 누적 반영됩니다.
                 </p>
               </div>
             ) : (
@@ -228,6 +252,13 @@ export default function HealthCalc5th() {
               )}
               {result.notes.length > 0 && (
                 <NoticeBox variant="info">{result.notes.join(" ")}</NoticeBox>
+              )}
+              {coverage === "non_benefit" && visit === "outpatient" && (
+                <NoticeBox variant="info">
+                  {severity === "non_critical"
+                    ? "비중증 통원은 약관상 '통원 1일당(외래 및 처방·조제비 합산)' 기준입니다. 같은 날 여러 번 다녀왔다면 하루치를 합산한 금액을 입력해 주세요."
+                    : "약관은 ①동일한 의료기관에서 같은 날 받은 외래와 처방조제, ②하루에 같은 치료를 목적으로 2회 이상 받은 통원을 각각 1회의 통원으로 봅니다. 이 경우에만 합산한 금액을 입력해 주세요. 치료 목적이 다르거나 다른 의료기관이면 따로 계산합니다."}
+                </NoticeBox>
               )}
               <p className="text-xs text-slate-500">
                 ※ 실제 보험금은 가입 상품, 약관, 연간 누적 사용액, 차등제 등에 따라 달라질 수 있습니다.

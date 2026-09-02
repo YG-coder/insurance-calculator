@@ -34,6 +34,9 @@ CI(GitHub Actions)는 `tsc --noEmit` → `lint` → `test:all` → `build` 순�
 2·3세대는 **표준형/선택형**에 따라 자기부담률과 통원 공제 방식이 다릅니다. 계약일로 추정하지
 않고 사용자가 증권을 보고 선택합니다. 미선택 시 계산하지 않습니다.
 
+2·3세대 계산기는 **다회 청구**를 지원합니다. 방문별로 행을 입력하면 계약해당일 기준 연간 외래
+180회·처방전 180건 한도와 입원 자기부담 연간 상한 200만 원의 건 사이 누적까지 반영합니다.
+
 ## 페이지
 
 **계산기**
@@ -90,6 +93,7 @@ docs/insurance/               개발 문서 (아래 색인)
 - [`docs/insurance/README.md`](./docs/insurance/README.md) — 문서 색인
 - [`docs/insurance/audit-status.md`](./docs/insurance/audit-status.md) — 감사 최종 상태, 설계 원칙, 남은 HOLD
 - [`docs/insurance/insurance-gen123-engine-design.md`](./docs/insurance/insurance-gen123-engine-design.md) — 1~3세대 엔진 근거 조사·구현 설계
+- [`docs/insurance/multi-claim-design.md`](./docs/insurance/multi-claim-design.md) — 다회 청구 설계(방문별 행, 연간 횟수 한도, 자기부담 상한 누적)
 - [`docs/insurance/stack-upgrade-log.md`](./docs/insurance/stack-upgrade-log.md) — 스택 업그레이드 기록
 
 ## 특징

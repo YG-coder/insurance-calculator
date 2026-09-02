@@ -98,6 +98,8 @@ export const GEN2009 = {
   inpatientAnnualOwnPayCap: R.GEN2009_INPATIENT_ANNUAL_OWN_PAY_CAP.value,
   outpatientStandardRate: R.GEN2009_OUTPATIENT_RATE_STANDARD.value,
   outpatientMinDeductible: R.GEN2009_OUTPATIENT_MIN_DEDUCTIBLE.value,
+  outpatientAnnualVisits: R.GEN2009_OUTPATIENT_ANNUAL_VISITS.value,
+  prescriptionAnnualCount: R.GEN2009_PRESCRIPTION_ANNUAL_COUNT.value,
 } as const;
 
 export const GEN2017 = {
@@ -108,6 +110,8 @@ export const GEN2017 = {
   inpatientAnnualOwnPayCap: R.GEN2017_INPATIENT_ANNUAL_OWN_PAY_CAP.value,
   outpatientStandardRate: R.GEN2017_OUTPATIENT_RATE_STANDARD.value,
   outpatientMinDeductible: R.GEN2017_OUTPATIENT_MIN_DEDUCTIBLE.value,
+  outpatientAnnualVisits: R.GEN2017_OUTPATIENT_ANNUAL_VISITS.value,
+  prescriptionAnnualCount: R.GEN2017_PRESCRIPTION_ANNUAL_COUNT.value,
 } as const;
 
 // ── 2·3세대에서 확인되었으나 1건 계산기의 입력 모델로 표현할 수 없는 한도 ──────

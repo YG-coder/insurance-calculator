@@ -7,6 +7,7 @@
 |---|---|
 | [`audit-status.md`](./audit-status.md) | 계산 엔진 감사 최종 상태 색인, 이 저장소가 지키는 설계 원칙, 남은 HOLD 항목 |
 | [`insurance-gen123-engine-design.md`](./insurance-gen123-engine-design.md) | 1~3세대 실손 엔진의 근거 조사(표준약관 원문 직독)와 구현 설계. 1세대를 계산 대상에서 제외한 이유 |
+| [`multi-claim-design.md`](./multi-claim-design.md) | 다회 청구 설계 — 방문별 행 입력, 연간 횟수 한도, 입원 자기부담 상한의 건 사이 누적, 결과 타입 계약 |
 | [`stack-upgrade-log.md`](./stack-upgrade-log.md) | Next.js·TypeScript 등 스택 업그레이드 기록과 보류 항목 |
 
 ## 규제 근거는 어디에 있나

@@ -18,9 +18,23 @@ import { settle, normalizeAmount } from "../common/settle";
 type StandardizedGeneration = "2009" | "2017";
 
 const TABLE = {
-  "2009": { constants: GEN2009, notApplied: GEN2009_NOT_APPLIED, cap: "GEN2009_INPATIENT_OWN_PAY_ANNUAL" as CapCode },
-  "2017": { constants: GEN2017, notApplied: GEN2017_NOT_APPLIED, cap: "GEN2017_INPATIENT_OWN_PAY_ANNUAL" as CapCode },
+  "2009": {
+    constants: GEN2009, notApplied: GEN2009_NOT_APPLIED,
+    cap: "GEN2009_INPATIENT_OWN_PAY_ANNUAL" as CapCode,
+    perVisitCap: "GEN2009_PER_VISIT_COVERAGE_LIMIT" as CapCode,
+  },
+  "2017": {
+    constants: GEN2017, notApplied: GEN2017_NOT_APPLIED,
+    cap: "GEN2017_INPATIENT_OWN_PAY_ANNUAL" as CapCode,
+    perVisitCap: "GEN2017_PER_VISIT_COVERAGE_LIMIT" as CapCode,
+  },
 } as const;
+
+/** 계약자가 정한 회(건)당 가입금액. 값이 없으면 undefined를 돌려 한도를 적용하지 않는다. */
+function perVisitLimit(value: number | undefined): number | undefined {
+  if (value === undefined || !Number.isFinite(value) || value < 0) return undefined;
+  return Math.floor(value);
+}
 
 function pending(generation: StandardizedGeneration, amount: number, reasons: string[]): CalcResult {
   return {
@@ -32,7 +46,7 @@ function pending(generation: StandardizedGeneration, amount: number, reasons: st
 
 export function calcStandardized(generation: StandardizedGeneration, input: ClaimInput): CalcResult {
   const amount = normalizeAmount(input.amount);
-  const { constants, notApplied, cap } = TABLE[generation];
+  const { constants, notApplied, cap, perVisitCap } = TABLE[generation];
 
   // 표준형/선택형은 계약자가 가입한 상품이 정하는 값이다. 계약일로 추정하지 않는다.
   const plan: Plan | undefined = input.plan;
@@ -82,17 +96,25 @@ export function calcStandardized(generation: StandardizedGeneration, input: Clai
     ? Math.max(amount * rate, minDeductible)
     : minDeductible;
 
+  // 회(건)당 가입금액은 계약자가 정하는 값이라 상수화할 수 없다.
+  // 사용자가 준 경우에만 보험금 지급 상한으로 적용하고, 없으면 미적용 한도로 고지한다.
+  // 입원에는 적용하지 않는다 — 약관의 회(건)당 한도는 외래·처방조제비 항목의 가입금액이다.
+  const visitLimit = perVisitLimit(input.perVisitCoverageLimit);
+
   notes.push(
     plan === "standard"
       ? `통원 공제는 ${minDeductible.toLocaleString("ko-KR")}원과 의료비의 ${Math.round(rate * 100)}% 중 큰 금액입니다.`
       : `선택형 통원 공제는 정액 ${minDeductible.toLocaleString("ko-KR")}원입니다(정률 공제 없음).`,
-    "이 계산에 반영되지 않은 약관 한도: " + notAppliedList.join(" / "),
   );
+  if (visitLimit !== undefined) {
+    notes.push(`입력하신 회(건)당 가입금액 ${visitLimit.toLocaleString("ko-KR")}원을 보험금 지급 한도로 적용했습니다.`);
+  }
+  notes.push("이 계산에 반영되지 않은 약관 한도: " + notAppliedList.join(" / "));
 
-  const s = settle(amount, ownPayRaw);
+  const s = settle(amount, ownPayRaw, visitLimit);
   return {
     status: "OK", generation, amount: s.amount, ownPay: s.ownPay, insurancePay: s.insurancePay,
     rateBased: Math.round(amount * rate), rateApplied: rate, minDeductible,
-    notes, appliedCaps: [],
+    notes, appliedCaps: s.capped ? [perVisitCap] : [],
   };
 }

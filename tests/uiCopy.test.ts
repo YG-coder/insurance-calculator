@@ -38,6 +38,17 @@ for (const banned of ["계약해당일부터 이미 부담한", "계약일부터
 check("5세대 UI: 누적 범위를 '약관상 누적기간'으로 한정", gen5.includes("약관상 누적기간"));
 check("5세대 UI: 기산점은 약관 확인 안내", gen5.includes("기산점은 가입하신 상품의 약관을 확인"));
 
+const std = readFileSync("src/components/calculators/HealthCalcStandardized.tsx", "utf8");
+
+// 2·3세대 UI: 표준형/선택형은 계약일로 추정하지 않는다는 규약이 문구로 남아 있어야 한다.
+//   2012.12.28 세칙 개정의 시행일을 확인하지 못했고, 애초에 계약일이 아니라 가입 상품이 정하는 값이다.
+check("2·3세대 UI: 증권 확인 안내", std.includes("보험증권의 상품명·가입내역에서 확인"));
+check("2·3세대 UI: 가입 시기로 추정하지 않음을 명시", std.includes("가입 시기로 추정하지 않습니다"));
+// 회(건)당 가입금액은 계약자가 정하는 값이라 기본값을 넣어 단정하지 않는다.
+check("2·3세대 UI: 회(건)당 가입금액은 미입력 시 미적용", std.includes("입력하지 않으면 적용하지 않습니다"));
+// 하루 중복방문을 1회로 합쳐 입력하라는 약관 규정 안내가 있어야 한다(날짜 축을 두지 않는 근거).
+check("2·3세대 UI: 하루 중복방문 합산 입력 안내", std.includes("한 행으로 합쳐"));
+
 const layout = readFileSync("src/app/layout.tsx", "utf8");
 const guides = readFileSync("src/lib/guides.ts", "utf8");
 const healthPage = readFileSync("src/app/health-insurance-calculator/page.tsx", "utf8");

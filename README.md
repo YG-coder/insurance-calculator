@@ -2,6 +2,9 @@
 
 Next.js 16.3.1 App Router 기반 보험 계산기 사이트 (보험계산기.kr).
 
+**최종 갱신:** 2026-09-02 · **배포 기준:** `43c8cb1` · **상태:** 2~5세대 계산기 공개,
+2·3세대 다회 청구 지원
+
 입력한 값으로만 계산하는 **참고용** 도구입니다. 추정 상수를 넣지 않고, 근거가 확인되지 않은
 값은 계산하지 않습니다 — [HOLD 원칙](#hold-원칙-근거-없는-값은-계산하지-않는다) 참조.
 
@@ -19,7 +22,9 @@ npm run test:coverage    # 커버리지 (보험 로직 하한: lines/statements/
 npx tsc --noEmit         # 타입 검사
 ```
 
-CI(GitHub Actions)는 `tsc --noEmit` → `lint` → `test:all` → `build` 순으로 실행합니다.
+CI(GitHub Actions)는 Node.js 22에서 `npm ci` → `test:coverage` → `build` 순으로 실행합니다.
+`test:coverage`가 `tests/*.test.ts`를 자동 탐색해 전체 테스트를 실행하며 타입 검사는 Next.js 빌드
+단계에서도 수행됩니다. 린트는 로컬 검증 명령으로 별도 제공합니다.
 
 ## 지원 세대 — 실손보험
 
@@ -36,6 +41,19 @@ CI(GitHub Actions)는 `tsc --noEmit` → `lint` → `test:all` → `build` 순�
 
 2·3세대 계산기는 **다회 청구**를 지원합니다. 방문별로 행을 입력하면 계약해당일 기준 연간 외래
 180회·처방전 180건 한도와 입원 자기부담 연간 상한 200만 원의 건 사이 누적까지 반영합니다.
+외래·처방조제비의 회(건)당 보험가입금액은 증권에서 확인한 값을 선택 입력할 수 있습니다.
+
+## 현재 검증 기준
+
+배포 커밋 `43c8cb1` 기준입니다.
+
+| 항목 | 결과 |
+|---|---|
+| 전체 테스트 | 19개 파일 통과 |
+| 2·3세대 다회 청구 | 합계 정합·단건 정합·연간 횟수·입원 상한 누적·1024케이스 불변식 검증 |
+| 커버리지 | Statements 93.05% · Branches 84.94% · Functions 98% (설정 하한 통과) |
+| 프로덕션 빌드 | 45개 라우트 생성 통과 |
+| 배포 확인 | 신규 다회 청구 UI와 구조화 데이터 공개 페이지 반영 확인 |
 
 ## 페이지
 
@@ -95,6 +113,18 @@ docs/insurance/               개발 문서 (아래 색인)
 - [`docs/insurance/insurance-gen123-engine-design.md`](./docs/insurance/insurance-gen123-engine-design.md) — 1~3세대 엔진 근거 조사·구현 설계
 - [`docs/insurance/multi-claim-design.md`](./docs/insurance/multi-claim-design.md) — 다회 청구 설계(방문별 행, 연간 횟수 한도, 자기부담 상한 누적)
 - [`docs/insurance/stack-upgrade-log.md`](./docs/insurance/stack-upgrade-log.md) — 스택 업그레이드 기록
+
+## 다음 개발 순서
+
+1. 보험업감독업무시행세칙 별표15의 2021.7.1 연혁본으로 4세대 상수 근거를 감독당국 1차
+   자료로 승격합니다.
+2. 연간 100회·연간 5천만 원·3대비급여 항목별 한도의 적용 단위와 순서를 확인한 뒤 4세대
+   다회 청구를 구현합니다.
+3. 5세대는 기산점을 추정하지 않고 "약관상 누적기간 내 이미 부담한 금액"을 사용자에게 받아
+   연간 한도와 중증 입원 자기부담 상한의 건 사이 누적을 구현합니다.
+
+세부 범위와 보류 이유는 [`docs/insurance/multi-claim-design.md`](./docs/insurance/multi-claim-design.md)
+§4와 [`docs/insurance/audit-status.md`](./docs/insurance/audit-status.md)에서 관리합니다.
 
 ## 특징
 

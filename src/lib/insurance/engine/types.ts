@@ -9,6 +9,8 @@ export type Coverage = "benefit" | "non_benefit"; // 급여 / 비급여
 export type Visit = "outpatient" | "inpatient";   // 통원 / 입원
 export type Tier = "clinic" | "hospital";         // 병·의원급 / 상급종합·종합병원 (4·5세대 축)
 export type Severity = "critical" | "non_critical"; // 중증 / 비중증 (5세대 비급여 전용)
+export type Cause = "injury" | "disease"; // 상해 / 질병 (4세대 연간 한도 구분축)
+export type Gen2021Rider = "none" | "manual_therapy" | "injection" | "mri";
 
 // 2·3세대 표준약관 <표1 항목별 공제금액>의 분류축.
 //   ⚠ 4·5세대의 Tier와 다른 축이다. 종합병원이 2·3세대에서는 1만5천원(hospital)이지만
@@ -46,10 +48,19 @@ export type CapCode =
   | "GEN2017_OUTPATIENT_ANNUAL_VISITS"
   | "GEN2017_PRESCRIPTION_ANNUAL_COUNT"
   | "GEN2021_OUTPATIENT_PER_VISIT"
+  | "GEN2021_ANNUAL_COVERAGE"
+  | "GEN2021_NONBENEFIT_OUTPATIENT_ANNUAL_VISITS"
+  | "GEN2021_MANUAL_THERAPY_ANNUAL"
+  | "GEN2021_MANUAL_THERAPY_ANNUAL_VISITS"
+  | "GEN2021_INJECTION_ANNUAL"
+  | "GEN2021_INJECTION_ANNUAL_VISITS"
+  | "GEN2021_MRI_ANNUAL"
   | "GEN2026_CRITICAL_INPATIENT_OWN_PAY_ANNUAL"
   | "GEN2026_CRITICAL_OUTPATIENT_PER_VISIT"
   | "GEN2026_NONCRITICAL_INPATIENT_PER_VISIT"
-  | "GEN2026_NONCRITICAL_OUTPATIENT_PER_DAY";
+  | "GEN2026_NONCRITICAL_OUTPATIENT_PER_DAY"
+  | "GEN2026_CRITICAL_ANNUAL_COVERAGE"
+  | "GEN2026_NONCRITICAL_ANNUAL_COVERAGE";
 
 export interface CalcResult {
   status: CalcStatus;
@@ -107,4 +118,30 @@ export interface MultiClaimResult {
   totalInsurancePay: number | null;
   appliedCaps: CapCode[]; // 전 행에서 실제로 구속된 한도의 합집합
   notes: string[];
+}
+
+/** 4세대는 한 계산 묶음을 동일한 (상해/질병)×(급여/비급여) 보장축으로 받는다. */
+export interface Gen2021MultiClaimInput {
+  cause: Cause;
+  coverage: Coverage;
+  visit: Visit;
+  tier?: Tier;
+  rider?: Gen2021Rider;
+  amounts: number[];
+  annualCoverageLimit?: number; // 증권상 선택 가입금액(최대 5천만원). 미입력 시 적용하지 않음
+  priorAnnualInsurancePaid?: number;
+  priorAnnualOutpatientVisits?: number; // 비급여 일반 통원에만 적용
+  priorAnnualRiderPaid?: number;
+  priorAnnualRiderVisits?: number;
+}
+
+export interface Gen2026MultiClaimInput {
+  coverage: Coverage;
+  visit: Visit;
+  tier?: Tier;
+  severity?: Severity;
+  nhisCoinsuranceRate?: number;
+  amounts: number[];
+  priorAnnualInsurancePaid?: number;
+  priorAnnualOwnPay?: number;
 }

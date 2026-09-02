@@ -18,6 +18,7 @@ function check(name: string, cond: boolean, detail = "") {
 }
 
 const gen5 = readFileSync("src/components/calculators/HealthCalc5th.tsx", "utf8");
+const gen5Multi = readFileSync("src/components/calculators/HealthCalcMulti2026.tsx", "utf8");
 
 // 이 입력과 안내에서 사용하던 역년 단정 문구가 되돌아오지 않아야 한다.
 // 컴포넌트 전체에서 "올해" 같은 일반 단어를 금지하면 무관한 문구까지 실패하므로
@@ -37,6 +38,16 @@ for (const banned of ["계약해당일부터 이미 부담한", "계약일부터
 // 중립 표현과 약관 확인 안내가 있어야 한다
 check("5세대 UI: 누적 범위를 '약관상 누적기간'으로 한정", gen5.includes("약관상 누적기간"));
 check("5세대 UI: 기산점은 약관 확인 안내", gen5.includes("기산점은 가입하신 상품의 약관을 확인"));
+
+// 다회 청구 화면도 동일한 근거 수준을 유지해야 한다. 단건 화면만 보호하면
+// 새 화면에서 역년 또는 계약해당일을 다시 단정할 수 있다.
+for (const banned of ["올해", "계약해당일부터 누적", "계약일부터 누적"]) {
+  check(`5세대 다회 UI: 근거 없는 기산점 문구 "${banned}" 없음`, !gen5Multi.includes(banned));
+}
+check("5세대 다회 UI: 누적 범위를 '약관상 누적기간'으로 한정", gen5Multi.includes("약관상 누적기간"));
+check("5세대 다회 UI: 기산점은 가입 상품 약관 확인 안내", gen5Multi.includes("누적기간의 기산점은 가입 상품 약관을 확인"));
+check("5세대 다회 UI: 역년·계약해당일 추정 금지", gen5Multi.includes("역년이나 계약해당일로 추정하지 않습니다"));
+check("5세대 다회 UI: 같은 날 통원 합산을 지시하지 않음", !gen5Multi.includes("같은 날") || !gen5Multi.includes("합쳐 입력"));
 
 const std = readFileSync("src/components/calculators/HealthCalcStandardized.tsx", "utf8");
 

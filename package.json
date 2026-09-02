@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "test:insurance": "tsx tests/generation2021.test.ts && tsx tests/generation2021.correctness.test.ts && tsx tests/generation2026.test.ts && tsx tests/regulatoryRules.test.ts",
+    "test:insurance": "tsx tests/generation2021.test.ts && tsx tests/generation2021.correctness.test.ts && tsx tests/multiClaim.test.ts && tsx tests/multiClaim2021.test.ts && tsx tests/generation2026.test.ts && tsx tests/multiClaim2026.test.ts && tsx tests/regulatoryRules.test.ts",
     "test:all": "node scripts/run-tests.mjs",
     "test:coverage": "c8 --all --src src/lib/insurance --check-coverage --lines 90 --statements 90 --functions 90 --branches 80 --reporter=text --reporter=json-summary node scripts/run-tests.mjs"
   },

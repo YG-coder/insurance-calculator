@@ -33,6 +33,11 @@ check("4세대 급여 입원률 추적", GEN2021.rate.benefit.inpatient === REGU
 check("4세대 급여 통원 최소공제 추적", GEN2021.outpatientMinDeductible.benefit.clinic === REGULATORY_RULES.GEN2021_BENEFIT_OUTPATIENT_CLINIC_MIN.value);
 check("4세대 비급여 통원률 추적", GEN2021.rate.non_benefit.outpatient === REGULATORY_RULES.GEN2021_NON_BENEFIT_OUTPATIENT_RATE.value);
 check("4세대 통원 한도 추적", GEN2021.outpatientPerVisitLimit === REGULATORY_RULES.GEN2021_OUTPATIENT_PER_VISIT_LIMIT.value);
+check("4세대 연간 가입금액 상한 추적", GEN2021.annualLimitMaximum === REGULATORY_RULES.GEN2021_ANNUAL_LIMIT.value);
+check("4세대 3대비급여 공제율 추적", GEN2021.rider.deductRate === REGULATORY_RULES.GEN2021_RIDER_DEDUCT_RATE.value);
+check("4세대 도수치료 횟수 추적", GEN2021.rider.manual_therapy.annualVisits === REGULATORY_RULES.GEN2021_MANUAL_THERAPY_ANNUAL_VISITS.value);
+check("4세대 규칙 검증일은 원문 직독일", rules.filter((rule) => rule.generation === "2021").every((rule) => rule.verifiedAt === "2026-09-02"));
+check("4세대 급여·비급여 출처 위치 분리", REGULATORY_RULES.GEN2021_BENEFIT_INPATIENT_RATE.sources[0].locator !== REGULATORY_RULES.GEN2021_NON_BENEFIT_INPATIENT_RATE.sources[0].locator);
 check("5세대 급여 통원 최소공제 추적", GEN2026.benefit.outpatient.minDeductible === REGULATORY_RULES.GEN2026_BENEFIT_OUTPATIENT_MIN_DEDUCTIBLE.value);
 check("5세대 중증 자기부담 상한 추적", GEN2026.nonBenefit.critical.annualOwnPayCap === REGULATORY_RULES.GEN2026_CRITICAL_ANNUAL_OWN_PAY_CAP.value);
 check("5세대 비중증 입원 한도 추적", GEN2026.nonBenefit.nonCritical.inpatientPerVisitLimit === REGULATORY_RULES.GEN2026_NONCRITICAL_INPATIENT_PER_VISIT_LIMIT.value);

@@ -25,6 +25,15 @@ export const GEN2021 = {
     non_benefit: R.GEN2021_NON_BENEFIT_OUTPATIENT_MIN.value, // 의료기관 구분 없음
   },
   outpatientPerVisitLimit: R.GEN2021_OUTPATIENT_PER_VISIT_LIMIT.value,
+  annualLimitMaximum: R.GEN2021_ANNUAL_LIMIT.value,
+  nonBenefitOutpatientAnnualVisits: R.GEN2021_NONBENEFIT_OUTPATIENT_ANNUAL_VISITS.value,
+  rider: {
+    deductRate: R.GEN2021_RIDER_DEDUCT_RATE.value,
+    minDeductible: R.GEN2021_RIDER_MIN_DEDUCTIBLE.value,
+    manual_therapy: { annualLimit: R.GEN2021_MANUAL_THERAPY_ANNUAL_LIMIT.value, annualVisits: R.GEN2021_MANUAL_THERAPY_ANNUAL_VISITS.value },
+    injection: { annualLimit: R.GEN2021_INJECTION_ANNUAL_LIMIT.value, annualVisits: R.GEN2021_INJECTION_ANNUAL_VISITS.value },
+    mri: { annualLimit: R.GEN2021_MRI_ANNUAL_LIMIT.value, annualVisits: null },
+  },
 } as const;
 
 // ── 4세대에서 확인되었으나 이번 엔진이 적용하지 않는 한도 ──────────────

@@ -1,19 +1,25 @@
 import { regulated, RegulatorySource } from "./regulatory";
 
+const GEN4_SOURCE_BASE = {
+  document: "보험업감독업무시행세칙 [별표 15] 표준약관 — 2021. 7. 1. 연혁본",
+  issuer: "금융감독원",
+  publishedOrEffective: "2021-07-01",
+  url: "https://www.law.go.kr/admRulLsInfoP.do?admRulSeq=2200000079045",
+};
+
 const GEN4_BENEFIT_TERMS: RegulatorySource = {
-  document: "ABL생명 무배당 급여실손의료비보장보험(갱신형)(계약전환용) 약관",
-  issuer: "ABL생명",
-  publishedOrEffective: "2022-09-01",
-  url: "https://abllife.co.kr/cms/pban/prdtPban/whlPrdt/__icsFiles/afieldfile/2022/09/01/20220901_NP_%EA%B8%89%EC%97%AC%EC%8B%A4%EC%86%90%EC%9D%98%EB%A3%8C%EB%B9%84%EB%B3%B4%EC%9E%A5%EB%B3%B4%ED%97%98%28%EA%B0%B1%EC%8B%A0%ED%98%95%29%28%EA%B3%84%EC%95%BD%EC%A0%84%ED%99%98%EC%9A%A9%29.pdf",
-  locator: "제3조 보장종목별 보상내용 <표1>, 제6조⑤",
+  ...GEN4_SOURCE_BASE,
+  locator: "기본형 실손의료보험(급여) 제3조(보상내용)·제5조(보험가입금액의 한도 등)",
 };
 
 const GEN4_NON_BENEFIT_TERMS: RegulatorySource = {
-  document: "KDB생명 (무)비급여실손의료비특약 약관 V03",
-  issuer: "KDB생명",
-  publishedOrEffective: "2024-01-01",
-  url: "http://www.kdblife.com/nKumhoFiles/data_pdf/arrangement/2024/I20659_20240101_(%EB%AC%B4)%EB%B9%84%EA%B8%89%EC%97%AC%EC%8B%A4%EC%86%90%EC%9D%98%EB%A3%8C%EB%B9%84%ED%8A%B9%EC%95%BD_%EC%95%BD%EA%B4%80_V03.pdf",
-  locator: "제3조 (1)·(2) 및 <표1>, 제5조③",
+  ...GEN4_SOURCE_BASE,
+  locator: "실손의료보험 특별약관(비급여) 제3조(보상내용)·제5조(보험가입금액의 한도 등), 인쇄 p.245~264",
+};
+
+const GEN4_RIDER_TERMS: RegulatorySource = {
+  ...GEN4_SOURCE_BASE,
+  locator: "3대비급여 특별약관 각 제3조(보상내용): 도수치료·체외충격파·증식치료, 주사료, MRI/MRA",
 };
 
 const GEN5_FSC_RELEASE: RegulatorySource = {
@@ -101,10 +107,10 @@ const confirmed = <T>(
   note,
 });
 
-/** 2026-09-02 별표15 연혁본 직독으로 확인한 2·3세대 규칙. */
+/** 2026-09-02 별표15 연혁본 직독으로 확인한 2·3·4세대 규칙. */
 const confirmed0902 = <T>(
   ruleId: string,
-  generation: "2009" | "2017",
+  generation: "2009" | "2017" | "2021",
   value: T,
   sources: readonly RegulatorySource[],
   note?: string,
@@ -241,56 +247,69 @@ export const REGULATORY_RULES = {
     "계약일 또는 매년 계약해당일부터 1년 단위 연간 300만원. 횟수 한도 없음",
   ),
 
-  GEN2021_BENEFIT_INPATIENT_RATE: confirmed(
+  GEN2021_BENEFIT_INPATIENT_RATE: confirmed0902(
     "GEN2021-BENEFIT-INPATIENT-RATE", "2021", 0.2, [GEN4_BENEFIT_TERMS],
     "급여 입원 본인부담률 20%",
   ),
-  GEN2021_BENEFIT_OUTPATIENT_RATE: confirmed(
+  GEN2021_BENEFIT_OUTPATIENT_RATE: confirmed0902(
     "GEN2021-BENEFIT-OUTPATIENT-RATE", "2021", 0.2, [GEN4_BENEFIT_TERMS],
     "급여 통원 보장대상 의료비의 20%와 최소공제액 중 큰 금액",
   ),
-  GEN2021_BENEFIT_OUTPATIENT_CLINIC_MIN: confirmed(
+  GEN2021_BENEFIT_OUTPATIENT_CLINIC_MIN: confirmed0902(
     "GEN2021-BENEFIT-OUTPATIENT-CLINIC-MIN", "2021", 10_000, [GEN4_BENEFIT_TERMS],
     "병·의원 및 약국 최소공제액",
   ),
-  GEN2021_BENEFIT_OUTPATIENT_HOSPITAL_MIN: confirmed(
+  GEN2021_BENEFIT_OUTPATIENT_HOSPITAL_MIN: confirmed0902(
     "GEN2021-BENEFIT-OUTPATIENT-HOSPITAL-MIN", "2021", 20_000, [GEN4_BENEFIT_TERMS],
     "상급종합·종합병원 및 약국 최소공제액",
   ),
-  GEN2021_NON_BENEFIT_INPATIENT_RATE: confirmed(
+  GEN2021_NON_BENEFIT_INPATIENT_RATE: confirmed0902(
     "GEN2021-NONBENEFIT-INPATIENT-RATE", "2021", 0.3, [GEN4_NON_BENEFIT_TERMS],
     "비급여 입원 본인부담률 30%",
   ),
-  GEN2021_NON_BENEFIT_OUTPATIENT_RATE: confirmed(
+  GEN2021_NON_BENEFIT_OUTPATIENT_RATE: confirmed0902(
     "GEN2021-NONBENEFIT-OUTPATIENT-RATE", "2021", 0.3, [GEN4_NON_BENEFIT_TERMS],
     "비급여 통원 보장대상 의료비의 30%와 최소공제액 중 큰 금액",
   ),
-  GEN2021_NON_BENEFIT_OUTPATIENT_MIN: confirmed(
+  GEN2021_NON_BENEFIT_OUTPATIENT_MIN: confirmed0902(
     "GEN2021-NONBENEFIT-OUTPATIENT-MIN", "2021", 30_000, [GEN4_NON_BENEFIT_TERMS],
     "비급여 통원 최소공제액",
   ),
-  GEN2021_OUTPATIENT_PER_VISIT_LIMIT: confirmed(
+  GEN2021_OUTPATIENT_PER_VISIT_LIMIT: confirmed0902(
     "GEN2021-OUTPATIENT-PER-VISIT-LIMIT", "2021", 200_000,
     [GEN4_BENEFIT_TERMS, GEN4_NON_BENEFIT_TERMS],
     "급여·비급여 통원 1회당 보험금 지급액 상한",
   ),
-  GEN2021_NONBENEFIT_OUTPATIENT_ANNUAL_VISITS: confirmed(
+  GEN2021_NONBENEFIT_OUTPATIENT_ANNUAL_VISITS: confirmed0902(
     "GEN2021-NONBENEFIT-OUTPATIENT-ANNUAL-VISITS", "2021", 100, [GEN4_NON_BENEFIT_TERMS],
     "매년 계약해당일부터 1년간 비급여 통원 횟수 한도",
   ),
-  GEN2021_ANNUAL_LIMIT: confirmed(
+  GEN2021_ANNUAL_LIMIT: confirmed0902(
     "GEN2021-ANNUAL-LIMIT", "2021", 50_000_000,
     [GEN4_BENEFIT_TERMS, GEN4_NON_BENEFIT_TERMS],
     "상해·질병별 보장 안에서 입원·통원 합산",
   ),
-  GEN2021_MANUAL_THERAPY_ANNUAL_LIMIT: confirmed(
+  GEN2021_MANUAL_THERAPY_ANNUAL_LIMIT: confirmed0902(
     "GEN2021-MANUAL-THERAPY-ANNUAL-LIMIT", "2021", 3_500_000, [GEN4_NON_BENEFIT_TERMS],
   ),
-  GEN2021_INJECTION_ANNUAL_LIMIT: confirmed(
+  GEN2021_INJECTION_ANNUAL_LIMIT: confirmed0902(
     "GEN2021-INJECTION-ANNUAL-LIMIT", "2021", 2_500_000, [GEN4_NON_BENEFIT_TERMS],
   ),
-  GEN2021_MRI_ANNUAL_LIMIT: confirmed(
+  GEN2021_MRI_ANNUAL_LIMIT: confirmed0902(
     "GEN2021-MRI-ANNUAL-LIMIT", "2021", 3_000_000, [GEN4_NON_BENEFIT_TERMS],
+  ),
+  GEN2021_RIDER_DEDUCT_RATE: confirmed0902(
+    "GEN2021-RIDER-DEDUCT-RATE", "2021", 0.3, [GEN4_RIDER_TERMS],
+    "3대비급여: 1회당 2만원과 보장대상의료비 30% 중 큰 금액",
+  ),
+  GEN2021_RIDER_MIN_DEDUCTIBLE: confirmed0902(
+    "GEN2021-RIDER-MIN-DEDUCTIBLE", "2021", 20_000, [GEN4_RIDER_TERMS],
+  ),
+  GEN2021_MANUAL_THERAPY_ANNUAL_VISITS: confirmed0902(
+    "GEN2021-MANUAL-THERAPY-ANNUAL-VISITS", "2021", 50, [GEN4_RIDER_TERMS],
+  ),
+  GEN2021_INJECTION_ANNUAL_VISITS: confirmed0902(
+    "GEN2021-INJECTION-ANNUAL-VISITS", "2021", 50, [GEN4_RIDER_TERMS],
   ),
 
   GEN2026_BENEFIT_INPATIENT_RATE: confirmed(

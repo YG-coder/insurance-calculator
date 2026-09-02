@@ -83,3 +83,53 @@ export const GEN2026 = {
     },
   },
 } as const;
+
+// ─────────────────────────────────────────────
+// 2세대(표준화 실손, 2009.10~2017.3) / 3세대(착한실손, 2017.4~2021.6)
+//   두 세대의 기본형 산식은 같다. 근거 약관이 다르므로 상수는 세대별로 분리해 파생한다.
+//   ⚠ 급여·비급여를 합한 금액에 단일 정률을 적용한다. 급여/비급여로 요율이 갈리는 것은 4세대부터다.
+//   ⚠ 선택형에는 통원 정률공제가 없다(정액 공제만). standardRate를 곱하지 말 것.
+// ─────────────────────────────────────────────
+export const GEN2009 = {
+  inpatientRate: {
+    standard: R.GEN2009_INPATIENT_RATE_STANDARD.value,
+    selective: R.GEN2009_INPATIENT_RATE_SELECTIVE.value,
+  },
+  inpatientAnnualOwnPayCap: R.GEN2009_INPATIENT_ANNUAL_OWN_PAY_CAP.value,
+  outpatientStandardRate: R.GEN2009_OUTPATIENT_RATE_STANDARD.value,
+  outpatientMinDeductible: R.GEN2009_OUTPATIENT_MIN_DEDUCTIBLE.value,
+} as const;
+
+export const GEN2017 = {
+  inpatientRate: {
+    standard: R.GEN2017_INPATIENT_RATE_STANDARD.value,
+    selective: R.GEN2017_INPATIENT_RATE_SELECTIVE.value,
+  },
+  inpatientAnnualOwnPayCap: R.GEN2017_INPATIENT_ANNUAL_OWN_PAY_CAP.value,
+  outpatientStandardRate: R.GEN2017_OUTPATIENT_RATE_STANDARD.value,
+  outpatientMinDeductible: R.GEN2017_OUTPATIENT_MIN_DEDUCTIBLE.value,
+} as const;
+
+// ── 2·3세대에서 확인되었으나 1건 계산기의 입력 모델로 표현할 수 없는 한도 ──────
+//   계약자가 정하는 가입금액(입원 5천만·통원 회당 30만)은 상수가 아니라 계약별 값이므로
+//   임의로 적용하지 않고 미적용 사실만 알린다.
+export const GEN2009_NOT_APPLIED = {
+  all: [
+    `상급병실료 차액(차액의 ${R.GEN2009_UPPER_ROOM_DEDUCT_RATE.value * 100}% 공제·1일 평균 ${manWon(R.GEN2009_UPPER_ROOM_DAILY_CAP.value)} 한도)`,
+    `보험가입금액 한도(입원 하나의 상해당 최고 ${manWon(R.GEN2009_INPATIENT_COVERAGE_MAX.value)}, 통원 외래·처방조제 회(건)당 합산 최고 ${manWon(R.GEN2009_OUTPATIENT_COVERAGE_MAX.value)} — 계약 시 정한 금액)`,
+  ],
+  outpatient: [
+    `매년 계약해당일 기준 1년간 외래 ${R.GEN2009_OUTPATIENT_ANNUAL_VISITS.value}회·처방전 ${R.GEN2009_PRESCRIPTION_ANNUAL_COUNT.value}건 한도`,
+  ],
+} as const;
+
+export const GEN2017_NOT_APPLIED = {
+  all: [
+    `상급병실료 차액(차액의 ${R.GEN2017_UPPER_ROOM_DEDUCT_RATE.value * 100}% 공제·1일 평균 ${manWon(R.GEN2017_UPPER_ROOM_DAILY_CAP.value)} 한도)`,
+    `보험가입금액 한도(입원 하나의 상해당 최고 ${manWon(R.GEN2017_INPATIENT_COVERAGE_MAX.value)}, 통원 외래·처방조제 회(건)당 합산 최고 ${manWon(R.GEN2017_OUTPATIENT_COVERAGE_MAX.value)} — 계약 시 정한 금액)`,
+    `3대비급여 특별약관(도수·체외충격파·증식 ${manWon(R.GEN2017_RIDER_MANUAL_THERAPY_ANNUAL_LIMIT.value)}·${R.GEN2017_RIDER_MANUAL_THERAPY_ANNUAL_VISITS.value}회, 주사료 ${manWon(R.GEN2017_RIDER_INJECTION_ANNUAL_LIMIT.value)}·${R.GEN2017_RIDER_INJECTION_ANNUAL_VISITS.value}회, MRI/MRA ${manWon(R.GEN2017_RIDER_MRI_ANNUAL_LIMIT.value)}) — 별도 특약이며 기본형 계산에 포함되지 않습니다`,
+  ],
+  outpatient: [
+    `매년 계약해당일 기준 1년간 외래 ${R.GEN2017_OUTPATIENT_ANNUAL_VISITS.value}회·처방전 ${R.GEN2017_PRESCRIPTION_ANNUAL_COUNT.value}건 한도`,
+  ],
+} as const;

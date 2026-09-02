@@ -14,6 +14,13 @@ export const CALCULATORS = [
     icon: "🏥",
   },
   {
+    title: "2·3세대 실손보험 자기부담금 계산기",
+    short: "2·3세대 실손",
+    description: "표준화 실손(2세대)·착한실손(3세대) 기준 본인부담금과 보험 적용 금액을 계산합니다.",
+    href: "/2nd-3rd-generation-health-insurance-calculator",
+    icon: "📄",
+  },
+  {
     title: "5세대 실손보험 자기부담금 계산기",
     short: "5세대 실손",
     description: "2026년 출시 5세대 실손보험 기준 본인부담금과 보험 적용 금액을 계산합니다.",
@@ -115,6 +122,7 @@ export const HUBS = [
     icon: "🏥",
     steps: [
       "/health-insurance-calculator",
+      "/2nd-3rd-generation-health-insurance-calculator",
       "/5th-generation-health-insurance-calculator",
       "/guide/silson-generations",
       "/guide/health-insurance-claim",

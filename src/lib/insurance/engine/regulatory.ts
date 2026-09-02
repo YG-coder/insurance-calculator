@@ -15,7 +15,7 @@ export interface RegulatorySource {
 export interface RegulatedConstant<T> {
   ruleId: string;
   value: T;
-  generation: "2021" | "2026";
+  generation: "2009" | "2017" | "2021" | "2026";
   status: RegulatoryStatus;
   evidenceGrade: EvidenceGrade;
   verifiedAt: string;

@@ -7,9 +7,9 @@ export const SITE = {
 
 export const CALCULATORS = [
   {
-    title: "실손보험 자기부담금 계산기",
-    short: "실손보험",
-    description: "병원비 중 본인부담금과 보험 적용 금액을 계산합니다.",
+    title: "4세대 실손보험 자기부담금 계산기",
+    short: "4세대 실손",
+    description: "4세대 실손보험 기준으로 본인부담금과 보험 적용 금액을 계산합니다.",
     href: "/health-insurance-calculator",
     icon: "🏥",
   },

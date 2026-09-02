@@ -13,13 +13,13 @@ import { SITE } from "@/lib/site";
 const URL = `${SITE.url}/health-insurance-calculator`;
 
 export const metadata: Metadata = {
-  title: "실손보험 자기부담금 계산기",
+  title: "4세대 실손보험 자기부담금 계산기",
   description:
     "병원비 중 본인이 부담할 금액과 보험 적용 금액을 무료로 계산하세요. 4세대 실손보험 기준 본인부담률을 반영한 참고용 계산기입니다.",
   alternates: { canonical: URL },
   openGraph: {
-    title: "실손보험 자기부담금 계산기",
-    description: "병원비 중 본인부담금과 보험 적용 금액을 계산하세요.",
+    title: "4세대 실손보험 자기부담금 계산기",
+    description: "4세대 실손보험 기준으로 본인부담금과 보험 적용 금액을 계산하세요.",
     url: URL,
   },
 };
@@ -51,7 +51,7 @@ export default function HealthPage() {
           참고용 · 2026년 기준
         </span>
         <h1 className="text-3xl sm:text-4xl font-bold text-slate-900">
-          실손보험 자기부담금 계산기
+          4세대 실손보험 자기부담금 계산기
         </h1>
         <p className="mt-3 text-slate-600 leading-relaxed">
           병원비 중 본인이 부담할 금액과 실손보험으로 적용받을 수 있는 금액을 빠르게

@@ -245,7 +245,7 @@ export default function DisclaimerPage() {
             href="/health-insurance-calculator"
             className="text-brand-600 hover:underline"
           >
-            실손보험 계산기
+            4세대 실손보험 계산기
           </a>
           <a
             href="/insurance-premium-calculator"

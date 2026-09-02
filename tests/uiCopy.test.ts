@@ -19,6 +19,21 @@ function check(name: string, cond: boolean, detail = "") {
 
 const gen5 = readFileSync("src/components/calculators/HealthCalc5th.tsx", "utf8");
 const gen5Multi = readFileSync("src/components/calculators/HealthCalcMulti2026.tsx", "utf8");
+const site = readFileSync("src/lib/site.ts", "utf8");
+const gen4Page = readFileSync("src/app/health-insurance-calculator/page.tsx", "utf8");
+const healthGuides = readFileSync("src/lib/guides.ts", "utf8");
+const footer = readFileSync("src/components/Footer.tsx", "utf8");
+const disclaimer = readFileSync("src/app/disclaimer/page.tsx", "utf8");
+const about = readFileSync("src/app/about/page.tsx", "utf8");
+
+check("4세대 계산기: 홈 카드가 세대를 명시", site.includes('title: "4세대 실손보험 자기부담금 계산기"'));
+check("4세대 계산기: 페이지 제목이 세대를 명시", gen4Page.includes("4세대 실손보험 자기부담금 계산기"));
+check("4세대 계산기: 가이드 링크가 세대를 명시", healthGuides.includes('calcLabel: "4세대 실손보험 자기부담금 계산기"'));
+check("실손 계산기: 푸터가 2·3·4·5세대를 각각 명시", ["2·3세대 실손보험 계산기", "4세대 실손보험 계산기", "5세대 실손보험 계산기"].every((label) => footer.includes(label)));
+check("4세대 계산기: 면책 페이지 링크가 세대를 명시", disclaimer.includes("4세대 실손보험 계산기"));
+check("실손 계산기: 소개 페이지가 2·3·4·5세대를 모두 명시", about.includes("2·3·4·5세대"));
+check("4세대 계산기: 세대 없는 옛 링크 라벨 없음", !/>\s*실손보험 계산기\s*</.test(footer) && !/>\s*실손보험 계산기\s*</.test(disclaimer));
+check("4세대 계산기: 가이드 본문에 세대 없는 옛 명칭 없음", !/(?<!4세대 )실손보험 자기부담금 계산기(?:로|를)/.test(healthGuides));
 
 // 이 입력과 안내에서 사용하던 역년 단정 문구가 되돌아오지 않아야 한다.
 // 컴포넌트 전체에서 "올해" 같은 일반 단어를 금지하면 무관한 문구까지 실패하므로

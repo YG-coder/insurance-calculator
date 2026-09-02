@@ -17,7 +17,17 @@ export default function Footer() {
             <ul className="space-y-2 text-sm">
               <li>
                 <Link href="/health-insurance-calculator" className="hover:text-brand-400">
-                  실손보험 계산기
+                  4세대 실손보험 계산기
+                </Link>
+              </li>
+              <li>
+                <Link href="/2nd-3rd-generation-health-insurance-calculator" className="hover:text-brand-400">
+                  2·3세대 실손보험 계산기
+                </Link>
+              </li>
+              <li>
+                <Link href="/5th-generation-health-insurance-calculator" className="hover:text-brand-400">
+                  5세대 실손보험 계산기
                 </Link>
               </li>
               <li>

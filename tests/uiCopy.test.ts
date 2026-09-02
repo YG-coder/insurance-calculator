@@ -1,12 +1,9 @@
 // UI 문구 가드.
 // 계산 로직이 아니라 "사실을 단정하는 문구"가 근거 없이 되돌아오는 것을 막는다.
 //
-// 배경: 5세대 중증 비급여 입원 자기부담 상한(500만원)의 누적 기간 기산점은
-//       2026-08-24 기준 확정되지 않았다. 금융위원회 보도자료 원문·첨부(보도자료/Q&A)에
-//       "연간 자기부담금 500만원"만 있고 계약해당일·보험연도·역년·매년 표현이 없으며,
-//       5세대 판매약관도 확보되지 않았다.
-//       인접 4세대 약관 2건은 모두 "매년 계약해당일부터 1년간" 기준이다.
-//       따라서 UI는 어느 쪽도 단정하지 않는다.
+// 배경: 2026-08-24에는 5세대 중증 비급여 입원 자기부담 상한의 기산점이 미확정이어서
+//       단정을 금지했다. 2026-09-03 별표15 2026.5.6 연혁본 특별약관1 제5조②·⑤를
+//       직접 확인해 계약일·계약해당일 기준으로 확정했고, 현재는 그 근거가 UI에 남도록 검사한다.
 //
 // 이 테스트가 실패하면 문구를 되돌리기 전에 먼저 약관 근거가 확보됐는지 확인할 것.
 import { readFileSync } from "node:fs";
@@ -25,6 +22,17 @@ const healthGuides = readFileSync("src/lib/guides.ts", "utf8");
 const footer = readFileSync("src/components/Footer.tsx", "utf8");
 const disclaimer = readFileSync("src/app/disclaimer/page.tsx", "utf8");
 const about = readFileSync("src/app/about/page.tsx", "utf8");
+const gen5Page = readFileSync("src/app/5th-generation-health-insurance-calculator/page.tsx", "utf8");
+
+for (const stale of ["연간 누적 한도와 급여 통원 등 일부 기준은", "공식 원문 확인 후 순차적으로 추가할 예정"]){
+  check(`5세대 페이지: 폐기된 미반영 안내 "${stale}" 없음`, !gen5Page.includes(stale));
+}
+check("5세대 페이지: 표준약관 근거 명시", gen5Page.includes("보험업감독업무시행세칙 별표15"));
+check("5세대 페이지: 단건 통원 가입금액 반영 안내",
+  gen5.includes("통원 가입금액 (선택)")
+  && gen5Page.includes("단건 계산은 통원 1회당·1일당 가입금액까지 반영"));
+check("5세대 페이지: 단건 미반영 범위를 연간 항목으로 한정",
+  gen5Page.includes("연간 횟수와 연간 보험가입금액은 반영하지"));
 
 check("4세대 계산기: 홈 카드가 세대를 명시", site.includes('title: "4세대 실손보험 자기부담금 계산기"'));
 check("4세대 계산기: 페이지 제목이 세대를 명시", gen4Page.includes("4세대 실손보험 자기부담금 계산기"));

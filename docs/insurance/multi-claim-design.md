@@ -1,6 +1,6 @@
 # 다회 청구 — 설계 및 구현
 
-**최종 갱신:** 2026-09-02 · **상태:** ✅ 2·3세대 구현 완료 / 4·5세대 확산은 다음 단계
+**최종 갱신:** 2026-09-03 · **상태:** ✅ 2·3·4·5세대 다회 청구 구현 완료
 **선행 문서:** [`insurance-gen123-engine-design.md`](./insurance-gen123-engine-design.md)
 
 **표기:** `FACT` 약관 원문으로 확인 / `INFERENCE` 추론 / `RECOMMENDATION` 권고

@@ -49,9 +49,13 @@ check("5세대 비중증 입원 한도 추적", GEN2026.nonBenefit.nonCritical.i
 
 
 // 2026-09-03 별표15 2026.5.6 연혁본(5세대 표준약관) 재대조분
-const gen5Bylaw = rules.filter((rule) => rule.generation === "2026" && rule.sources[0]?.document.includes("2026. 5. 6. 연혁본"));
-check(`5세대 표준약관 근거 규칙에 재대조일 기록 (${gen5Bylaw.length}건)`,
+// HOLD 규칙은 2026-09-03 조사분이므로 검증일이 다르다. 확정 규칙만 대상으로 한다.
+const gen5Bylaw = rules.filter((rule) =>
+  rule.generation === "2026" && rule.status === "CONFIRMED"
+  && rule.sources[0]?.document.includes("2026. 5. 6. 연혁본"));
+check(`5세대 표준약관 확정 규칙에 재대조일 기록 (${gen5Bylaw.length}건)`,
   gen5Bylaw.length >= 12 && gen5Bylaw.every((rule) => rule.verifiedAt === "2026-09-03"));
+
 check("5세대 '연간' 기산점이 계약해당일 기준으로 등록",
   REGULATORY_RULES.GEN2026_ANNUAL_PERIOD_BASIS.value === "contract_anniversary");
 check("5세대 기산점 근거가 제5조 제2항을 특정",
@@ -62,6 +66,55 @@ check("5세대 통원 가입금액은 상한선으로 등록(계약값 아님)",
   && Boolean(REGULATORY_RULES.GEN2026_CRITICAL_OUTPATIENT_PER_VISIT_LIMIT_MAX.note?.includes("계약값이 아니다")));
 check("5세대 중증 통원 연간 횟수 추적",
   GEN2026.nonBenefit.critical.outpatientAnnualVisits === REGULATORY_RULES.GEN2026_CRITICAL_OUTPATIENT_ANNUAL_VISITS.value);
+
+
+// ── 2026-09-03 feature/ 4종 HOLD 근거 등록 ────────────────────────────
+// 값을 만들지 않으면서 출처는 추적한다. note는 "확인된 근거"와 "막힌 이유"를 나눠 적는다.
+const HOLD_RULES = [
+  ["발달장애", REGULATORY_RULES.GEN2026_DEVELOPMENTAL_DISORDER_BENEFIT],
+  ["임신·출산", REGULATORY_RULES.GEN2026_PREGNANCY_CHILDBIRTH_BENEFIT],
+  ["비중증 제외항목", REGULATORY_RULES.GEN2026_NONCRITICAL_EXCLUSION_ITEMS],
+  ["비급여 보험료 할인·할증", REGULATORY_RULES.GEN2026_NON_BENEFIT_PREMIUM_ADJUSTMENT],
+] as const;
+
+for (const [name, rule] of HOLD_RULES) {
+  check(`HOLD ${name}: 값이 확정되지 않음`, rule.status === "HOLD" && rule.value === null);
+  // ⚠ 이번에 등록한 4건만 대상이다. 앞으로 다른 날 추가될 HOLD까지 이 날짜로
+  //    강제하면 정상적인 신규 등록이 실패한다.
+  check(`HOLD ${name}: 검증일이 실제 조사일(2026-09-03)`, rule.verifiedAt === "2026-09-03", rule.verifiedAt);
+  check(`HOLD ${name}: 출처가 등록됨`, rule.sources.length > 0 && rule.sources.every((src) => Boolean(src.locator)));
+  check(`HOLD ${name}: 확인된 근거를 명시`, Boolean(rule.note?.includes("확인됨")), rule.note);
+  check(`HOLD ${name}: 막힌 이유를 근거와 분리해 명시`, Boolean(rule.note?.includes("막힌 이유")), rule.note);
+}
+
+check("HOLD 발달장애: '가입당시 태아' 조건이 빠지지 않음",
+  Boolean(REGULATORY_RULES.GEN2026_DEVELOPMENTAL_DISORDER_BENEFIT.note?.includes("태아")));
+check("HOLD 임신·출산: 조건부 보장(280일)과 일부 본인부담금을 명시",
+  Boolean(REGULATORY_RULES.GEN2026_PREGNANCY_CHILDBIRTH_BENEFIT.note?.includes("280일"))
+  && Boolean(REGULATORY_RULES.GEN2026_PREGNANCY_CHILDBIRTH_BENEFIT.note?.includes("일부 본인부담금")));
+check("HOLD 할인·할증: 출처가 보험업감독규정 조문을 특정",
+  REGULATORY_RULES.GEN2026_NON_BENEFIT_PREMIUM_ADJUSTMENT.sources.every((src) =>
+    src.document.includes("보험업감독규정") && src.locator.includes("제7-63조")));
+check("HOLD 할인·할증: 보험료 영역이며 별도 도메인이라는 판단 기록",
+  Boolean(REGULATORY_RULES.GEN2026_NON_BENEFIT_PREMIUM_ADJUSTMENT.note?.includes("보험료"))
+  && Boolean(REGULATORY_RULES.GEN2026_NON_BENEFIT_PREMIUM_ADJUSTMENT.note?.includes("별도")));
+check("HOLD 할인·할증: 해제 조건이 상품·보험사별 요율표/약관",
+  Boolean(REGULATORY_RULES.GEN2026_NON_BENEFIT_PREMIUM_ADJUSTMENT.note?.includes("요율표")));
+check("HOLD 할인·할증: 4세대 보도자료 구간을 상수로 쓰지 않음을 명시",
+  Boolean(REGULATORY_RULES.GEN2026_NON_BENEFIT_PREMIUM_ADJUSTMENT.note?.includes("전용하지 않는다")));
+check("HOLD 규칙은 CONFIRMED A등급 검사를 통과시키지 않음",
+  HOLD_RULES.every(([, rule]) => rule.evidenceGrade === "REVIEW"));
+
+// ── 2026.8.28 현행본을 일괄 반영하지 않았음을 고정 ────────────────────
+// 직접 대조한 조문은 특별약관1·2의 제3조·제5조뿐이다. 나머지 규칙의 출처·검증일을
+// 현행본으로 갈아 끼우면 "읽지 않은 것을 읽었다"고 말하는 셈이 된다.
+check("규칙 출처에 2026.8.28 현행본이 일괄 적용되지 않음",
+  rules.every((rule) => rule.sources.every((src) => !src.document.includes("2026. 8. 28"))));
+check("CONFIRMED 5세대 규칙의 출처가 2026.5.6 연혁본으로 유지",
+  rules.filter((rule) => rule.generation === "2026" && rule.status === "CONFIRMED"
+    && rule.sources.some((src) => src.document.includes("별표 15")))
+    .every((rule) => rule.sources.every((src) =>
+      !src.document.includes("별표 15") || src.document.includes("2026. 5. 6. 연혁본"))));
 
 console.log(`\n[regulatoryRules] 규칙 ${rules.length}개 · 통과 ${pass} / 실패 ${fail}`);
 if (fail) process.exit(1);

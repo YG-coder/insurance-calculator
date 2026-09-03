@@ -157,7 +157,7 @@ src/lib/insurance/
   common/      settle.ts(금액 종결·반올림 정책) · number.ts · time.ts
   engine/      규정 기반 실손 계산 — regulatoryRules.ts(출처 레지스트리) · constants.ts
                generationStandardized.ts(2·3세대) · generation2021.ts(4세대) · generation2026.ts(5세대)
-               feature/  HOLD 스텁 (제외항목·할인할증·임신출산·발달장애)
+               feature/  HOLD 스텁 (제외항목·할인할증·임신출산·발달장애) — 값을 반환하지 않는다
   decision/    사용자 입력 기반 의사결정 산수 8종
 src/components/calculators/   계산기 UI (산식 없음 — 도메인 함수 호출만)
 tests/                        run-tests.mjs가 글롭으로 자동 탐색
@@ -166,7 +166,7 @@ docs/insurance/               개발 문서 (아래 색인)
 
 ## 개발 문서
 
-- [`docs/insurance/audit-status.md`](./docs/insurance/audit-status.md) — 감사 최종 상태, 설계 원칙, 남은 HOLD
+- [`docs/insurance/audit-status.md`](./docs/insurance/audit-status.md) — 감사 상태 기록, 설계 원칙, 남은 HOLD
 - [`docs/insurance/insurance-gen123-engine-design.md`](./docs/insurance/insurance-gen123-engine-design.md) — 1~3세대 엔진 근거 조사·구현 설계
 - [`docs/insurance/multi-claim-design.md`](./docs/insurance/multi-claim-design.md) — 다회 청구 설계(방문별 행, 연간 횟수 한도, 자기부담 상한 누적)
 - [`docs/insurance/stack-upgrade-log.md`](./docs/insurance/stack-upgrade-log.md) — 스택 업그레이드 기록
@@ -175,7 +175,10 @@ docs/insurance/               개발 문서 (아래 색인)
 
 1. 같은 날 통원을 날짜 축으로 자동 판정합니다. 현재는 약관 규정에 따라 사용자가 합산해
    한 행으로 입력합니다(중증은 동일 의료기관·같은 치료 목적 조건이 붙습니다).
-2. 외부 근거가 확보되면 `feature/` HOLD 규칙 4종을 해제합니다.
+2. `feature/` HOLD 4종은 **근거가 없어서가 아니라** 판정 입력축이 없거나(발달장애·임신출산·비중증 제외항목)
+   공통 규정에 계산 수치가 없어서(비급여 보험료 할인·할증) 막혀 있습니다. 출처는
+   `engine/regulatoryRules.ts`에 `HOLD`/`value: null`로 등록돼 있고, 항목별 해제 조건은
+   `docs/insurance/audit-status.md` §3.2에 있습니다.
 
 세부 범위와 보류 이유는 [`docs/insurance/multi-claim-design.md`](./docs/insurance/multi-claim-design.md)
 §4와 [`docs/insurance/audit-status.md`](./docs/insurance/audit-status.md)에서 관리합니다.

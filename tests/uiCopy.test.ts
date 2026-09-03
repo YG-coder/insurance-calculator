@@ -6,7 +6,7 @@
 //       직접 확인해 계약일·계약해당일 기준으로 확정했고, 현재는 그 근거가 UI에 남도록 검사한다.
 //
 // 이 테스트가 실패하면 문구를 되돌리기 전에 먼저 약관 근거가 확보됐는지 확인할 것.
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 
 let pass = 0, fail = 0;
 function check(name: string, cond: boolean, detail = "") {
@@ -34,7 +34,7 @@ check("5세대 페이지: 단건 통원 가입금액 반영 안내",
 check("5세대 페이지: 단건 미반영 범위를 연간 항목으로 한정",
   gen5Page.includes("연간 횟수와 연간 보험가입금액은 반영하지"));
 
-// ── 5세대 비급여 치료유형 안전 차단 (2026-09-04) ───────────────────
+// ── 5세대 비급여 치료유형 안전 차단 (2026-09-03) ───────────────────
 // 근거: 별표15 특별약관1 제3조 (2)①("3대비급여는 제외"), 특별약관2 제3조 (1)①
 //       ("비급여 자기공명영상진단은 제외"), 특약1·2 입원 표("비급여 병실료는 제외").
 // 화면이 이 네 항목을 일반 경로로 계산하도록 유도하면 잘못된 보험금이 표시된다.
@@ -177,6 +177,64 @@ check("H-4: 입력 라벨이 연간 견적 금액", carCalc.includes("연간 견
 check("H-4: 월 환산 산식과 12개월 전제 표시", carCalc.includes("연간 차액 ÷ 12개월"));
 check("H-4: 결과 안내가 1년치 견적 전제 표시", carCalc.includes("1년치 자동차보험 견적을 전제로"));
 
+
+// ── 문서의 낡은 HOLD 사유 전수 검사 (2026-09-03) ────────────────────
+// 조사 결과 네 항목의 종전 사유는 모두 사실이 아니었다. 문서에 되살아나면
+// "근거가 없어서 못 한다"는 잘못된 상태 설명으로 되돌아간다.
+{
+  const auditStatus = readFileSync("docs/insurance/audit-status.md", "utf8");
+  const gen123Design = readFileSync("docs/insurance/insurance-gen123-engine-design.md", "utf8");
+  const readmeDoc = readFileSync("README.md", "utf8");
+
+  // 현재 상태 설명에서 금지. 과거 경위 서술은 §3.1에 따로 두고 그때만 인용부호로 남긴다.
+  const STALE = ["시행세칙 공포 대기", "감독규정 확정 후", "판매약관 확인 필요", "자료 미발견"];
+  for (const [label, text] of [["README", readmeDoc], ["gen123 설계 문서", gen123Design]] as const) {
+    for (const stale of STALE) {
+      check(`${label}: 낡은 HOLD 사유 "${stale}" 없음`, !text.includes(stale));
+    }
+  }
+  // audit-status는 경위(§3.1)에서 종전 사유를 인용하므로, 현재 상태 표(§3.2)에만 없으면 된다.
+  const current = auditStatus.slice(auditStatus.indexOf("### 3.2"), auditStatus.indexOf("### 3.3"));
+  // ⚠ 검사 대상은 feature/ 4종 행뿐이다. 같은 표의 2012.12.28 세칙 시행일 행은
+  //    실제로 "부칙 미확인" 상태이므로 그 낱말을 금지하면 안 된다.
+  const featureRows = current.split("\n").filter((line) => line.includes("`feature/`"));
+  check(`audit-status §3.2: feature/ 행 4개 존재 (${featureRows.length})`, featureRows.length === 4);
+  for (const stale of [...STALE, "미확인"]) {
+    const hits = featureRows.filter((line) => line.includes(stale));
+    check(`audit-status §3.2 feature/ 행: 낡은 사유 "${stale}" 없음`, hits.length === 0, hits.join(" / "));
+  }
+  check("audit-status: 경위와 현재 상태를 분리", auditStatus.includes("### 3.1") && auditStatus.includes("### 3.2"));
+  // 진입점은 루트 README 하나. 이 문서가 '색인'으로 되돌아가면 혼동이 생긴다.
+  check("audit-status: 제목이 상태 기록임을 밝힘", auditStatus.startsWith("# 보험 계산 엔진 — 감사 상태 기록"));
+  check("audit-status: '색인'을 자칭하지 않음", !/^#[^\n]*색인/m.test(auditStatus));
+  check("README: audit-status를 색인으로 소개하지 않음", !readmeDoc.includes("감사 최종 상태 색인"));
+
+  // 항목별로 '확인된 근거'가 실제로 적혀 있어야 한다.
+  check("audit-status: 발달장애의 '가입 당시 태아' 조건 명시", current.includes("가입 당시 태아"));
+  check("audit-status: 발달장애 18세 한도 명시", current.includes("18세"));
+  check("audit-status: 임신·출산 280일 조건 명시", current.includes("280일"));
+  check("audit-status: 임신·출산 일부 본인부담금 명시", current.includes("일부 본인부담금"));
+  check("audit-status: 비중증 제외항목 근거 조문 명시", current.includes("특별약관2 제4조"));
+  check("audit-status: 할인·할증 감독규정 조문 명시", current.includes("제7-63조"));
+  check("audit-status: 할인·할증이 보험료 영역임을 명시", current.includes("보험료 영역"));
+  check("audit-status: 할인·할증 해제 조건이 상품·보험사별 요율표", current.includes("요율표"));
+  check("audit-status: 4세대 보도자료 구간을 전용하지 않음을 명시", auditStatus.includes("전용하지 않는다"));
+
+  // 2026.8.28 현행본은 대조한 조문만 검증했다고 적혀 있어야 한다.
+  check("audit-status: 2026.8.28 대조 범위를 조문 단위로 한정", auditStatus.includes("### 3.3") && auditStatus.includes("직접 눈으로 대조한 조문은 아래뿐"));
+  // ⚠ "무변경" 낱말 자체를 금지하면 '무변경이라고 하지 않는다'는 문장까지 막힌다.
+  //    금지 대상은 단정하는 형태(무변경이다 / 무변경임을 확인 / 무변경으로 확인)뿐이다.
+  const affirmsUnchanged = auditStatus.match(/무변경(이다|임을 확인|으로 확인|이 확인)/g) ?? [];
+  check("audit-status: 전체 무변경 단정 없음", affirmsUnchanged.length === 0, affirmsUnchanged.join(" / "));
+  check("audit-status: 확대 해석 금지를 명시", auditStatus.includes("확대 해석하지 않는다"));
+  check("audit-status: 쪽수 1쪽 이동 사실 기록", auditStatus.includes("1쪽씩"));
+
+  // 진입점은 루트 README 하나. docs/ 안에 색인 문서를 새로 만들지 않는다.
+  const docsFiles = readdirSync("docs/insurance").filter((f) => f.endsWith(".md")).sort();
+  check(`docs/insurance 문서가 늘지 않음 (${docsFiles.length}개)`, docsFiles.length === 4, docsFiles.join(", "));
+  check("docs/insurance에 중복 색인 문서 없음",
+    !docsFiles.some((f) => /^(index|readme|목차|hold)/i.test(f)), docsFiles.join(", "));
+}
 
 // ── 문서(README) 과잉 일반화 방지 ───────────────────────────────────
 // 화면 문구만 지키고 README가 "같은 날이면 무조건 합산"으로 뭉뚱그리면 같은 오해가 남는다.

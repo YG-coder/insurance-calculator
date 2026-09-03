@@ -114,6 +114,7 @@ export type CapCode =
   | "GEN2026_NONCRITICAL_INPATIENT_PER_VISIT"
   | "GEN2026_NONCRITICAL_OUTPATIENT_PER_DAY"
   | "GEN2026_CRITICAL_OUTPATIENT_ANNUAL_VISITS"
+  | "GEN2026_NONCRITICAL_OUTPATIENT_ANNUAL_DAYS"
   | "GEN2026_CRITICAL_ANNUAL_COVERAGE"
   | "GEN2026_NONCRITICAL_ANNUAL_COVERAGE"
   // 특별약관1 (3)3대비급여 / 특별약관2 (3)비급여 자기공명영상진단의 항목별 한도.
@@ -233,7 +234,16 @@ export interface Gen2026MultiNonBenefitInput extends Gen2026MultiCommonInput {
   // 통원 가입금액(중증은 1회당, 비중증은 1일당). 약관상 20만원 "이내에서 계약자가 선택한 금액"
   // 이므로 상수화할 수 없다. 미제공 시 적용하지 않고 미적용 사실만 알린다.
   outpatientCoverageLimit?: number;
+  // ⚠ 아래 두 카운터를 혼용하지 않는다. 단위가 회 ≠ 일이고 근거 조문도 다르다
+  //   (특약1 제5조④ '보상한 횟수' / 특약2 제5조④ '보상한 일수').
+  //   대상 통원 경로에서 반대편 필드가 존재하면 값이 0이어도 런타임에서 차단한다.
   priorAnnualOutpatientVisits?: number; // 중증 통원 연간 100회 한도용
+  /**
+   * 비중증 통원 연간 100**일** 한도용(특약2 (1)(2) 표 인쇄 p.288·291, 제5조④ p.309).
+   *   미입력은 0일로 본다. 음수·소수·NaN·Infinity·안전 정수 초과는 정규화하지 않고 차단한다.
+   *   100을 넘는 값도 유효한 과거 상태로 받는다(절삭하지 않는다).
+   */
+  priorAnnualOutpatientDays?: number;
   // 연간 보험가입금액. 약관 제5조①이 "N원 이내에서 계약자가 선택한 금액"으로 규정하므로
   // 상수화할 수 없다. 상해비급여·질병비급여 각 축에 대해 따로 정해진다.
   annualCoverageLimit?: number;
@@ -304,6 +314,14 @@ interface Gen2026SpecialBase {
   priorAnnualInsurancePaid?: number;
   /** ⚠ 한도가 상해·질병 합산이라 이 경로에서는 원인 축을 받지 않는다. */
   cause?: never;
+  /**
+   * ⚠ 통원 카운터는 (3) 별도 보장종목에 적용되지 않는다.
+   *   중증 100회는 특약1 (1)(2) 통원 행, 비중증 100일은 특약2 (1)(2) 통원 행의 한도이고
+   *   <표1>의 보장한도는 이와 별개다(제5조①단서·③). 실려 오면 쓰이지 않는 입력이므로
+   *   조용히 버리지 않고 런타임에서도 막는다.
+   */
+  priorAnnualOutpatientVisits?: never;
+  priorAnnualOutpatientDays?: never;
 }
 
 export interface Gen2026CriticalMskInput extends Gen2026SpecialBase {
@@ -363,8 +381,10 @@ interface Gen2026RoutedGeneralBase {
   priorAnnualInsurancePaid?: number;
   annualCoverageLimit?: number;
   outpatientCoverageLimit?: number;
-  priorAnnualOutpatientVisits?: number;
   priorAnnualDeductible?: number;
+  // ⚠ 통원 카운터는 여기 두지 않는다. 중증은 '회'(특약1), 비중증은 '일'(특약2)로
+  //   단위가 다르므로 공통 베이스에 두면 어느 축이든 아무 필드나 실을 수 있게 된다.
+  //   각 변형에서 쓰는 쪽만 열고 반대편은 never로 닫는다.
 }
 
 /** 특약1 제3조(3)② — 항암제·항생제(항진균제 포함)·희귀의약품 주사료. */
@@ -372,6 +392,9 @@ export interface Gen2026CriticalExceptionalInjectionInput extends Gen2026RoutedG
   severity: "critical";
   item: "injection";
   injectionPurpose: "anticancer" | "antibiotic" | "orphan_drug";
+  /** 중증 통원은 연 100**회**(특약1 제3조·제5조④ '보상한 횟수'). */
+  priorAnnualOutpatientVisits?: number;
+  priorAnnualOutpatientDays?: never;
 }
 
 /** 특약2 (1)①·(2)①이 배제하는 것은 MRI뿐이다(인쇄 p.287·p.290). */
@@ -380,12 +403,18 @@ export interface Gen2026NonCriticalMskInput extends Gen2026RoutedGeneralBase {
   item: "musculoskeletal_esw";
   /** ⚠ 비중증에서는 약제 용도가 경로도 안내도 바꾸지 않는다. 쓰이지 않는 입력을 만들지 않는다. */
   injectionPurpose?: never;
+  /** 비중증 통원은 연 100**일**(특약2 제3조·제5조④ '보상한 일수'). */
+  priorAnnualOutpatientDays?: number;
+  priorAnnualOutpatientVisits?: never;
 }
 
 export interface Gen2026NonCriticalInjectionInput extends Gen2026RoutedGeneralBase {
   severity: "non_critical";
   item: "injection";
   injectionPurpose?: never;
+  /** 비중증 통원은 연 100**일**(특약2 제3조·제5조④ '보상한 일수'). */
+  priorAnnualOutpatientDays?: number;
+  priorAnnualOutpatientVisits?: never;
 }
 
 export type Gen2026RoutedGeneralInput =
@@ -428,6 +457,7 @@ export interface Gen2026RoomChargeInput {
   priorAnnualCoveredCount?: never;
   outpatientCoverageLimit?: never;
   priorAnnualOutpatientVisits?: never;
+  priorAnnualOutpatientDays?: never;
 }
 
 export type Gen2026ItemClaimInput =

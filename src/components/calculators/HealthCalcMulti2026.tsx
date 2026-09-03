@@ -9,8 +9,11 @@ import {
   GEN2026_SPECIAL_ITEM_LABEL, calculateGen2026Item, routeOfGen2026Item,
 } from "@/lib/insurance/engine/specialItem2026";
 import { CAP_LABELS } from "@/lib/insurance/engine/capLabels";
+import { GEN2026 } from "@/lib/insurance/engine/constants";
 import {
-  Cause, Coverage, Gen2026CriticalMriLine, Gen2026InjectionPurpose, Gen2026ItemClaimResult,
+  Cause, Coverage, Gen2026CriticalExceptionalInjectionInput, Gen2026CriticalMriLine,
+  Gen2026InjectionPurpose, Gen2026ItemClaimResult, Gen2026NonCriticalInjectionInput,
+  Gen2026NonCriticalMskInput,
   Gen2026MskApprovedThrough, Gen2026NonBenefitItem, Gen2026SpecialItem, Gen2026SpecialLine,
   Severity, Tier, Visit,
 } from "@/lib/insurance/engine/types";
@@ -56,6 +59,18 @@ const positiveDays = (v: string): number | null => {
  *   잘못된 쉼표 형식, 안전 정수 범위(2^53−1) 초과.
  */
 const ROOM_CHARGE_AMOUNT_FORMAT = /^(?:[0-9]+|[1-9][0-9]{0,2}(?:,[0-9]{3})+)$/;
+/**
+ * 비중증 통원 '이미 사용한 통원일수' 전용 파서.
+ *   0 이상의 안전 정수만 허용한다. 공백·부호·소수·문자·지수 표기·안전 정수 초과는 null이며,
+ *   **제거·절삭·0으로의 변형을 하지 않는다.** 100을 넘는 값도 유효한 과거 상태로 받는다.
+ */
+const OUTPATIENT_DAYS_FORMAT = /^[0-9]+$/;
+const outpatientDays = (v: string): number | null => {
+  if (!OUTPATIENT_DAYS_FORMAT.test(v)) return null;
+  const n = Number(v);
+  return Number.isSafeInteger(n) && n >= 0 ? n : null;
+};
+
 const roomChargeAmount = (v: string): number | null => {
   if (!ROOM_CHARGE_AMOUNT_FORMAT.test(v)) return null;
   const n = Number(v.replace(/,/g, ""));
@@ -91,6 +106,8 @@ export default function HealthCalcMulti2026() {
   const [priorDeductible, setPriorDeductible] = useState("0");
   const [outpatientLimit, setOutpatientLimit] = useState("");
   const [priorVisits, setPriorVisits] = useState("0");
+  // ⚠ 기본값 없음. 0으로 추정하면 사용자가 인식하지 못한 채 "이전 통원 없음"으로 계산된다.
+  const [priorOutDays, setPriorOutDays] = useState("");
   const [annualLimit, setAnnualLimit] = useState("");
   const [copyCount, setCopyCount] = useState("3");
   // 특별약관 전용 입력
@@ -131,6 +148,10 @@ export default function HealthCalcMulti2026() {
   //   일수: 0·음수·소수·빈 값은 불완전.
   const rcIncomplete = showRoomChargeForm
     && rcRows.some((r) => roomChargeAmount(r.amount) === null || positiveDays(r.days) === null);
+  // 비중증 통원은 연 100일 한도가 걸리므로 이미 사용한 일수를 알아야 계산할 수 있다.
+  //   빈 값을 0으로 추정하지 않는다 — 한도가 통째로 사라져 보험금이 과다 산출된다.
+  const needsOutDays = coverage === "non_benefit" && (nonBenefitItem === "general" || route === "general")
+    && severity === "non_critical" && visit === "outpatient" && outpatientDays(priorOutDays) === null;
   // 일반 비급여 입원은 종별을 고르기 전에는 계산하지 않는다(중증·비중증 모두).
   const needsTier = showGeneralForm && severity !== "" && visit === "inpatient" && nbInpatientTier === "";
   // 중증 MRI 입원 행은 의료기관 종별이 조건부 필수다(제5조⑤ pool 판정).
@@ -146,7 +167,7 @@ export default function HealthCalcMulti2026() {
   //   판별 유니온이라 잘못된 조합은 여기서 컴파일되지 않는다.
   let itemResult: Gen2026ItemClaimResult | null = null;
   if (coverage === "non_benefit" && specialItem !== null && severity !== "" && !rowsIncomplete
-      && !(route === "general" && (cause === "" || (visit === "inpatient" && nbInpatientTier === "")))) {
+      && !(route === "general" && (cause === "" || (visit === "inpatient" && nbInpatientTier === "") || needsOutDays))) {
     const generalCommon = {
       route: "general" as const, coverage: "non_benefit" as const, cause: cause as Cause, visit,
       // ⚠ 빈 값을 Tier로 단언하지 않는다. 아래 게이트가 미선택을 이미 배제한다.
@@ -155,9 +176,13 @@ export default function HealthCalcMulti2026() {
       priorAnnualInsurancePaid: num(priorInsurance),
       annualCoverageLimit: annualLimit !== "" ? num(annualLimit) : undefined,
       outpatientCoverageLimit: visit === "outpatient" && outpatientLimit !== "" ? num(outpatientLimit) : undefined,
-      priorAnnualOutpatientVisits: severity === "critical" && visit === "outpatient" ? num(priorVisits) : undefined,
       priorAnnualDeductible: severity === "critical" && visit === "inpatient" && nbInpatientTier === "hospital" ? num(priorDeductible) : undefined,
     };
+    // ⚠ 통원 카운터는 generalCommon에 넣지 않는다. 스프레드로 실으면 축이 다른 분기에도
+    //   같은 필드가 따라 들어가고, 초과 필드는 타입 검사에서 드러나지 않는다.
+    //   각 분기에서 쓰는 쪽만 실어 보낸다.
+    const outVisits = visit === "outpatient" ? num(priorVisits) : undefined;         // 중증 = 회
+    const outDays = visit === "outpatient" ? outpatientDays(priorOutDays) ?? undefined : undefined; // 비중증 = 일
     if (severity === "critical") {
       if (specialItem === "musculoskeletal_esw") {
         itemResult = calculateGen2026Item({
@@ -184,7 +209,8 @@ export default function HealthCalcMulti2026() {
       } else if (injectionPurpose !== "") {
         itemResult = calculateGen2026Item({
           ...generalCommon, severity: "critical", item: "injection", injectionPurpose,
-        });
+          priorAnnualOutpatientVisits: outVisits,
+        } satisfies Gen2026CriticalExceptionalInjectionInput);
       }
     } else if (specialItem === "mri") {
       itemResult = calculateGen2026Item({
@@ -193,9 +219,15 @@ export default function HealthCalcMulti2026() {
         priorAnnualInsurancePaid: num(priorInsurance),
       });
     } else if (specialItem === "injection") {
-      itemResult = calculateGen2026Item({ ...generalCommon, severity: "non_critical", item: "injection" });
+      itemResult = calculateGen2026Item({
+        ...generalCommon, severity: "non_critical", item: "injection",
+        priorAnnualOutpatientDays: outDays,
+      } satisfies Gen2026NonCriticalInjectionInput);
     } else if (specialItem === "musculoskeletal_esw") {
-      itemResult = calculateGen2026Item({ ...generalCommon, severity: "non_critical", item: "musculoskeletal_esw" });
+      itemResult = calculateGen2026Item({
+        ...generalCommon, severity: "non_critical", item: "musculoskeletal_esw",
+        priorAnnualOutpatientDays: outDays,
+      } satisfies Gen2026NonCriticalMskInput);
     }
   }
 
@@ -221,7 +253,7 @@ export default function HealthCalcMulti2026() {
         nhisCoinsuranceRate: visit === "outpatient" && nhisRate !== "" ? Math.min(100, num(nhisRate)) / 100 : undefined,
         amounts: amounts.map(num),
       })
-    : nonBenefitItem === "general" && severity !== "" && cause !== "" && !needsTier
+    : nonBenefitItem === "general" && severity !== "" && cause !== "" && !needsTier && !needsOutDays
       ? calculateMany2026({
           cause, coverage: "non_benefit", visit, severity, nonBenefitItem: "general",
           tier: visit === "inpatient" ? nbInpatientTier || undefined : undefined,
@@ -230,6 +262,8 @@ export default function HealthCalcMulti2026() {
           priorAnnualDeductible: severity === "critical" && visit === "inpatient" && nbInpatientTier === "hospital" ? num(priorDeductible) : undefined,
           outpatientCoverageLimit: visit === "outpatient" && outpatientLimit !== "" ? num(outpatientLimit) : undefined,
           priorAnnualOutpatientVisits: severity === "critical" && visit === "outpatient" ? num(priorVisits) : undefined,
+          priorAnnualOutpatientDays: severity === "non_critical" && visit === "outpatient"
+            ? outpatientDays(priorOutDays) ?? undefined : undefined,
           annualCoverageLimit: annualLimit !== "" ? num(annualLimit) : undefined,
         })
       : null;
@@ -276,6 +310,7 @@ export default function HealthCalcMulti2026() {
     {showGeneralForm && severity !== "" && <label className="mt-4 block max-w-sm text-sm font-semibold">연간 보험가입금액 (선택)<input className="input-base mt-1" inputMode="numeric" value={annualLimit} onChange={(e) => setAnnualLimit(e.target.value)} placeholder={severity === "critical" ? "예: 50000000 — 모르면 비워두세요" : "예: 10000000 — 모르면 비워두세요"} /><span className="mt-2 block text-xs font-normal text-slate-500">약관은 {severity === "critical" ? "5천만" : "1천만"} 원 <b>이내에서 계약 시 정한 금액</b>으로 규정하며, 상해비급여·질병비급여 각각에 대해 따로 정해집니다. 입력하지 않으면 적용하지 않습니다.</span></label>}
     {showGeneralForm && severity === "non_critical" && visit === "inpatient" && <div className="mt-4"><NoticeBox variant="info">비중증 입원의 <b>1회당 300만 원 한도</b>는 「의료법」 제3조제2항 의료기관 중 <b>종합병원을 제외한 곳</b>(병·의원급)에서 발생한 비급여 의료비에만 적용됩니다(특별약관2 제3조 (1)제1항·(2)제1항). 상급종합·종합병원 입원에는 적용하지 않습니다.</NoticeBox></div>}
     {showGeneralForm && severity === "critical" && visit === "outpatient" && <label className="mt-4 block max-w-sm text-sm font-semibold">이미 사용한 통원 횟수 (선택)<input className="input-base mt-1" type="number" min="0" value={priorVisits} onChange={(e) => setPriorVisits(e.target.value)} /><span className="mt-2 block text-xs font-normal text-slate-500">중증 통원은 계약해당일 기준 1년간 100회가 한도입니다.</span></label>}
+    {showGeneralForm && severity === "non_critical" && visit === "outpatient" && <label className="mt-4 block max-w-sm text-sm font-semibold">계약해당일 기준 1년간 이미 사용한 통원일수<input className="input-base mt-1" inputMode="numeric" value={priorOutDays} onChange={(e) => setPriorOutDays(e.target.value)} placeholder="이전 통원이 없으면 0" /><span className="mt-2 block text-xs font-normal text-slate-500">비중증 통원은 약관상 <b>계약일 또는 매년 계약해당일부터 1년간 통원 {GEN2026.nonBenefit.nonCritical.outpatientAnnualDays}일</b>이 한도입니다(특별약관2 제3조 (1)제1항·(2)제1항). 보상 단위가 <b>통원 1일당</b>이므로, 같은 날 외래와 처방·조제비는 <b>한 행으로 합쳐</b> 입력해 주세요. 같은 날을 여러 행으로 나누면 일수가 실제보다 빨리 소진됩니다.</span></label>}
 
     {/* ── 특별약관 입력 안내 ── */}
     {showSpecialForm && specialItem !== null && <div className="mt-4"><NoticeBox variant="info">{specialItem === "injection"
@@ -333,6 +368,7 @@ export default function HealthCalcMulti2026() {
     {submitted && needsPurpose && <div className="mt-5"><NoticeBox variant="warning">비급여 주사료는 <b>약제 용도</b>에 따라 보상하는 보장종목이 달라집니다(특별약관1 제3조(3)제2항). 약제 용도를 선택해 주세요. 선택 전에는 계산하지 않습니다.</NoticeBox></div>}
     {submitted && rcIncomplete && <div className="mt-5"><NoticeBox variant="warning">각 입원의 <b>차액 총액</b>과 <b>총 입원일수</b>를 올바르게 입력해 주세요. 차액 총액은 <b>0 이상의 숫자</b>, 총 입원일수는 <b>1 이상의 정수</b>여야 합니다. 음수·문자가 섞인 값은 계산기가 임의로 고치지 않고, 약관에 일수 산정 방법이 정해져 있지 않아 일수도 추정하지 않습니다. 올바르게 입력하기 전에는 계산하지 않습니다.</NoticeBox></div>}
     {submitted && needsTier && <div className="mt-5"><NoticeBox variant="warning">비급여 <b>입원</b>은 <b>의료기관 종별</b>에 따라 보험금이 달라집니다. 중증은 공제금액 상한 500만 원이 상급종합·종합병원 입원에만 적용되고(특별약관1 제5조 제5항), 비중증은 1회당 300만 원 한도가 병·의원급에만 적용됩니다(특별약관2 제3조 (1)제1항·(2)제1항). <b>입원 의료기관</b>을 선택해 주세요. 선택 전에는 계산하지 않습니다.</NoticeBox></div>}
+    {submitted && needsOutDays && <div className="mt-5"><NoticeBox variant="warning">계약해당일 기준 1년간 <b>이미 사용한 통원일수</b>를 입력해 주세요. 이전 통원이 없으면 <b>0</b>을 입력하세요. 비중증 통원은 연 {GEN2026.nonBenefit.nonCritical.outpatientAnnualDays}일이 한도라 이 값이 있어야 계산할 수 있고, 계산기가 0으로 추정하지 않습니다. 0 이상의 정수만 받으며 음수·소수는 계산하지 않습니다.</NoticeBox></div>}
     {submitted && needsCause && <div className="mt-5"><NoticeBox variant="warning">일반 상해·질병 비급여는 약관상 <b>상해비급여·질병비급여 각각</b>에 대해 연간 보험가입금액과 누적이 따로 정해집니다(특별약관1·2 제5조 제1항). <b>원인</b>을 선택해 주세요. 선택 전에는 계산하지 않습니다.</NoticeBox></div>}
     {submitted && rowsIncomplete && <div className="mt-5"><NoticeBox variant="warning">각 행의 <b>치료 형태</b>{needsRowTier ? <>와 입원 행의 <b>의료기관 종별</b></> : null}를 선택해 주세요.{needsRowTier ? " 중증 비급여 MRI 입원은 의료기관 종별에 따라 공제금액 상한 500만 원 적용 여부가 달라지므로 기본값으로 계산하지 않습니다." : ""}</NoticeBox></div>}
     {submitted && result && result.status === "PENDING_UNVERIFIED" && <div className="mt-5"><NoticeBox variant="warning">{result.notes.join(" ")}</NoticeBox></div>}

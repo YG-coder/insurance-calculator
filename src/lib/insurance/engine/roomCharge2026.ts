@@ -37,6 +37,7 @@ const UNUSED_KEYS = [
   "visit", "tier", "item", "nonBenefitItem", "injectionPurpose", "lines", "amounts",
   "approvedThroughVisit", "priorAnnualCoveredCount", "priorAnnualInpatientDeductible",
   "priorAnnualDeductible", "outpatientCoverageLimit", "priorAnnualOutpatientVisits",
+  "priorAnnualOutpatientDays",
 ] as const;
 
 function validate(input: Gen2026RoomChargeInput): Gen2026RejectedResult | null {

@@ -91,6 +91,8 @@ export const GEN2026 = {
       inpatientPerVisitLimit: R.GEN2026_NONCRITICAL_INPATIENT_PER_VISIT_LIMIT.value,
       /** 1회당 300만원 한도가 적용되는 의료기관 종별. **여기가 유일한 원천이다**. */
       inpatientPerVisitLimitTiers: R.GEN2026_NONCRITICAL_INPATIENT_PER_VISIT_LIMIT_TIERS.value,
+      /** 연간 통원 **일수** 한도. 중증의 outpatientAnnualVisits(회)와 단위가 다르다. */
+      outpatientAnnualDays: R.GEN2026_NONCRITICAL_OUTPATIENT_ANNUAL_DAYS.value,
       outpatientPerDayLimitMax: R.GEN2026_NONCRITICAL_OUTPATIENT_PER_DAY_LIMIT_MAX.value,
       annualLimitMax: R.GEN2026_NONCRITICAL_ANNUAL_LIMIT_MAX.value,
     },

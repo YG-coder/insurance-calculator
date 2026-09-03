@@ -137,7 +137,19 @@ function validateItemInput(input: Exclude<Gen2026ItemClaimInput, Gen2026RoomChar
     return rejected("약제 용도(injectionPurpose)는 중증 비급여 주사료에서만 사용합니다 —", purpose);
   }
 
+  // ── 통원 카운터는 어느 경로에서든 먼저 본다 ─────────────────────────
+  //   ⚠ special_item 분기가 먼저 return하면 이 검사에 도달하지 못해, 잘못 실린 카운터가
+  //     조용히 버려진다. 그 구조 자체가 이번에 고친 결함의 원인이었다.
+  const days = raw.priorAnnualOutpatientDays;
+  const visits = raw.priorAnnualOutpatientVisits;
+
   if (raw.route === "special_item") {
+    // (3) 별도 보장종목에는 통원 한도가 적용되지 않는다. <표1>의 보장한도는 별개이며
+    //   통원 가입금액·연간 가입금액도 여기 적용되지 않는다(제5조①단서·③).
+    //   두 카운터 중 어느 쪽이든 실려 오면 값이 0이어도 계산하지 않는다.
+    if (days !== undefined || visits !== undefined) {
+      return rejected("통원 카운터는 별도 보장종목(3대비급여·비중증 MRI)에 적용되지 않습니다 —", days ?? visits);
+    }
     if (!Array.isArray(raw.lines)) return rejected("행 목록(lines)", raw.lines);
     for (let i = 0; i < raw.lines.length; i++) {
       const line = raw.lines[i] as Record<string, unknown> | null;
@@ -158,6 +170,27 @@ function validateItemInput(input: Exclude<Gen2026ItemClaimInput, Gen2026RoomChar
   if (!oneOf(raw.visit, VISIT_VALUES)) return rejected("치료 형태(visit)", raw.visit);
   if (raw.tier !== undefined && !oneOf(raw.tier, TIER_VALUES)) return rejected("의료기관 종별(tier)", raw.tier);
   if (!Array.isArray(raw.amounts) || !raw.amounts.every(isNum)) return rejected("진료비 목록(amounts)", raw.amounts);
+
+  // ── 통원 카운터 축 분리 (일반 전환 경로) ───────────────────────────
+  //   중증은 연 100'회'(특약1 제3조·제5조④ '보상한 횟수'),
+  //   비중증은 연 100'일'(특약2 제3조·제5조④ '보상한 일수')로 단위가 다르다.
+  //   반대편 필드가 실려 오면 호출자가 단위를 잘못 알고 있다는 뜻이므로 값이 0이어도 막는다.
+  //   ⚠ 조용히 버리지 않는다 — 버리면 한도가 통째로 사라져 보험금이 과다 산출된다.
+  if (raw.severity === "critical" && days !== undefined) {
+    return rejected("중증 통원의 연간 한도는 통원 100회입니다. 일수 카운터(priorAnnualOutpatientDays)는 비중증 전용이라 —", days);
+  }
+  if (raw.severity === "non_critical" && visits !== undefined) {
+    return rejected("비중증 통원의 연간 한도는 통원 100일입니다. 횟수 카운터(priorAnnualOutpatientVisits)는 중증 전용이라 —", visits);
+  }
+  // 통원 카운터는 통원에서만 쓰인다. 입원에 실려 오면 쓰이지 않는 입력이므로 막는다.
+  if (raw.visit === "inpatient" && (days !== undefined || visits !== undefined)) {
+    return rejected("통원 카운터는 입원 계산에 쓰이지 않습니다 —", days ?? visits);
+  }
+  // 비중증 통원 일수는 0 이상의 안전 정수만 받는다. 정규화하지 않는다.
+  if (days !== undefined
+    && !(typeof days === "number" && Number.isSafeInteger(days) && days >= 0)) {
+    return rejected("이미 사용한 통원일수(priorAnnualOutpatientDays)는 0 이상의 정수여야 합니다 —", days);
+  }
   return null;
 }
 
@@ -370,14 +403,19 @@ function routeNote(input: Gen2026RoutedGeneralInput): string {
 
 /** ⚠ export하지 않는다. 위와 같은 이유다. */
 function calculateRoutedGeneral2026(input: Gen2026RoutedGeneralInput): Gen2026RoutedGeneralResult {
+  // ⚠ 통원 카운터는 축에 맞는 쪽만 넘긴다. 둘을 동시에 넘기면 calculateMany2026의
+  //   교차 필드 가드에 걸린다(그리고 걸리는 것이 맞다).
+  //   중증 = 연 100회(특약1), 비중증 = 연 100일(특약2).
   const base = calculateMany2026({
     cause: input.cause, coverage: "non_benefit", visit: input.visit, tier: input.tier,
     severity: input.severity, nonBenefitItem: "general", amounts: input.amounts,
     priorAnnualInsurancePaid: input.priorAnnualInsurancePaid,
     annualCoverageLimit: input.annualCoverageLimit,
     outpatientCoverageLimit: input.outpatientCoverageLimit,
-    priorAnnualOutpatientVisits: input.priorAnnualOutpatientVisits,
     priorAnnualDeductible: input.priorAnnualDeductible,
+    ...(input.severity === "critical"
+      ? { priorAnnualOutpatientVisits: input.priorAnnualOutpatientVisits }
+      : { priorAnnualOutpatientDays: input.priorAnnualOutpatientDays }),
   });
   // ⚠ 계산 결과는 손대지 않는다. 차단된 결과에는 "계산했다"는 안내를 붙이지 않는다.
   if (base.status !== "OK") return { ...base, route: "general" };

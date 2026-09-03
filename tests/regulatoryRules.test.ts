@@ -283,6 +283,10 @@ const VERIFIED_2026_05_06_DIRECT = new Set([
   "GEN2026-ROOM-CHARGE-CAUSE-SEPARATED",
   "GEN2026-ROOM-CHARGE-EXCLUDED-FROM-INPATIENT-MEDICAL",
   "GEN2026-ROOM-CHARGE-DEDUCTIBLE-POOL",
+  // 2026-09-03 재직독 — 특약2 (1)①·(2)① 통원 행의 '통원 100일' 한도와 제5조④의 '보상한 일수'
+  //   (인쇄 p.288·291·309). 5.6 판본만 직접 읽었으므로 7.15·9.10 주소는 여전히 금지된다.
+  "GEN2026-NONCRITICAL-OUTPATIENT-ANNUAL-DAYS",
+  "GEN2026-NONCRITICAL-OUTPATIENT-DAYS-ZEROPAY",
 ]);
 const VERSION_5_6_URL = "https://www.law.go.kr/LSW/admRulInfoP.do?admRulSeq=2200000108697";
 const leaked = rules

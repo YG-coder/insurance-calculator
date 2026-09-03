@@ -213,6 +213,21 @@ const GEN5_ROOM_CHARGE_TABLES: RegulatorySource = {
   locator: "별표/서식 → [별표 15] 표준약관(별표 식별번호 3216359) → 실손의료보험 특별약관1 제3조 (1)상해비급여 제1항(인쇄 p.258)·(2)질병비급여 제1항(인쇄 p.261), 특별약관2 제3조 (1)상해비급여 제1항(인쇄 p.287)·(2)질병비급여 제1항(인쇄 p.290) <구분·보상금액> '상급병실료 차액' 행, 2026. 5. 6. 공포·시행본",
 };
 
+/**
+ * 특약2 (1)상해비급여·(2)질병비급여 통원 행 — 연간 통원 100**일** 한도.
+ *   ⚠ 특약1(중증)의 "통원 100**회**"와 단위가 다르다. 합치지 않는다.
+ */
+const GEN5_NONCRITICAL_OUTPATIENT_DAYS_TABLES: RegulatorySource = {
+  ...GEN5_DIRECT_BASE,
+  locator: "별표/서식 → [별표 15] 표준약관(별표 식별번호 3216359) → 실손의료보험 특별약관2 제3조 (1)상해비급여 제1항(인쇄 p.288)·(2)질병비급여 제1항(인쇄 p.291) <구분·보상금액> 통원 행 — '매년 계약해당일부터 1년간 통원 100일을 한도로 합니다', 2026. 5. 6. 공포·시행본",
+};
+
+/** 특약2 제5조④ — 계속중인 통원의 이월 단위가 '일수'임을 재확인한다. */
+const GEN5_NONCRITICAL_OUTPATIENT_DAYS_BASIS: RegulatorySource = {
+  ...GEN5_DIRECT_BASE,
+  locator: "별표/서식 → [별표 15] 표준약관(별표 식별번호 3216359) → 실손의료보험 특별약관2 제5조(보험가입금액 한도 등) 제4항(인쇄 p.309) — '연간 보장한도(일수)에서 직전 보험기간 종료일까지 보상한 일수를 차감한 잔여 일수를 한도로 적용', 2026. 5. 6. 공포·시행본",
+};
+
 /** 상급병실료 차액의 정의 — 특약1 제2조(용어의 정의). */
 const GEN5_ROOM_CHARGE_DEFINITION: RegulatorySource = {
   ...GEN5_DIRECT_BASE,
@@ -823,6 +838,23 @@ export const REGULATORY_RULES = {
   ),
   // ⚠ 상수가 아니라 상한선이다. 약관 제5조③: "통원 1일당 20만원 이내에서 회사가 정한
   //    금액 중 계약자가 선택한 금액".
+  // ⚠ 중증의 GEN2026-CRITICAL-OUTPATIENT-ANNUAL-VISITS(100**회**)와 **다른 규칙**이다.
+  //   특약2는 보상 단위가 '통원 1일당'이고 한도도 '통원 100일', 제5조④의 이월도 '보상한 일수'다.
+  //   값이 같다고 상수를 공유하면 단위가 섞인다.
+  GEN2026_NONCRITICAL_OUTPATIENT_ANNUAL_DAYS: confirmed5th(
+    "GEN2026-NONCRITICAL-OUTPATIENT-ANNUAL-DAYS", 100,
+    [GEN5_NONCRITICAL_OUTPATIENT_DAYS_TABLES, GEN5_NONCRITICAL_OUTPATIENT_DAYS_BASIS],
+    "매년 계약해당일부터 1년간 통원 100일을 한도로 한다. 단위는 '회'가 아니라 '일'이며, 특약2 제5조④도 연간 보장한도(일수)·보상한 일수로 규정한다",
+  ),
+  // ⚠ 공제금액이 의료비 이상이거나 연간 가입금액이 소진되어 **지급 보험금이 0원인 통원일**이
+  //   이 100일을 소진하는지는 원문에 판단 문언이 없다. 표는 '통원 100일'이라 하고
+  //   제5조④는 '보상한 일수'라 해 서로 다른 방향으로 읽힌다. 값을 만들지 않는다.
+  GEN2026_NONCRITICAL_OUTPATIENT_DAYS_ON_ZERO_PAY: held(
+    "GEN2026-NONCRITICAL-OUTPATIENT-DAYS-ZEROPAY", "2026",
+    [GEN5_NONCRITICAL_OUTPATIENT_DAYS_TABLES, GEN5_NONCRITICAL_OUTPATIENT_DAYS_BASIS],
+    "확인된 것: 연간 한도가 100일이고 보상 단위가 통원 1일당(외래 및 처방·조제비 합산)이다. 확인되지 않은 것: 진료비는 있으나 지급 보험금이 0원인 통원일이 100일을 소진하는지. 표의 '통원 100일'은 통원 자체를, 제5조④의 '보상한 일수'는 보상된 날을 가리키는 것으로 읽혀 한쪽으로 단정할 수 없다",
+    "2026-09-03",
+  ),
   GEN2026_NONCRITICAL_OUTPATIENT_PER_DAY_LIMIT_MAX: confirmed5th(
     "GEN2026-NONCRITICAL-OUTPATIENT-PER-DAY-LIMIT-MAX", 200_000, [GEN5_NONCRITICAL_LIMIT_TERMS],
     "통원 1일당 가입금액의 상한선. 계약값이 아니다",

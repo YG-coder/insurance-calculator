@@ -17,12 +17,23 @@ const out = (amount: number, facility: ClaimLine["facility"] = "clinic"): ClaimL
   ({ amount, visit: "outpatient", facility });
 const inp = (amount: number): ClaimLine => ({ amount, visit: "inpatient" });
 
+/**
+ * 행 구성에 맞는 카운터만 실어 준다.
+ *   ⚠ 쓰이지 않는 축(약국 행이 없는데 처방전, 입원만 있는데 외래)을 넘기면 엔진이 막는다.
+ *     그것이 이번 계약이므로 여기서 우회하지 않고 필요한 축만 넣는다.
+ */
+const counters = (ls: ClaimLine[]) => ({
+  ...(ls.some((l) => l.visit === "outpatient" && l.facility !== "pharmacy")
+    ? { priorAnnualOutpatientVisits: 0 } : {}),
+  ...(ls.some((l) => l.visit === "outpatient" && l.facility === "pharmacy")
+    ? { priorAnnualPrescriptions: 0 } : {}),
+});
+
 // ── 1. 건별 합 = 총계, 그리고 총계 불변식 ────────────────────────────
 {
   const r = calculateMany("2017", {
     plan: "standard",
-    lines: [out(300_000), out(40_000), out(30_000, "pharmacy"), inp(1_000_000)],
-  });
+    lines: [out(300_000), out(40_000), out(30_000, "pharmacy"), inp(1_000_000)], priorAnnualOutpatientVisits: 0, priorAnnualPrescriptions: 0 });
   const sumOwn = r.lines.reduce((s, l) => s + (l.ownPay ?? 0), 0);
   const sumIns = r.lines.reduce((s, l) => s + (l.insurancePay ?? 0), 0);
   const sumAmt = r.lines.reduce((s, l) => s + l.amount, 0);
@@ -38,7 +49,7 @@ const inp = (amount: number): ClaimLine => ({ amount, visit: "inpatient" });
 // ── 2. 총액은 순서와 무관 (건별 배분만 순서를 탄다) ──────────────────
 {
   const lines = [inp(8_000_000), inp(3_000_000), out(300_000), inp(500_000)];
-  const base = calculateMany("2017", { plan: "standard", lines });
+  const base = calculateMany("2017", { plan: "standard", lines, ...counters(lines) });
   const perms: ClaimLine[][] = [
     [lines[3], lines[0], lines[2], lines[1]],
     [lines[2], lines[1], lines[3], lines[0]],
@@ -46,7 +57,7 @@ const inp = (amount: number): ClaimLine => ({ amount, visit: "inpatient" });
   ];
   let bad = 0;
   for (const p of perms) {
-    const r = calculateMany("2017", { plan: "standard", lines: p });
+    const r = calculateMany("2017", { plan: "standard", lines: p, ...counters(p) });
     if (r.totalOwnPay !== base.totalOwnPay || r.totalInsurancePay !== base.totalInsurancePay) bad++;
   }
   check("총액은 행 순서와 무관", bad === 0, `불일치 ${bad}건`);
@@ -65,7 +76,7 @@ const inp = (amount: number): ClaimLine => ({ amount, visit: "inpatient" });
         facility: line.visit === "outpatient" ? line.facility : undefined, plan,
         priorAnnualPaid: line.visit === "inpatient" ? 0 : undefined,
       });
-      const many = calculateMany(gen, { plan, lines: [line] });
+      const many = calculateMany(gen, { plan, lines: [line], ...counters([line]) });
       n++;
       if (many.totalOwnPay !== single.ownPay || many.totalInsurancePay !== single.insurancePay) bad++;
     }
@@ -78,8 +89,7 @@ const inp = (amount: number): ClaimLine => ({ amount, visit: "inpatient" });
   const r = calculateMany("2017", {
     plan: "standard",
     lines: [out(300_000), out(300_000)],
-    priorAnnualOutpatientVisits: 179,
-  });
+    priorAnnualOutpatientVisits: 179 });
   check("한도 직전 1건은 보상", r.lines[0].covered === true && r.lines[0].ownPay === 60_000);
   check("180회 초과 건은 보상 제외 — 자기부담이 진료비 전액", r.lines[1].covered === false && r.lines[1].ownPay === 300_000 && r.lines[1].insurancePay === 0);
   check("초과 건에 횟수 한도 capCode", r.lines[1].appliedCaps.includes("GEN2017_OUTPATIENT_ANNUAL_VISITS"));
@@ -95,20 +105,28 @@ const inp = (amount: number): ClaimLine => ({ amount, visit: "inpatient" });
   check("외래와 처방 횟수는 별도 집계", rx.lines[1].ownPay === 60_000);
   check("처방 한도 capCode 분리", rx.lines[0].appliedCaps.includes("GEN2017_PRESCRIPTION_ANNUAL_COUNT"));
 
-  // 입원은 횟수 한도가 없다
-  const many = calculateMany("2017", { plan: "standard", lines: Array.from({ length: 5 }, () => inp(100_000)), priorAnnualOutpatientVisits: 180 });
-  check("입원은 연간 통원 횟수 한도의 영향을 받지 않음", many.lines.every((l) => l.covered));
+  // 입원은 횟수 한도가 없다 — 카운터를 요구하지도 않는다.
+  const inpLines = Array.from({ length: 5 }, () => inp(100_000));
+  const many = calculateMany("2017", { plan: "standard", lines: inpLines });
+  check("입원은 연간 통원 횟수 한도의 영향을 받지 않음",
+    many.status === "OK" && many.lines.every((l) => l.covered));
+  // ⚠ 종전에는 입원 묶음에 실린 통원 카운터를 조용히 버렸다. 안전성 커밋에서 차단으로 바뀌었다.
+  for (const field of ["priorAnnualOutpatientVisits", "priorAnnualPrescriptions"] as const) {
+    const stray = calculateMany("2017", { plan: "standard", lines: inpLines, [field]: 0 });
+    check(`입원 묶음에 ${field}가 실리면 값 0이어도 차단`,
+      stray.status === "PENDING_UNVERIFIED" && stray.lines.length === 0
+      && stray.totalOwnPay === null && stray.totalAmount === 500_000);
+  }
 }
 
 // ── 5. 회(건)당 가입금액 한도 ────────────────────────────────────────
 {
   const withLimit = calculateMany("2017", {
-    plan: "selective", lines: [out(1_000_000)], perVisitCoverageLimit: 300_000,
-  });
+    plan: "selective", lines: [out(1_000_000)], perVisitCoverageLimit: 300_000, priorAnnualOutpatientVisits: 0 });
   check("회당 가입금액 30만원이 보험금 상한으로 구속", withLimit.totalInsurancePay === 300_000 && withLimit.totalOwnPay === 700_000);
   check("구속 시 capCode", withLimit.appliedCaps.includes("GEN2017_PER_VISIT_COVERAGE_LIMIT"));
 
-  const noLimit = calculateMany("2017", { plan: "selective", lines: [out(1_000_000)] });
+  const noLimit = calculateMany("2017", { plan: "selective", lines: [out(1_000_000)], priorAnnualOutpatientVisits: 0 });
   check("미입력 시 적용하지 않음", noLimit.totalInsurancePay === 990_000 && noLimit.appliedCaps.length === 0);
   check("미입력 시 안내 문구", noLimit.notes.some((n) => n.includes("회(건)당 가입금액은 계약마다 다른 값")));
 
@@ -130,13 +148,13 @@ const inp = (amount: number): ClaimLine => ({ amount, visit: "inpatient" });
   check("기납부 150만 → 잔여 50만", withPrior.totalOwnPay === 500_000);
 
   // 통원 자기부담은 입원 상한에 누적되지 않는다 (약관 단서가 입원 표에만 있다)
-  const mixed = calculateMany("2017", { plan: "standard", lines: [out(10_000_000), inp(5_000_000)] });
+  const mixed = calculateMany("2017", { plan: "standard", lines: [out(10_000_000), inp(5_000_000)], priorAnnualOutpatientVisits: 0 });
   check("통원 자기부담은 입원 상한을 소진하지 않음", mixed.lines[1].ownPay === 1_000_000, String(mixed.lines[1].ownPay));
 }
 
 // ── 7. plan 미지정·빈 입력 ───────────────────────────────────────────
 {
-  const r = calculateMany("2017", { lines: [out(300_000)] });
+  const r = calculateMany("2017", { lines: [out(300_000)], priorAnnualOutpatientVisits: 0 });
   check("plan 미지정 → PENDING_UNVERIFIED", r.status === "PENDING_UNVERIFIED" && r.totalOwnPay === null);
   check("보류여도 총 진료비는 계산", r.totalAmount === 300_000);
 
@@ -152,10 +170,12 @@ const inp = (amount: number): ClaimLine => ({ amount, visit: "inpatient" });
   for (const gen of GENS) for (const plan of PLANS) {
     for (const a of amounts) for (const b of amounts) {
       for (const f of ["clinic", "hospital", "tertiary", "pharmacy"] as const) {
+        // ⚠ f === "pharmacy"면 두 통원 행이 처방조제라 필요한 축이 바뀐다.
+        //   행 구성에 맞는 축만 실어야 한다(쓰이지 않는 축은 엔진이 정당하게 막는다).
+        const ls = [out(a, f), inp(b), out(b, f)];
         const r: MultiClaimResult = calculateMany(gen, {
-          plan, lines: [out(a, f), inp(b), out(b, f)],
-          priorAnnualPaid: 500_000, perVisitCoverageLimit: 300_000,
-        });
+          plan, lines: ls,
+          priorAnnualPaid: 500_000, perVisitCoverageLimit: 300_000, ...counters(ls) });
         n++;
         if ((r.totalOwnPay ?? 0) + (r.totalInsurancePay ?? 0) !== r.totalAmount) bad["합계 정합"]++;
         if (!r.lines.every((l) => Number.isInteger(l.ownPay) && Number.isInteger(l.insurancePay))) bad["건별 정수"]++;
@@ -172,11 +192,16 @@ const inp = (amount: number): ClaimLine => ({ amount, visit: "inpatient" });
   const r = calculateMany("2017", {
     plan: "standard",
     lines: [out(-500_000), out(Number.NaN), out(10_000.9)],
-    priorAnnualOutpatientVisits: -5,
-    priorAnnualPaid: -100,
-  });
+    priorAnnualOutpatientVisits: 0,
+    priorAnnualPaid: -100 });
   check("음수·NaN 진료비는 0으로, 소수는 floor", r.lines[0].amount === 0 && r.lines[1].amount === 0 && r.lines[2].amount === 10_000);
-  check("음수 누적 입력은 0으로 클램프", r.status === "OK" && r.lines.every((l) => l.covered));
+  check("음수 금액 누적 입력은 종전대로 0으로 클램프(금액 축은 이번 범위 밖)",
+    r.status === "OK" && r.lines.every((l) => l.covered));
+  // ⚠ 종전에는 횟수 축의 음수도 0으로 클램프했다. 안전성 커밋에서 차단으로 바뀌었다.
+  const negCount = calculateMany("2017", {
+    plan: "standard", lines: [out(300_000)], priorAnnualOutpatientVisits: -5 });
+  check("음수 횟수 입력은 0으로 바뀌지 않고 차단",
+    negCount.status === "PENDING_UNVERIFIED" && negCount.lines.length === 0);
 }
 
 console.log(`\n[multiClaim] 통과 ${pass} / 실패 ${fail}`);

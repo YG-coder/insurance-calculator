@@ -167,17 +167,24 @@ console.log("\n[범위] 2·3·4세대의 기존 정책 무변경");
 {
   const std = readFileSync("src/lib/insurance/engine/multiClaim.ts", "utf8");
   const g4 = readFileSync("src/lib/insurance/engine/multiClaim2021.ts", "utf8");
-  check("2·3세대는 여전히 nonNegInt로 정규화",
-    /let outpatientVisits = nonNegInt\(input\.priorAnnualOutpatientVisits\)/.test(std));
+  // ⚠ 2·3세대는 F-2 안전성 커밋에서 이 파일과 **독립적으로** 엄격 검증으로 바뀌었다.
+  //   그 계약은 tests/gen2009OutpatientCounterInput.test.ts가 맡는다. 여기서는
+  //   5세대 코드가 2·3세대에 섞여 들어가지 않았는지만 본다(세대별 파서·상수 분리).
+  check("2·3세대는 5세대 파서를 재사용하지 않는다",
+    !std.includes("badOutpatientDays") && !std.includes("ZERO_PAY_") && !std.includes("GEN2026")
+    && /const badCount = /.test(std));
   // ⚠ 4세대는 F-1 안전성 커밋에서 이 파일과 **독립적으로** 엄격 검증으로 바뀌었다.
   //   그 계약은 tests/gen2021OutpatientCounterInput.test.ts가 맡는다. 여기서는
   //   5세대 코드가 4세대에 섞여 들어가지 않았는지만 본다(세대별 파서·상수 분리).
   check("4세대는 5세대 파서를 재사용하지 않는다",
     !g4.includes("badOutpatientDays") && !g4.includes("ZERO_PAY_")
     && /const badCount = /.test(g4));
-  check("2·3세대 UI 파서는 그대로",
-    /priorAnnualOutpatientVisits: priorVisits\.trim\(\) === "" \? undefined : onlyNum\(priorVisits\)/
-      .test(readFileSync("src/components/calculators/HealthCalcStandardized.tsx", "utf8")));
+  check("2·3세대 UI가 5세대 도메인 파서를 재사용하지 않는다", (() => {
+    const stdUi = readFileSync("src/components/calculators/HealthCalcStandardized.tsx", "utf8");
+    return /const stdCount = /.test(stdUi)
+      && !stdUi.includes("outpatientDays") && !stdUi.includes("nonNegSafeInt")
+      && !stdUi.includes("gen2021Count");
+  })());
   check("4세대 UI가 5세대 도메인 파서를 재사용하지 않는다", (() => {
     const ui = readFileSync("src/components/calculators/HealthCalcMulti2021.tsx", "utf8");
     return /const gen2021Count = /.test(ui)

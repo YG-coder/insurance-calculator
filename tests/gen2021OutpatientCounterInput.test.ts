@@ -300,13 +300,15 @@ console.log("\n[구조] 검증 위치와 세대 분리");
 // ── 2·3·5세대 무회귀 ─────────────────────────────────────────────────
 console.log("\n[범위] 2·3·5세대 무변경");
 {
+  // ⚠ 2·3세대는 F-2에서 별도로 엄격 검증으로 바뀌었다(그 계약은 전용 테스트가 맡는다).
+  //   여기서는 4세대 변경이 2·3세대 계산을 건드리지 않았는지만 본다.
   const std = calculateMany("2017", { plan: "standard",
-    lines: [{ amount: 300_000, visit: "outpatient", facility: "clinic" }] });
-  check("2·3세대는 종전대로 미입력을 0회로 본다(F-2 대상)",
+    lines: [{ amount: 300_000, visit: "outpatient", facility: "clinic" }],
+    priorAnnualOutpatientVisits: 0 });
+  check("2·3세대의 정상 입력 계산은 종전과 같다",
     std.status === "OK" && std.totalInsurancePay === 240_000);
-  check("2·3세대 엔진은 여전히 nonNegInt로 정규화",
-    /let outpatientVisits = nonNegInt\(input\.priorAnnualOutpatientVisits\)/
-      .test(readFileSync("src/lib/insurance/engine/multiClaim.ts", "utf8")));
+  check("2·3세대 엔진은 4세대 파서를 재사용하지 않는다",
+    !readFileSync("src/lib/insurance/engine/multiClaim.ts", "utf8").includes("GEN2021"));
   const g5 = calculateMany2026({ cause: "disease", coverage: "non_benefit", visit: "outpatient",
     tier: "clinic", severity: "critical", nonBenefitItem: "general", amounts: [500_000],
     priorAnnualOutpatientVisits: 0 } as never);

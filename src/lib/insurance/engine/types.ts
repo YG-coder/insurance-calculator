@@ -173,8 +173,27 @@ export interface MultiClaimInput {
   plan?: Plan;
   lines: ClaimLine[];
   priorAnnualPaid?: number;              // 계약해당일 기준 1년간 이미 부담한 입원 자기부담금
-  priorAnnualOutpatientVisits?: number;  // 이미 사용한 외래 방문 횟수
-  priorAnnualPrescriptions?: number;     // 이미 사용한 처방전 건수
+  /**
+   * 이미 사용한 외래 방문 **횟수**(연 180회 한도). 약국 처방조제가 아닌 통원 행이 하나라도
+   * 있으면 필수다.
+   *
+   * ⚠ optional인 이유는 "미입력을 허용해서"가 아니라 **타입으로 표현할 수 없어서**다.
+   *   2·3세대 다회는 행마다 visit·facility가 달라 한 묶음에 외래·처방조제·입원이 섞인다.
+   *   그래서 축이 필요한지는 lines의 내용이 정하고, 최상위 필드로 판별할 수 없다
+   *   (4세대가 rider·coverage·visit으로 판별 유니온을 쓸 수 있었던 것과 다르다).
+   *   런타임이 같은 계약을 강제한다 — 미입력·잘못된 값·쓰이지 않는 축은 모두 차단한다.
+   *
+   * ⚠ 미입력(undefined)과 확인 결과 0은 다른 상태다. 미입력은 0으로 추정하지 않는다.
+   *   음수·소수·NaN·Infinity·안전 정수 초과·문자열도 정규화하지 않고 차단한다.
+   *   180을 넘는 값은 유효한 과거 상태이므로 절삭하지 않는다.
+   */
+  priorAnnualOutpatientVisits?: number;
+  /**
+   * 이미 사용한 처방전 **건수**(연 180건 한도). 약국 처방조제 통원 행이 하나라도 있으면 필수다.
+   *   ⚠ 외래 횟수와 **별도 축**이다. 단위가 회 ≠ 건이고 카운터·CapCode도 다르다.
+   *   optional인 이유와 입력 계약은 위 priorAnnualOutpatientVisits와 같다.
+   */
+  priorAnnualPrescriptions?: number;
   perVisitCoverageLimit?: number;        // 계약자가 정한 회(건)당 가입금액. 미제공 시 미적용
 }
 

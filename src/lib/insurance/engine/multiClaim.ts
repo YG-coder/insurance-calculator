@@ -38,6 +38,22 @@ const LIMITS = {
 const nonNegInt = (v: number | undefined) =>
   v !== undefined && Number.isFinite(v) ? Math.max(0, Math.floor(v)) : 0;
 
+/**
+ * 이미 사용한 횟수·건수 축 검증(2·3세대 전용).
+ *
+ * ⚠ 금액 축이 쓰는 nonNegInt()의 관용(음수→0, NaN·Infinity→0, 소수 내림)을 물려받지 않는다.
+ *   실제로 nonNegInt()는 문자열 "180"과 Infinity를 **0**으로 만들었다 — "이미 180회 썼다"가
+ *   "한 번도 안 썼다"가 되어 한도가 사라지고 보험금이 과다 산출된다.
+ *   ⚠ 한도를 넘는 값도 유효한 과거 상태다. 절삭하지 않는다.
+ *   (금액 축의 관용은 이번 범위가 아니라 그대로 둔다.)
+ *
+ * ⚠ 형식 규칙만 공유한다. 외래는 '회', 처방전은 '건'이고 카운터·CapCode·안내가 모두 다르다.
+ */
+const badCount = (v: unknown): boolean =>
+  !(typeof v === "number" && Number.isSafeInteger(v) && v >= 0);
+const readCount = (o: object, key: string): unknown =>
+  (o as Record<string, unknown>)[key];
+
 /** 연간 횟수 한도를 넘겨 보상 대상이 아닌 행. 자기부담이 진료비 전액이 된다. */
 function notCovered(
   generation: StandardizedGeneration,
@@ -72,10 +88,81 @@ export function calculateMany(
     };
   }
 
+  // ── 이미 사용한 횟수·건수 축 ─────────────────────────────────────────
+  //   ⚠ 4·5세대와 달리 이 묶음은 행마다 visit·facility가 다를 수 있다. 그래서 어떤 축이
+  //     필요한지는 최상위 필드가 아니라 **lines의 내용**이 정한다.
+  //       외래 180회  — 약국 처방조제가 아닌 통원 행이 하나라도 있으면 필요
+  //       처방전 180건 — 약국 처방조제 통원 행이 하나라도 있으면 필요
+  //       입원 행     — 두 축 모두 쓰지 않는다
+  //   ⚠ 쓰이지 않는 축이 실려 오면 조용히 버리지 않는다. 버리면 한도를 반영했다고 오해한다.
+  const visitsRaw = readCount(input, "priorAnnualOutpatientVisits");
+  const prescriptionsRaw = readCount(input, "priorAnnualPrescriptions");
+  const isPharmacyLine = (l: ClaimLine) => l.visit === "outpatient" && (l.facility ?? "clinic") === "pharmacy";
+  const usesVisits = lines.some((l) => l.visit === "outpatient" && !isPharmacyLine(l));
+  const usesPrescriptions = lines.some(isPharmacyLine);
+
+  const blocked = (notes: string[]): MultiClaimResult => ({
+    status: "PENDING_UNVERIFIED", generation, lines: [],
+    totalAmount: lines.reduce((sum, l) => sum + normalizeAmount(l.amount), 0),
+    totalOwnPay: null, totalInsurancePay: null, appliedCaps: [], notes,
+  });
+
+  if (!usesVisits && visitsRaw !== undefined) {
+    return blocked([
+      `외래 방문 횟수(priorAnnualOutpatientVisits)는 약국 처방조제가 아닌 통원의 연 ${constants.outpatientAnnualVisits}회 한도에만 쓰입니다.`,
+      usesPrescriptions
+        ? "이 묶음에는 약국 처방조제 행만 있습니다. 처방전 건수(priorAnnualPrescriptions)로 넘겨 주세요. 두 축은 단위가 회와 건으로 달라 서로 대신 쓰지 않습니다."
+        : "이 묶음에는 해당하는 통원 행이 없습니다. 쓰이지 않는 입력을 조용히 버리면 한도를 반영했다고 오해할 수 있어 계산하지 않았습니다.",
+      `받은 값: ${JSON.stringify(visitsRaw)}`,
+    ]);
+  }
+  if (!usesPrescriptions && prescriptionsRaw !== undefined) {
+    return blocked([
+      `처방전 건수(priorAnnualPrescriptions)는 약국 처방조제의 연 ${constants.prescriptionAnnualCount}건 한도에만 쓰입니다.`,
+      usesVisits
+        ? "이 묶음에는 약국 처방조제 행이 없습니다. 외래 방문 횟수(priorAnnualOutpatientVisits)로 넘겨 주세요. 두 축은 단위가 회와 건으로 달라 서로 대신 쓰지 않습니다."
+        : "이 묶음에는 통원 행이 없습니다. 쓰이지 않는 입력을 조용히 버리면 한도를 반영했다고 오해할 수 있어 계산하지 않았습니다.",
+      `받은 값: ${JSON.stringify(prescriptionsRaw)}`,
+    ]);
+  }
+  // 미입력은 0으로 추정하지 않는다 — 과거 사용량을 모르면 한도를 반영할 수 없다.
+  //   ⚠ 이는 계산기의 안전 정책이다. 약관이 이 입력을 의무화한 것이 아니다.
+  //   ⚠ 미입력(undefined)과 확인 결과 0은 다른 상태다. 0은 유효값이다.
+  if (usesVisits) {
+    if (visitsRaw === undefined) {
+      return blocked([
+        `외래 방문은 계약해당일 기준 1년간 ${constants.outpatientAnnualVisits}회가 한도입니다.`,
+        "이미 사용한 외래 방문 횟수(priorAnnualOutpatientVisits)를 알아야 이후 청구의 보상 여부가 정해지므로, 입력 전에는 계산하지 않습니다. 이전 방문이 없으면 0을 넣어 주세요.",
+      ]);
+    }
+    if (badCount(visitsRaw)) {
+      return blocked([
+        "이미 사용한 외래 방문 횟수는 0 이상의 정수여야 합니다. 음수·소수·NaN·Infinity·안전 정수 범위를 넘는 값·문자열은 계산하지 않습니다.",
+        `받은 값: ${JSON.stringify(visitsRaw)}`,
+      ]);
+    }
+  }
+  if (usesPrescriptions) {
+    if (prescriptionsRaw === undefined) {
+      return blocked([
+        `처방조제는 계약해당일 기준 1년간 ${constants.prescriptionAnnualCount}건이 한도입니다.`,
+        "이미 사용한 처방전 건수(priorAnnualPrescriptions)를 알아야 이후 청구의 보상 여부가 정해지므로, 입력 전에는 계산하지 않습니다. 이전 처방이 없으면 0을 넣어 주세요.",
+      ]);
+    }
+    if (badCount(prescriptionsRaw)) {
+      return blocked([
+        "이미 사용한 처방전 건수는 0 이상의 정수여야 합니다. 음수·소수·NaN·Infinity·안전 정수 범위를 넘는 값·문자열은 계산하지 않습니다.",
+        `받은 값: ${JSON.stringify(prescriptionsRaw)}`,
+      ]);
+    }
+  }
+
   // 이어지는 상태
   let inpatientOwnPaySoFar = nonNegInt(input.priorAnnualPaid);
-  let outpatientVisits = nonNegInt(input.priorAnnualOutpatientVisits);
-  let prescriptions = nonNegInt(input.priorAnnualPrescriptions);
+  // ⚠ 두 카운터는 정규화하지 않는다. 위에서 미입력·잘못된 값을 이미 차단했고, 쓰이지 않는
+  //   축은 실려 오는 것 자체가 차단된다. 여기서 ?? 0은 "쓰이지 않는 축"의 자리값이다.
+  let outpatientVisits = (visitsRaw as number | undefined) ?? 0;
+  let prescriptions = (prescriptionsRaw as number | undefined) ?? 0;
 
   const results: ClaimLineResult[] = [];
 

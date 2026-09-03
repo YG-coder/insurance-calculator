@@ -16,6 +16,25 @@ const MAX_ROWS = 20;
 const won = (n: number) => `${Math.max(0, Math.round(n)).toLocaleString("ko-KR")}원`;
 const onlyNum = (v: string) => Number(v.replace(/[^0-9]/g, "")) || 0;
 
+/**
+ * 2·3세대 '이미 사용한 횟수·건수' 문자열 파서. **원문을 변형 전에 형식으로 판정한다.**
+ *
+ * ⚠ 공용 `onlyNum()`을 쓰면 안 된다. 숫자가 아닌 문자를 **지우고** 실패를 0으로 바꾸므로
+ *   `-1`→**1**(부호를 지워 양수가 된다), `1.5`→**15**(점을 지운다), `1e3`→13, `1,0`→10,
+ *   `abc`·빈 값·`Infinity`→0이 되어 잘못된 입력이 다른 유효값으로 둔갑한다.
+ *   과거 사용량이 0으로 줄어드는 방향이라 보험금이 과다 산출된다.
+ * ⚠ 4·5세대 파서를 재사용하지 않는다. 형식 규칙이 같아도 세대·한도·라벨이 다르다.
+ *
+ * 유효: 0 이상의 안전 정수(`0`, `180`, 한도 초과값 포함).
+ * 무효(null = 미입력·잘못된 입력): 빈 값·공백·부호·소수·문자·지수 표기·쉼표·안전 정수 초과.
+ */
+const STD_COUNT_FORMAT = /^[0-9]+$/;
+const stdCount = (v: string): number | null => {
+  if (!STD_COUNT_FORMAT.test(v)) return null;
+  const n = Number(v);
+  return Number.isSafeInteger(n) && n >= 0 ? n : null;
+};
+
 const btn = (active: boolean) =>
   `px-4 py-3 rounded-xl border text-sm font-semibold transition ${
     active
@@ -54,17 +73,28 @@ export default function HealthCalcStandardized() {
     facility: r.visit === "outpatient" ? r.facility : undefined,
   }));
 
-  const result = calculateMany(generation, {
+  const hasInpatient = rows.some((r) => r.visit === "inpatient");
+  const hasOutpatient = rows.some((r) => r.visit === "outpatient");
+  // ⚠ 두 축은 필요한 조건이 다르다. 한 게이트로 묶으면 약국 행이 없는데 처방전 입력이
+  //   뜨거나 그 반대가 된다. 행 구성으로 각각 판정한다(엔진과 같은 규칙).
+  const usesVisits = rows.some((r) => r.visit === "outpatient" && r.facility !== "pharmacy");
+  const usesPrescriptions = rows.some((r) => r.visit === "outpatient" && r.facility === "pharmacy");
+  //   한도가 걸린 축은 과거 사용량 없이는 계산할 수 없다. 빈 값을 0으로 추정하지 않는다.
+  const needsVisits = usesVisits && stdCount(priorVisits) === null;
+  const needsPrescriptions = usesPrescriptions && stdCount(priorPrescriptions) === null;
+  const gated = needsVisits || needsPrescriptions;
+
+  // ⚠ 게이트가 걸린 동안에는 엔진을 호출하지 않는다. 호출하면 엔진의 차단 안내가 화면으로
+  //   새어 나와 내부 필드명이 노출되고 경고가 겹친다.
+  //   ⚠ 화면에서 숨겨진 카운터는 넘기지 않는다 — 쓰이지 않는 축이 실리면 엔진이 막는다.
+  const result = gated ? null : calculateMany(generation, {
     plan: plan ?? undefined,
     lines,
     priorAnnualPaid: priorPaid.trim() === "" ? undefined : onlyNum(priorPaid),
-    priorAnnualOutpatientVisits: priorVisits.trim() === "" ? undefined : onlyNum(priorVisits),
-    priorAnnualPrescriptions: priorPrescriptions.trim() === "" ? undefined : onlyNum(priorPrescriptions),
+    priorAnnualOutpatientVisits: usesVisits ? stdCount(priorVisits) ?? undefined : undefined,
+    priorAnnualPrescriptions: usesPrescriptions ? stdCount(priorPrescriptions) ?? undefined : undefined,
     perVisitCoverageLimit: perVisitLimit.trim() === "" ? undefined : onlyNum(perVisitLimit),
   });
-
-  const hasInpatient = rows.some((r) => r.visit === "inpatient");
-  const hasOutpatient = rows.some((r) => r.visit === "outpatient");
 
   const quickFill = () => {
     const count = Math.min(MAX_ROWS, Math.max(1, onlyNum(quickCount) || 1));
@@ -207,42 +237,48 @@ export default function HealthCalcStandardized() {
 
       {/* 선택 입력 */}
       <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-5">
+        {/* ⚠ 두 축은 노출 조건이 다르다. 약국 처방조제 행이 없으면 처방전 입력을 띄우지 않고,
+            약국 행만 있으면 외래 입력을 띄우지 않는다. 화면에 없는 축은 엔진에도 넘기지 않는다. */}
+        {usesVisits && (
+          <div>
+            <label className="label-base" htmlFor="std-prior-visits">
+              계약해당일 기준 1년간 이미 사용한 외래 방문 횟수
+            </label>
+            <input
+              id="std-prior-visits"
+              inputMode="numeric"
+              className="input-base w-full"
+              value={priorVisits}
+              onChange={(e) => setPriorVisits(e.target.value)}
+              placeholder="이전 방문이 없으면 0"
+            />
+            <p className="mt-2 text-xs text-slate-500">
+              외래는 계약해당일 기준 1년간 <b>180회</b>가 한도입니다. 약국 처방조제와는 별개 한도이며,
+              이전 방문이 없으면 <b>0</b>을 입력해 주세요. 모르는 값을 0으로 추정하지 않습니다.
+            </p>
+          </div>
+        )}
+        {usesPrescriptions && (
+          <div>
+            <label className="label-base" htmlFor="std-prior-prescriptions">
+              계약해당일 기준 1년간 이미 사용한 처방전 건수
+            </label>
+            <input
+              id="std-prior-prescriptions"
+              inputMode="numeric"
+              className="input-base w-full"
+              value={priorPrescriptions}
+              onChange={(e) => setPriorPrescriptions(e.target.value)}
+              placeholder="이전 처방이 없으면 0"
+            />
+            <p className="mt-2 text-xs text-slate-500">
+              처방조제는 외래와 <b>별도로 180건</b>이 한도입니다(단위가 회가 아니라 건입니다).
+              이전 처방이 없으면 <b>0</b>을 입력해 주세요. 모르는 값을 0으로 추정하지 않습니다.
+            </p>
+          </div>
+        )}
         {hasOutpatient && (
           <>
-            <div>
-              <label className="label-base" htmlFor="std-prior-visits">
-                올 계약연도에 이미 사용한 외래 방문 횟수 (선택)
-              </label>
-              <input
-                id="std-prior-visits"
-                type="number"
-                min={0}
-                className="input-base w-full"
-                value={priorVisits}
-                onChange={(e) => setPriorVisits(e.target.value)}
-                placeholder="모르면 비워두세요"
-              />
-              <p className="mt-2 text-xs text-slate-500">
-                계약해당일 기준 1년간 외래 180회가 한도입니다. 입력하면 한도 초과분을 결과에 반영합니다.
-              </p>
-            </div>
-            <div>
-              <label className="label-base" htmlFor="std-prior-prescriptions">
-                이미 사용한 처방전 건수 (선택)
-              </label>
-              <input
-                id="std-prior-prescriptions"
-                type="number"
-                min={0}
-                className="input-base w-full"
-                value={priorPrescriptions}
-                onChange={(e) => setPriorPrescriptions(e.target.value)}
-                placeholder="모르면 비워두세요"
-              />
-              <p className="mt-2 text-xs text-slate-500">
-                처방전은 외래와 별도로 180건 한도입니다.
-              </p>
-            </div>
             <div className="sm:col-span-2 max-w-md">
               <label className="label-base" htmlFor="std-per-visit-limit">
                 회(건)당 보험가입금액 (선택)
@@ -288,13 +324,28 @@ export default function HealthCalcStandardized() {
 
       {submitted && (
         <div className="mt-8 space-y-4">
-          {result.status === "PENDING_UNVERIFIED" && (
+          {needsVisits && (
             <NoticeBox variant="warning">
-              <b>표준형 / 선택형</b>을 선택해 주세요. 두 유형은 자기부담률과 통원 공제 방식이 다릅니다.
+              계약해당일 기준 1년간 <b>이미 사용한 외래 방문 횟수</b>를 입력해 주세요. 이전 방문이 없으면 <b>0</b>을
+              입력하세요. 외래는 연 180회가 한도라 이 값이 있어야 계산할 수 있고, 계산기가 0으로 추정하지
+              않습니다. 0 이상의 정수만 받으며 음수·소수는 계산하지 않습니다.
+            </NoticeBox>
+          )}
+          {needsPrescriptions && (
+            <NoticeBox variant="warning">
+              계약해당일 기준 1년간 <b>이미 사용한 처방전 건수</b>를 입력해 주세요. 이전 처방이 없으면 <b>0</b>을
+              입력하세요. 처방조제는 연 180건이 한도라 이 값이 있어야 계산할 수 있고, 계산기가 0으로 추정하지
+              않습니다. 0 이상의 정수만 받으며 음수·소수는 계산하지 않습니다.
+            </NoticeBox>
+          )}
+          {/* ⚠ 차단 사유를 plan 미선택으로 단정하지 않는다. 엔진이 준 안내를 그대로 보여준다. */}
+          {result !== null && result.status === "PENDING_UNVERIFIED" && (
+            <NoticeBox variant="warning">
+              {result.notes.map((note) => <span key={note} className="block">{note}</span>)}
             </NoticeBox>
           )}
 
-          {result.status === "OK" && result.totalAmount > 0 && (
+          {result !== null && result.status === "OK" && result.totalAmount > 0 && (
             <>
               <ResultCard
                 title={`계산 결과 · ${result.lines.length}건 합계 (${generation === "2009" ? "2세대" : "3세대"} 실손 기본형 기준 · 참고용)`}

@@ -18,13 +18,42 @@ npm run start            # 프로덕션 실행
 npm run lint             # ESLint
 npm run test:all         # tests/*.test.ts 전체 (글롭 자동 탐색)
 npm run test:insurance   # 실손 엔진 관련 테스트만
-npm run test:coverage    # 커버리지 (보험 로직 하한: lines/statements/functions 90%, branches 80%)
+npm run test:coverage    # 커버리지 (하한 강제 — 아래 표 참고)
 npx tsc --noEmit         # 타입 검사
 ```
 
 CI(GitHub Actions)는 Node.js 22에서 `npm ci` → `test:coverage` → `build` 순으로 실행합니다.
 `test:coverage`가 `tests/*.test.ts`를 자동 탐색해 전체 테스트를 실행하며 타입 검사는 Next.js 빌드
 단계에서도 수행됩니다. 린트는 로컬 검증 명령으로 별도 제공합니다.
+
+### 커버리지
+
+측정 대상은 `src/lib/insurance/**` **뿐**이며, 하한은 `--check-coverage`로 **강제**됩니다.
+아래를 밑돌면 CI가 실패하므로, 그때그때의 실측 퍼센트는 README에 적지 않습니다.
+현재 수치는 `npm run test:coverage` 출력이나 CI 로그에서 확인하세요.
+
+| 지표 | 하한 |
+|---|---|
+| lines | 99% |
+| statements | 99% |
+| functions | 90% |
+| branches | 80% |
+
+범위와 제외는 `.c8rc.json`에 있습니다.
+
+- **`include: ["src/lib/insurance/**"]`** — `--src`는 `--all`이 훑을 디렉터리만 제한할 뿐,
+  테스트 실행 중 로드된 바깥 파일(`scripts/run-tests.mjs`, `src/lib/site.ts` 등)까지 막지 못합니다.
+  그대로 두면 보험 코드와 무관한 파일의 변화가 하한을 흔듭니다.
+- **`exclude`** — istanbul 기본 제외 목록(`tests/`, `**/*.d.ts`, 각종 설정 파일)을 그대로 옮겨 적고
+  **`src/lib/insurance/engine/types.ts` 한 줄만** 더합니다. c8에서 `exclude`를 지정하면 기본 목록이
+  병합이 아니라 **대체**되기 때문입니다. `types.ts`는 타입 선언만 있어 컴파일 산출물에 실행 코드가
+  없는 **타입 전용** 파일이고, 로드되지 않는 218줄이 전체 수치를 9%p 넘게 끌어내려 하한 여유를
+  갉아먹고 있었습니다.
+
+`tests/coverageConfig.test.ts`가 이를 자동으로 지킵니다. 기본 제외 목록은 `@istanbuljs/schema`
+원본과 대조하고, `types.ts`는 **TypeScript API로 실제 변환해 산출물이 비어 있는지** 확인하며
+(정규식은 부작용 import·런타임 re-export·namespace를 놓칩니다), c8를 한 번 더 돌려 **실제 보고서의
+파일 목록**이 보험 디렉터리만 담고 있는지 검사합니다.
 
 ## 지원 세대 — 실손보험
 
@@ -78,8 +107,9 @@ CI(GitHub Actions)는 Node.js 22에서 `npm ci` → `test:coverage` → `build` 
 | 2·3세대 다회 청구 | 합계 정합·단건 정합·연간 횟수·입원 상한 누적·1024케이스 불변식 검증 |
 | 4세대 다회 청구 | 회당 20만원·비급여 100회·연간 가입금액·3대비급여 항목별 금액/횟수 한도 검증 |
 | 5세대 비급여 치료유형 | 치료유형 미선택·별도 보장종목 4종 차단(단건·다회), 급여는 요구하지 않음, 일반 비급여 기준 결과 고정 |
+| 커버리지 측정 설정 | 실제 보고서 파일 목록이 보험 디렉터리 한정임을 재실행으로 검사, istanbul 기본 제외 목록 보존, 타입 전용 여부를 컴파일 산출물로 판정, 하한 하향 방지 |
 | 5세대 다회 청구 | 상해·질병 보장축 분리, 계약자 선택 통원·연간 가입금액, 중증 통원 연간 100회, 자기부담 상한 누적, 급여 통원 입력 게이트 검증 |
-| 커버리지 | Statements 90.32% · Branches 86.83% · Functions 98.17% (설정 하한 통과) |
+| 커버리지 | 설정 하한(lines·statements 99% / functions 90% / branches 80%) 통과 — 실측은 CI 로그 참조 |
 | 프로덕션 빌드 | 45개 라우트 생성 통과 |
 | 화면 확인 | 4세대 다회 청구 입력·결과 UI 로컬 확인 |
 

@@ -1,0 +1,42 @@
+{
+  "//": [
+    "커버리지 측정 설정. package.json의 test:coverage가 이 파일을 읽는다.",
+    "",
+    "exclude를 지정하면 c8/istanbul의 기본 제외 목록이 '대체'된다(병합이 아니다).",
+    "과거에 --exclude 한 줄을 CLI에 얹었다가 tests/가 측정 대상으로 끌려들어와",
+    "브랜치 커버리지가 왜곡된 적이 있다. 그래서 기본 목록을 그대로 옮겨 적고",
+    "맨 아래 한 줄만 더한다. 목록이 낡지 않도록 tests/coverageConfig.test.ts가",
+    "@istanbuljs/schema의 기본값과 자동 대조한다.",
+    "",
+    "types.ts를 제외하는 근거: 이 파일은 타입 선언만 있어 컴파일 산출물에",
+    "실행 코드가 한 줄도 없다(모듈 래퍼뿐). tsx가 타입 전용 import를 지우므로",
+    "테스트 중 한 번도 로드되지 않는데, --all은 소스 218줄 전부를 미커버로 센다.",
+    "이 잡음이 전체 수치를 99.49% -> 90.32%로 끌어내려 하한(90%) 여유를",
+    "0.32%p까지 좁혔다. 제외 후 하한을 99%로 '올린' 이유가 이것이다.",
+    "실행 가능한 코드가 조금이라도 들어가면 이 파일을 목록에서 빼야 한다.",
+    "",
+    "include를 두는 이유: --src는 --all이 훑을 디렉터리만 제한할 뿐, 테스트 실행 중",
+    "로드된 바깥 파일(scripts/run-tests.mjs, src/lib/site.ts 등)까지 막지 못한다.",
+    "그대로 두면 보험 코드와 무관한 파일의 변화가 99% 하한을 흔든다.",
+    "실제 보고서가 정말 src/lib/insurance/**만 담는지는 tests/coverageConfig.test.ts가",
+    "c8를 한 번 더 돌려 파일 목록으로 검사한다."
+  ],
+  "include": [
+    "src/lib/insurance/**"
+  ],
+  "exclude": [
+    "coverage/**",
+    "packages/*/test{,s}/**",
+    "**/*.d.ts",
+    "test{,s}/**",
+    "test{,-*}.{js,cjs,mjs,ts,tsx,jsx}",
+    "**/*{.,-}test.{js,cjs,mjs,ts,tsx,jsx}",
+    "**/__tests__/**",
+    "**/{ava,babel,nyc}.config.{js,cjs,mjs}",
+    "**/jest.config.{js,cjs,mjs,ts}",
+    "**/{karma,rollup,webpack}.config.js",
+    "**/.{eslint,mocha}rc.{js,cjs}",
+
+    "src/lib/insurance/engine/types.ts"
+  ]
+}

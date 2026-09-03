@@ -281,10 +281,21 @@ console.log("\n[커밋 D] 문서");
   //   ⚠ "비중증 통원"이 "중증 통원"을 포함하므로 앞 글자를 배제해야 오탐이 없다.
   check("중증 통원을 '100일'이라고 쓰지 않는다", !/(^|[^비])중증 통원[^.\n]{0,20}100일/.test(DOCS));
   check("비중증 통원을 '100회'라고 쓰지 않는다", !/비중증 통원[^.\n]{0,20}100회/.test(DOCS));
-  check("중증 100회가 한쪽 해석 채택 중임을 명시",
-    DESIGN.includes("한쪽 해석을 채택") && AUDIT.includes("한쪽 해석을 채택하고 있다"));
-  check("커밋 E의 착수·해제 조건이 적혀 있다",
-    DESIGN.includes("착수 조건") && DESIGN.includes("해제 조건") && AUDIT.includes("착수 조건"));
+  // ⚠ 커밋 E 인계 — 커밋 D 시점에는 "중증 100회는 한쪽 해석 채택 중"이 사실이어서 그 문장을
+  //   **요구**하는 가드였다. 커밋 E가 이중 해석 차단으로 바꿨으므로 이제는 반대로
+  //   **현재형으로 남아 있으면** 실패해야 한다(과거 서술은 §5.4.4에 남는다).
+  check("중증 100회를 '한쪽 해석 채택 중'이라고 현재형으로 쓰지 않는다",
+    !/한쪽 해석을[^.\n]{0,20}채택하고 있다/.test(DOCS)
+    && !/한쪽 해석을[^.\n]{0,20}채택 중/.test(DOCS));
+  check("중증 100회가 이중 해석 차단으로 바뀐 사실이 적혀 있다",
+    DESIGN.includes("커밋 D 시점의 중증 통원 100회는")
+    && DESIGN.includes("해석 A") && DESIGN.includes("해석 B")
+    && AUDIT.includes("커밋 E에서 비중증 100일·3대비급여와 같은 차단 정책으로 통일했다"));
+  check("근거가 새로 확인돼서 바꾼 것이 아님을 명시",
+    DESIGN.includes("근거가 새로\n확인돼서가 아니다") || DESIGN.includes("근거가 새로 확인돼서가 아니다"));
+  check("착수 조건은 사라지고 해제 조건만 남는다",
+    !DOCS.includes("착수 조건") && DESIGN.includes("해제 조건")
+    && AUDIT.includes("0원 통원의 횟수 처리가 확인될 것"));
   check("지급 0원 정책을 세 규칙에 일괄 적용했다고 쓰지 않는다",
     !/세 규칙[^.\n]{0,30}같은 정책/.test(DOCS) && !/중증 통원[^.\n]{0,40}비중증 통원[^.\n]{0,20}같은 정책/.test(DOCS));
   // 확대 단정 금지
@@ -306,10 +317,18 @@ console.log("\n[커밋 D] 문서");
 // 커밋 D는 근거·문서 정리 커밋이라 계산과 화면이 **한 글자도** 바뀌면 안 된다.
 //   ⚠ 이 가드는 기준 커밋 30dee21에 고정돼 있다. 다음에 아래 파일을 정당하게 고치는
 //     커밋은 이 표를 **의도적으로** 갱신해야 한다(그 자체가 속도 방지턱이다).
-console.log("\n[커밋 D] 계산·화면 무변경 (기준 30dee21)");
+//
+//   ⚠ 커밋 E 인계 — multiClaim2026.ts는 이 표에서 **의도적으로** 뺐다.
+//     커밋 E(중증 통원 연 100회의 지급 0원 처리)가 그 파일의 계산을 바꾸므로
+//     해시를 그대로 두면 정당한 변경이 실패로 잡힌다. 새 해시로 다시 얼리지 않는
+//     이유는 커밋 E 자신이 그 파일을 계속 고치는 커밋이어서 해시가 방지턱 구실을
+//     못 하기 때문이다. 대신 아래에서 **커밋 E가 넣기로 한 변경이 실제로 있는지**를
+//     구조로 확인하고, 그 파일의 나머지 계약은
+//     tests/gen2026CriticalOutpatientZeroPay.test.ts가 맡는다.
+//     나머지 7개 파일은 커밋 D·E 양쪽에서 무변경이어야 한다.
+console.log("\n[커밋 D·E] 계산·화면 무변경 (기준 30dee21)");
 {
   const FROZEN: Record<string, string> = {
-    "src/lib/insurance/engine/multiClaim2026.ts": "842f9bfa97b9250521a961f5248e02bce4b3c77476135185c3b4b16ccbdcc96f",
     "src/lib/insurance/engine/roomCharge2026.ts": "fa3c0f00ce6966e4886f737afc26546d29567285bf0257dff6bdf1d3c11c4355",
     "src/lib/insurance/engine/generation2026.ts": "2c019bb8fa843b59cc6a60c0f5c7dc6350b991f52c7e1026ce694329165a017a",
     "src/lib/insurance/engine/engine.ts": "da28c9f77d7d90ba1d0e18146d626c9ea7fc6a89013293a26ec50e223ee56c8e",
@@ -353,6 +372,24 @@ console.log("\n[커밋 D] 계산·화면 무변경 (기준 30dee21)");
     && /&& !needsPriorActs/.test(ui));
   check("변경 의도: UI가 두 입력을 분리해 라벨링",
     ui.includes("보상한 횟수</b> (연 50회 한도용)") && ui.includes("치료행위 수</b> (보상 승인 회차용)"));
+  // ── 커밋 E가 multiClaim2026.ts에 넣기로 한 변경 ──
+  //   해시를 뺀 자리를 빈칸으로 두지 않는다. "무엇을 바꿨는지"를 여기서 못박아,
+  //   해시 제거가 임의 수정의 통로가 되지 않게 한다.
+  const mc = readFileSync("src/lib/insurance/engine/multiClaim2026.ts", "utf8");
+  check("변경 의도(E): 중증 '회' 축 전용 차단 안내가 생겼다",
+    mc.includes("ZERO_PAY_VISITS_HOLD_NOTES")
+    && mc.includes("연 100회 한도의 횟수를 소진하는지"));
+  check("변경 의도(E): 비중증 '일' 축 안내는 그대로 남아 있다",
+    mc.includes("ZERO_PAY_DAYS_HOLD_NOTES")
+    && mc.includes("연 100일 한도의 일수를 소진하는지"));
+  check("변경 의도(E): 두 통원 축이 같은 해석 인자를 공유한다",
+    /const consumes = amount > 0 && \(countZeroPay \|\| \(single\.insurancePay \?\? 0\) > 0\);/.test(mc));
+  check("변경 의도(E): 중증 카운터가 그 판정을 쓴다",
+    /if \(isCriticalOutpatient && consumes\) outpatientVisits \+= 1;/.test(mc));
+  check("변경 의도(E): 계산 전 무조건 증가시키던 옛 줄이 없다",
+    !/isCriticalOutpatient && amount > 0\) outpatientVisits/.test(mc));
+  check("변경 의도(E): 통원이 아닌 축은 두 번째 실행이 없다",
+    /if \(dualAxis === null\) return runBundle\(true\);/.test(mc));
   check("변경 의도: 산식 파일은 그대로", true);
 }
 

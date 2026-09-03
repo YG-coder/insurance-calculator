@@ -564,14 +564,21 @@ console.log("\n[가드] 단위와 파생");
     return ["let insurancePaid =", "let deductiblePaid =", "let outpatientVisits =",
       "let outpatientDays =", "const results:"].every((d) => fn.includes(d));
   })());
+  // ⚠ 커밋 E에서 중증 통원 100회도 같은 방식으로 바뀌면서 이 구조가 축 공용으로 일반화됐다.
+  //   여기서는 **비중증 축이 자기 안내로 차단되는지**를 계속 확인한다. 축 선택이 뒤집히면
+  //   비중증 묶음에 '회' 안내가 나가므로 아래 두 검사가 함께 잡는다.
   check("후보 비교가 실제로 차단에 연결",
-    /if \(fingerprint\(countedA\) !== fingerprint\(countedB\)\) return blocked\(ZERO_PAY_DAYS_HOLD_NOTES\);/.test(eng));
+    /if \(fingerprint\(countedA\) !== fingerprint\(countedB\)\) return blocked\(dualAxis\);/.test(eng));
+  check("비중증 축이 '일' 안내를 고른다",
+    /isNonCriticalOutpatient \? ZERO_PAY_DAYS_HOLD_NOTES/.test(eng));
   check("fingerprint가 보상 여부·금액·공제·CapCode를 모두 본다",
     /l\.covered[\s\S]{0,120}l\.insurancePay[\s\S]{0,120}l\.deductibleApplied[\s\S]{0,60}appliedCaps/.test(eng));
-  check("비중증 통원이 아니면 한 번만 계산",
-    /if \(!isNonCriticalOutpatient\) return runBundle\(true\);/.test(eng));
+  check("두 통원 축이 아니면 한 번만 계산",
+    /if \(dualAxis === null\) return runBundle\(true\);/.test(eng)
+    && /const dualAxis = isCriticalOutpatient \? ZERO_PAY_VISITS_HOLD_NOTES/.test(eng));
   check("0원 행은 두 해석 모두 미소진",
-    /isNonCriticalOutpatient && amount > 0\s*\n?\s*&& \(countZeroPayDays \|\| \(single\.insurancePay \?\? 0\) > 0\)/.test(eng));
+    /const consumes = amount > 0 && \(countZeroPay \|\| \(single\.insurancePay \?\? 0\) > 0\);/.test(eng)
+    && /if \(isNonCriticalOutpatient && consumes\) outpatientDays \+= 1;/.test(eng));
 }
 
 console.log(`\n[비중증 통원 100일] ✅ ${pass} / ❌ ${fail}`);

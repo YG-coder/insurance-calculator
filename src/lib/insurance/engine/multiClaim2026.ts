@@ -45,6 +45,18 @@ const ZERO_PAY_DAYS_HOLD_NOTES = [
 ];
 
 /**
+ * 중증도 같다. 표는 '통원 100회'(특약1 제3조 (1)①·(2)① 인쇄 p.258·261)라 통원 자체를,
+ * 제5조④(p.280)는 '보상한 횟수'라 보상된 건을 가리키는 것으로 읽혀 갈린다
+ * (GEN2026-CRITICAL-OUTPATIENT-VISITS-ZEROPAY = HOLD).
+ *   ⚠ 비중증(일)과 별개 규칙이다. 안내 문구도 단위를 섞지 않는다.
+ */
+const ZERO_PAY_VISITS_HOLD_NOTES = [
+  "지급 보험금이 0원인 통원이 중증 통원 연 100회 한도의 횟수를 소진하는지는 표준약관에 정해져 있지 않습니다.",
+  "이 계산에는 그런 통원이 있어 이후 청구의 보상 여부가 달라지므로 계산을 중단했습니다.",
+  "가입하신 보험사에 확인해 주세요.",
+];
+
+/**
  * 같은 날 통원의 취급은 약관에 명시되어 있다.
  *   중증  — 특별약관1 제3조⑥⑦: 하루 2회 이상 통원(외래·처방조제 합산)은 1회의 통원으로 본다.
  *   비중증 — 특별약관2 제3조: 보상 단위 자체가 "통원 1일당(외래 및 처방·조제비 합산)"이다.
@@ -149,13 +161,14 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
    * 가변 상태(누적 지급보험금·공제금액 pool·통원 카운터)는 **모두 이 함수 안에서 새로 만든다.**
    *   두 해석을 비교하려면 실행 사이에 공유되는 상태가 하나도 없어야 한다.
    *
-   * @param countZeroPayDays 비중증 통원 연 100일 카운터의 해석.
-   *   true  = 해석 A — 진료비가 있는 통원일은 지급액이 0원이어도 일수를 소진
-   *   false = 해석 B — 실제 지급보험금이 0원보다 큰 통원일만 일수를 소진
-   *   ⚠ 이 인자를 읽는 곳은 아래 비중증 카운터 한 곳뿐이다. 중증 100회 로직은 두 실행에서
-   *     완전히 같은 코드·같은 결과를 낸다.
+   * @param countZeroPay 통원 카운터의 해석. 축은 묶음마다 하나뿐이다
+   *   (중증 통원이면 '회', 비중증 통원이면 '일'. 둘은 동시에 활성화되지 않는다).
+   *   true  = 해석 A — 진료비가 있는 통원은 지급액이 0원이어도 횟수·일수를 소진
+   *   false = 해석 B — 실제 지급보험금이 0원보다 큰 통원만 소진
+   *   ⚠ 이 인자를 읽는 곳은 아래 두 카운터뿐이고, 그 둘은 서로 배타적이다.
+   *     통원이 아닌 경로(급여·입원·별도 보장종목)는 두 번째 실행 자체가 없다.
    */
-  function runBundle(countZeroPayDays: boolean): MultiClaimResult {
+  function runBundle(countZeroPay: boolean): MultiClaimResult {
     let insurancePaid = nonNegInt(input.priorAnnualInsurancePaid);
     // 특별약관1 제5조⑤ 500만원 상한의 누적 대상은 약관상 **공제금액**이다(인쇄 p.280).
     //   ⚠ single.ownPay를 누적하면 안 된다. 연간 보험가입금액 한도로 잘려 추가 부담한 금액이
@@ -183,8 +196,6 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
         });
         continue;
       }
-      if (isCriticalOutpatient && amount > 0) outpatientVisits += 1;
-
       // 비중증 통원은 매년 계약해당일부터 1년간 100일이 한도다(특별약관2 제3조 (1)①·(2)①).
       //   ⚠ 중증과 카운터·상수·CapCode를 공유하지 않는다. 단위가 회 ≠ 일이다.
       if (isNonCriticalOutpatient && amount > 0 && outpatientDays >= GEN2026.nonBenefit.nonCritical.outpatientAnnualDays) {
@@ -226,12 +237,12 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
         }
       }
 
-      // 일수 소진 판정은 지급액이 정해진 **뒤에** 한다(해석 B가 지급액을 봐야 하므로).
+      // 소진 판정은 지급액이 정해진 **뒤에** 한다(해석 B가 지급액을 봐야 하므로).
       //   amount === 0인 행은 두 해석 모두 소진하지 않는다 — 기존 0원 행 계약 그대로다.
-      if (isNonCriticalOutpatient && amount > 0
-        && (countZeroPayDays || (single.insurancePay ?? 0) > 0)) {
-        outpatientDays += 1;
-      }
+      //   ⚠ 중증은 '회', 비중증은 '일'. 카운터를 공유하지 않는다.
+      const consumes = amount > 0 && (countZeroPay || (single.insurancePay ?? 0) > 0);
+      if (isCriticalOutpatient && consumes) outpatientVisits += 1;
+      if (isNonCriticalOutpatient && consumes) outpatientDays += 1;
 
       insurancePaid += single.insurancePay ?? 0;
       if (nb && severity === "critical" && nb.visit === "inpatient" && nb.tier === "hospital") {
@@ -252,12 +263,18 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
     };
   }
 
-  // 비중증 통원이 아니면 해석 차이가 생길 수 없다 → 종전과 똑같이 한 번만 계산한다.
-  if (!isNonCriticalOutpatient) return runBundle(true);
+  // 지급 0원 해석이 결과를 바꿀 수 있는 축은 **일반 비급여 통원의 연간 횟수·일수**뿐이다.
+  //   급여·입원·별도 보장종목·2·3·4세대는 두 번째 실행 자체가 없다(구조적 무회귀).
+  const dualAxis = isCriticalOutpatient ? ZERO_PAY_VISITS_HOLD_NOTES
+    : isNonCriticalOutpatient ? ZERO_PAY_DAYS_HOLD_NOTES
+    : null;
+  if (dualAxis === null) return runBundle(true);
 
-  // 두 해석을 처음부터 독립 실행해 결과를 비교한다. 내부 후보는 노출하지 않는다.
+  // 두 해석을 **처음부터 독립 실행**한다. runBundle이 누적 지급보험금·공제 pool·두 통원
+  //   카운터를 실행마다 새로 만들므로 실행 사이에 공유되는 상태가 없다.
+  //   내부 후보 결과와 카운터는 노출하지 않는다.
   const countedA = runBundle(true);
   const countedB = runBundle(false);
-  if (fingerprint(countedA) !== fingerprint(countedB)) return blocked(ZERO_PAY_DAYS_HOLD_NOTES);
+  if (fingerprint(countedA) !== fingerprint(countedB)) return blocked(dualAxis);
   return countedA;
 }

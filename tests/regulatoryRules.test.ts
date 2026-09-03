@@ -290,6 +290,7 @@ const VERIFIED_2026_05_06_DIRECT = new Set([
   // 2026-09-03 재직독 — 특약1 (3)3대비급여 <표1> 주)의 '각 치료횟수를 합산하여'(인쇄 p.264).
   "GEN2026-MSK-APPROVAL-COUNT-BASIS",
   "GEN2026-MSK-APPROVAL-PRIOR-ACT-COUNT",
+  "GEN2026-CRITICAL-OUTPATIENT-VISITS-ZEROPAY",
 ]);
 const VERSION_5_6_URL = "https://www.law.go.kr/LSW/admRulInfoP.do?admRulSeq=2200000108697";
 const leaked = rules

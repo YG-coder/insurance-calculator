@@ -17,6 +17,7 @@
 import { CapCode, CalcResult, Gen2026ClaimInput, Gen2026NonBenefitItem } from "./types";
 import { GEN2026 } from "./constants";
 import { settle, normalizeAmount } from "../common/settle";
+import { topic } from "../common/korean";
 
 function ok(
   amount: number,
@@ -112,7 +113,8 @@ export function calc2026(input: Gen2026ClaimInput): CalcResult {
   }
   if (item !== "general") {
     return pending(amount, [
-      `${GEN2026_NON_BENEFIT_ITEM_LABEL[item]}는 현재 계산 대상이 아닙니다.`,
+      // 조사는 라벨의 받침에 따라 달라진다("차액은" / "주사료는"). 하드코딩하지 않는다.
+      `${topic(GEN2026_NON_BENEFIT_ITEM_LABEL[item])} 현재 계산 대상이 아닙니다.`,
       BLOCKED_ITEM_REASON[item],
     ]);
   }

@@ -123,7 +123,11 @@ export type CapCode =
   | "GEN2026_INJECTION_ANNUAL_COVERAGE"
   | "GEN2026_INJECTION_ANNUAL_VISITS"
   | "GEN2026_CRITICAL_MRI_ANNUAL_COVERAGE"
-  | "GEN2026_NONCRITICAL_MRI_ANNUAL_COVERAGE";
+  | "GEN2026_NONCRITICAL_MRI_ANNUAL_COVERAGE"
+  // 상급병실료 차액. ⚠ 일반 (1)(2) 표 안의 행이므로 연간 한도는 일반 보상금액과 공유하지만,
+  //   구속 사유를 구분해 보여주기 위해 CapCode는 따로 둔다.
+  | "GEN2026_ROOM_CHARGE_DAILY_AVERAGE_LIMIT"
+  | "GEN2026_ROOM_CHARGE_ANNUAL_COVERAGE";
 
 export interface CalcResult {
   status: CalcStatus;
@@ -389,7 +393,47 @@ export type Gen2026RoutedGeneralInput =
   | Gen2026NonCriticalMskInput
   | Gen2026NonCriticalInjectionInput;
 
-export type Gen2026ItemClaimInput = Gen2026SpecialItemInput | Gen2026RoutedGeneralInput;
+// ── 상급병실료 차액 ──────────────────────────────────────────────────
+// 근거: 별표15 2026.5.6 공포·시행본 특약1 제3조 (1)①(인쇄 p.258)·(2)①(p.261),
+//       특약2 제3조 (1)①(p.287)·(2)①(p.290) <구분·보상금액> '상급병실료 차액' 행,
+//       특약1 제2조 용어의 정의(p.257), 특약1·2 제5조①(p.279·p.308).
+//
+// ⚠ 3대비급여와 달리 **독립된 (3) 보장종목이 아니다.** (1)상해비급여/(2)질병비급여 표 안의
+//   한 행이므로 상해·질병 축이 나뉘고(cause 필수), 연간 보험가입금액을 일반 (1)(2)와 공유한다.
+//   산식은 중증·비중증이 같지만 가입금액 축(중증 5천만·비중증 1천만 이내)이 달라 severity도 필수다.
+// ⚠ 같은 표의 입원 행이 "비급여 의료비(비급여 병실료는 제외합니다)"이므로 일반 입원 의료비와
+//   병실료 차액은 입력을 합치면 안 된다.
+
+/** 1행 = 약관상 1회의 입원. "입원기간 동안 … 총 입원일수로 나누어"가 1회 입원 단위다. */
+export interface Gen2026RoomChargeStay {
+  /** 그 입원의 비급여 상급병실료 **차액** 총액(사용 병실료 − 기준병실료). 병실료 총액이 아니다. */
+  roomChargeTotal: number;
+  /** 그 입원의 총 입원일수. 약관에 산정 방법 정의가 없어 사용자 입력값을 그대로 쓴다. */
+  inpatientDays: number;
+}
+
+export interface Gen2026RoomChargeInput {
+  route: "room_charge";
+  coverage: "non_benefit";
+  cause: Cause;
+  severity: Severity;
+  stays: Gen2026RoomChargeStay[];
+  priorAnnualInsurancePaid?: number;
+  annualCoverageLimit?: number;
+  // ⚠ 아래 축은 상급병실료 계산에 쓰이지 않는다. 타입에서 막고 런타임에서도 거부한다.
+  injectionPurpose?: never;
+  visit?: never;
+  tier?: never;
+  priorAnnualDeductible?: never;
+  priorAnnualCoveredCount?: never;
+  outpatientCoverageLimit?: never;
+  priorAnnualOutpatientVisits?: never;
+}
+
+export type Gen2026ItemClaimInput =
+  | Gen2026SpecialItemInput
+  | Gen2026RoutedGeneralInput
+  | Gen2026RoomChargeInput;
 
 // ── 결과 ──────────────────────────────────────────────────────────────
 
@@ -431,7 +475,31 @@ export interface Gen2026RejectedResult extends Omit<MultiClaimResult, "lines"> {
   lines: never[];
 }
 
+export interface Gen2026RoomChargeLineResult extends ClaimLineResult {
+  inpatientDays: number;
+  /** 총 차액 ÷ 총 입원일수 (표시용, 원 단위 반올림) */
+  dailyAverageRoomCharge: number;
+  /** 차액의 50% — 어떤 한도도 걸기 전 보험금 */
+  payBeforeCaps: number;
+  /** 1일 10만원 × 총 입원일수 */
+  dailyCapAmount: number;
+  /** 차액의 나머지 50% — 한도와 무관한 기본 자기부담 */
+  baseOwnPay: number;
+  /** 1일 평균 보험금 한도로 잘린 금액 */
+  dailyCapExcess: number;
+  /** 연간 보험가입금액 한도로 잘린 금액 */
+  annualCapExcess: number;
+  /** dailyCapExcess + annualCapExcess */
+  excessOwnPay: number;
+}
+
+export interface Gen2026RoomChargeResult extends Omit<MultiClaimResult, "lines"> {
+  route: "room_charge";
+  lines: Gen2026RoomChargeLineResult[];
+}
+
 export type Gen2026ItemClaimResult =
   | Gen2026SpecialItemResult
   | Gen2026RoutedGeneralResult
+  | Gen2026RoomChargeResult
   | Gen2026RejectedResult;

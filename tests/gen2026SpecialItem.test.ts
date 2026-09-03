@@ -382,7 +382,14 @@ console.log("\n[무회귀] 단건 차단 유지 · 일반 경로 불변");
   for (const item of ["musculoskeletal_esw", "injection", "mri"] as const) {
     check(`단건 ${item} 안내가 다회로 유도`, src.includes("아래 여러 건 합산 계산에서 계산해 주세요"));
   }
-  check("상급병실료는 다회로 유도하지 않음", src.includes("입원일수 축이 필요해 현재 계산하지 않습니다"));
+  // 커밋 B: 상급병실료도 다회로 계산된다. 다만 안내 문구는 다른 3항목과 달라야 한다
+  // (입원일수라는 추가 축을 함께 넣어야 한다는 사실을 알려야 하므로).
+  check("상급병실료도 다회로 유도", src.includes("아래 여러 건 합산 계산에서 입원일수와 함께 계산할 수 있습니다"));
+  check("상급병실료 안내가 3대비급여 문구와 구분됨",
+    !/room_charge:\s*\n?\s*"[^"]*아래 여러 건 합산 계산에서 계산해 주세요/.test(src));
+  check("상급병실료 미계산 단정이 사라짐",
+    !src.includes("입원일수 축이 필요해 현재 계산하지 않습니다")
+    && !src.includes("입원일수 축이 필요해 아직 계산하지 않습니다"));
   check("일반 비급여 다회는 그대로", calculateMany2026({ cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "critical", visit: "inpatient", tier: "hospital", amounts: [10_000_000] }).lines[0].ownPay === 3_000_000);
 }
 
@@ -425,8 +432,17 @@ console.log("\n[가드] 축·문구·출처의 금지형");
   check("일반 전환 계산이 원인 미선택을 배제", /!\(route === "general" && \(cause === ""/.test(ui));
   check("일반 전환 계산이 입원 종별 미선택도 배제", /visit === "inpatient" && nbInpatientTier === ""/.test(ui));
   check("일반 비급여 계산이 원인 미선택을 배제", /nonBenefitItem === "general" && severity !== "" && cause !== ""/.test(ui));
-  check("needsCause가 안내와 같은 값을 씀", /const needsCause = showGeneralForm && severity !== "" && cause === "";/.test(ui) && /submitted && needsCause/.test(ui));
-  check("별도 보장종목에는 원인을 노출하지 않음", /\{showGeneralForm && <label className="text-sm font-semibold">원인/.test(ui));
+  check("needsCause가 안내와 같은 값을 씀", /const needsCause = \(showGeneralForm \|\| showRoomChargeCause\) && severity !== "" && cause === "";/.test(ui) && /submitted && needsCause/.test(ui));
+  // 원인 입력은 일반 (1)(2) 경로와 상급병실료(같은 축을 공유)에서만 노출된다.
+  // 별도 보장종목(3대비급여·비중증 MRI)은 상해·질병을 합산하므로 원인을 묻지 않는다.
+  {
+    const m = /\{([^{}]*) && <label className="text-sm font-semibold">원인<select className="input-base mt-1" value=\{cause\}/.exec(ui);
+    check("원인 입력이 게이트를 달고 노출됨", m !== null);
+    const gate = m === null ? "" : m[1];
+    check("별도 보장종목에는 원인을 노출하지 않음",
+      gate === '(showGeneralForm || showRoomChargeCause)', gate);
+    check("원인 노출 게이트에 showSpecialForm 없음", !gate.includes("showSpecialForm"), gate);
+  }
   check("급여는 종전대로 원인 기본값을 유지", /const \[benefitCause, setBenefitCause\] = useState<Cause>\("disease"\)/.test(ui) && /cause: benefitCause, coverage: "benefit"/.test(ui));
 }
 

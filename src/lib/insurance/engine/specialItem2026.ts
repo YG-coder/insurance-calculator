@@ -14,10 +14,15 @@ import { normalizeAmount, settle } from "../common/settle";
 import { GEN2026 } from "./constants";
 import { calculateMany2026 } from "./multiClaim2026";
 import {
+  CAUSE_VALUES, SEVERITY_VALUES, TIER_VALUES, VISIT_VALUES, isNum, oneOf, rejected,
+} from "./itemGuards";
+import { calculateRoomCharge2026 } from "./roomCharge2026";
+import {
   CapCode, Gen2026CriticalMriLine, Gen2026DeductibleBreakdown, Gen2026InjectionPurpose,
   Gen2026ItemClaimInput, Gen2026ItemClaimResult, Gen2026MskApprovedThrough,
-  Gen2026RejectedResult, Gen2026RoutedGeneralInput, Gen2026RoutedGeneralResult, Gen2026SpecialItem,
-  Gen2026SpecialItemInput, Gen2026SpecialItemResult, Severity, SpecialItemLineResult, Tier,
+  Gen2026RejectedResult, Gen2026RoomChargeInput, Gen2026RoutedGeneralInput,
+  Gen2026RoutedGeneralResult, Gen2026SpecialItem, Gen2026SpecialItemInput,
+  Gen2026SpecialItemResult, Severity, SpecialItemLineResult, Tier,
 } from "./types";
 
 const S = GEN2026.specialItem;
@@ -113,27 +118,10 @@ function specOf(input: Gen2026SpecialItemInput): ItemSpec {
 //   ⚠ 모르는 값이 else 분기나 기본 반환을 타고 MRI·비중증·일반 주사 산식으로 떨어지면
 //     "계산 못 함"이 아니라 **틀린 보험금**이 나온다. 값을 확인하기 전에는 계산하지 않는다.
 // ─────────────────────────────────────────────────────────────────────
-const SEVERITY_VALUES: readonly string[] = ["critical", "non_critical"];
 const SPECIAL_ITEM_VALUES: readonly string[] = Object.keys(GEN2026_SPECIAL_ITEM_LABEL);
 const PURPOSE_VALUES: readonly string[] = Object.keys(GEN2026_INJECTION_PURPOSE_LABEL);
-const VISIT_VALUES: readonly string[] = ["outpatient", "inpatient"];
-const TIER_VALUES: readonly string[] = ["clinic", "hospital"];
-const CAUSE_VALUES: readonly string[] = ["injury", "disease"];
-const isNum = (v: unknown) => typeof v === "number" && Number.isFinite(v);
-const oneOf = (v: unknown, values: readonly string[]) => typeof v === "string" && values.includes(v);
 
-function rejected(what: string, got: unknown): Gen2026RejectedResult {
-  return {
-    route: "rejected", status: "PENDING_UNVERIFIED", generation: "2026", lines: [],
-    totalAmount: 0, totalOwnPay: null, totalInsurancePay: null, appliedCaps: [],
-    notes: [
-      `${what} 값이 올바르지 않아 계산하지 않았습니다.`,
-      `받은 값: ${JSON.stringify(got) ?? String(got)}`,
-    ],
-  };
-}
-
-function validateItemInput(input: Gen2026ItemClaimInput): Gen2026RejectedResult | null {
+function validateItemInput(input: Exclude<Gen2026ItemClaimInput, Gen2026RoomChargeInput>): Gen2026RejectedResult | null {
   const raw = input as unknown as Record<string, unknown>;
   if (raw.route !== "special_item" && raw.route !== "general") return rejected("경로(route)", raw.route);
   if (raw.coverage !== "non_benefit") return rejected("급여 구분(coverage)", raw.coverage);
@@ -400,28 +388,34 @@ function calculateRoutedGeneral2026(input: Gen2026RoutedGeneralInput): Gen2026Ro
 // 진입점 — route로 갈라 보낸다. 타입이 막는 조합을 런타임에서도 한 번 더 막는다.
 // ─────────────────────────────────────────────────────────────────────
 export function calculateGen2026Item(input: Gen2026ItemClaimInput): Gen2026ItemClaimResult {
+  // 0) 상급병실료 차액은 축이 다르다(cause 필요, item 없음). 전용 엔진이 자체 검증까지 한다.
+  if ((input as unknown as { route?: unknown }).route === "room_charge") {
+    return calculateRoomCharge2026(input as Gen2026RoomChargeInput);
+  }
+  const rest = input as Exclude<Gen2026ItemClaimInput, Gen2026RoomChargeInput>;
+
   // 1) 값 검증이 먼저다. specOf()나 어떤 산식에도 닿기 전에 막는다.
-  const invalid = validateItemInput(input);
+  const invalid = validateItemInput(rest);
   if (invalid !== null) return invalid;
 
   // 2) 경로 대조. 여기 오는 값은 모두 유효한 리터럴이다.
-  const purpose = (input as { injectionPurpose?: Gen2026InjectionPurpose }).injectionPurpose;
-  const expected = routeOfGen2026Item(input.severity, input.item, purpose);
+  const purpose = (rest as { injectionPurpose?: Gen2026InjectionPurpose }).injectionPurpose;
+  const expected = routeOfGen2026Item(rest.severity, rest.item, purpose);
   if (expected === "missing_purpose") {
     return rejected(
       "비급여 주사료의 약제 용도(injectionPurpose)가 없어 보상 보장종목을 정할 수 없습니다(특별약관1 제3조(3)제2항) —",
       purpose,
     );
   }
-  if (expected !== input.route) {
+  if (expected !== rest.route) {
     return rejected(
       `이 조합은 ${expected === "general" ? "일반 상해·질병 비급여" : "별도 보장종목"} 경로에서 계산해야 합니다. 요청된 경로(route)`,
-      input.route,
+      rest.route,
     );
   }
 
   // 3) 계산.
-  return input.route === "special_item"
-    ? calculateSpecialItem2026(input)
-    : calculateRoutedGeneral2026(input);
+  return rest.route === "special_item"
+    ? calculateSpecialItem2026(rest)
+    : calculateRoutedGeneral2026(rest);
 }

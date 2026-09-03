@@ -124,6 +124,18 @@ export const GEN2026 = {
     /** 지급 0원 행위의 횟수 소진은 원문 미확정(HOLD). null이면 두 해석을 비교한다. */
     countOnZeroPay: R.GEN2026_SPECIAL_ITEM_COUNT_ON_ZERO_PAY.value,
   },
+  // 상급병실료 차액 — (1)(2) 표 안의 한 행. 독립 보장종목이 아니다.
+  roomCharge: {
+    payRate: R.GEN2026_ROOM_CHARGE_PAY_RATE.value,
+    dailyPayCap: R.GEN2026_ROOM_CHARGE_DAILY_PAY_CAP.value,
+    /** "insurance_pay" = 50%를 먼저 적용한 뒤 1일 평균 **보험금**에 한도를 건다. */
+    dailyCapBasis: R.GEN2026_ROOM_CHARGE_DAILY_CAP_BASIS.value,
+    sharesAnnualLimit: R.GEN2026_ROOM_CHARGE_SHARES_ANNUAL_LIMIT.value,
+    causeSeparated: R.GEN2026_ROOM_CHARGE_CAUSE_SEPARATED.value,
+    excludedFromInpatientMedical: R.GEN2026_ROOM_CHARGE_EXCLUDED_FROM_INPATIENT_MEDICAL.value,
+    /** 제5조⑤ 500만원 공제 pool 적용 여부는 미확정(HOLD). null이면 적용하지 않는다. */
+    deductiblePool: R.GEN2026_ROOM_CHARGE_DEDUCTIBLE_POOL.value,
+  },
 } as const;
 
 // ─────────────────────────────────────────────

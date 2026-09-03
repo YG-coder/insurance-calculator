@@ -1,5 +1,6 @@
 import { GEN2021, GEN2026 } from "../src/lib/insurance/engine/constants";
 import { REGULATORY_RULES } from "../src/lib/insurance/engine/regulatoryRules";
+import type { RegulatorySource } from "../src/lib/insurance/engine/regulatory";
 
 let pass = 0, fail = 0;
 function check(name: string, cond: boolean, detail = "") {
@@ -274,6 +275,14 @@ const VERIFIED_2026_05_06_DIRECT = new Set([
   // 2026-09-03 재직독 — 특약2 (1)①·(2)① 입원 행의 1회당 300만원 한도와 그 적용 대상.
   "GEN2026-NONCRITICAL-INPATIENT-PER-VISIT-LIMIT",
   "GEN2026-NONCRITICAL-INPATIENT-PER-VISIT-LIMIT-TIERS",
+  // 2026-09-03 재직독 — 특약1·2 (1)(2) 표의 상급병실료 차액 행(인쇄 p.258·261·287·290)과
+  //   용어 정의(p.257), 연간 보험가입금액 조문(p.279·308).
+  //   5.6 판본만 직접 읽었으므로 7.15·9.10 주소는 여전히 금지된다.
+  "GEN2026-ROOM-CHARGE-PAY-RATE", "GEN2026-ROOM-CHARGE-DAILY-PAY-CAP",
+  "GEN2026-ROOM-CHARGE-DAILY-CAP-BASIS", "GEN2026-ROOM-CHARGE-SHARES-ANNUAL-LIMIT",
+  "GEN2026-ROOM-CHARGE-CAUSE-SEPARATED",
+  "GEN2026-ROOM-CHARGE-EXCLUDED-FROM-INPATIENT-MEDICAL",
+  "GEN2026-ROOM-CHARGE-DEDUCTIBLE-POOL",
 ]);
 const VERSION_5_6_URL = "https://www.law.go.kr/LSW/admRulInfoP.do?admRulSeq=2200000108697";
 const leaked = rules
@@ -289,13 +298,40 @@ const directRules = rules.filter((rule) => VERIFIED_2026_05_06_DIRECT.has(rule.r
 check(`2026.5.6 직독 규칙 ${VERIFIED_2026_05_06_DIRECT.size}개가 모두 등록돼 있음`,
   directRules.length === VERIFIED_2026_05_06_DIRECT.size,
   `${directRules.length}개만 발견`);
-check("직독 규칙은 2026.5.6 판본 주소를 사용",
-  directRules.every((rule) => rule.sources.every((src) => src.url === VERSION_5_6_URL)),
-  directRules.flatMap((r) => r.sources.map((s) => `${r.ruleId} → ${s.url}`)).filter((x) => !x.endsWith(VERSION_5_6_URL)).join(" | "));
+// 직독 규칙은 판본 직행 주소를 **반드시 하나 이상** 달고 있어야 하고,
+// 그 직행 출처는 별표 식별번호와 인쇄 쪽수를 모두 갖춰야 한다.
+// (2026-09-03: 상급병실료 규칙 2건이 원문 외 출처를 함께 단다 —
+//  적용 순서 확인용 보조 근거 1건과, 기존 연혁본 검색 주소 1건.
+//  느슨하게 풀지 않고, 원문 출처의 요건은 그대로 두고 원문 아닌 출처를 따로 검증한다.)
+const directOf = (rule: { sources: readonly RegulatorySource[] }) =>
+  rule.sources.filter((src) => src.url === VERSION_5_6_URL);
+check("직독 규칙은 2026.5.6 판본 주소를 하나 이상 사용",
+  directRules.every((rule) => directOf(rule).length > 0),
+  directRules.filter((r) => directOf(r).length === 0).map((r) => r.ruleId).join(" | "));
 check("직독 규칙 출처에 별표 식별번호 3216359가 있음",
-  directRules.every((rule) => rule.sources.every((src) => src.locator.includes("3216359"))));
+  directRules.every((rule) => directOf(rule).every((src) => src.locator.includes("3216359"))));
 check("직독 규칙 출처에 인쇄 쪽수가 있음",
-  directRules.every((rule) => rule.sources.every((src) => /인쇄 p\.\d/.test(src.locator))));
+  directRules.every((rule) => directOf(rule).every((src) => /인쇄 p\.\d/.test(src.locator))));
+// 직행 주소가 아닌 출처는 (a) 같은 별표 15 연혁본이거나 (b) 보조 근거라고 명시돼 있어야 한다.
+// 라벨 없는 제3자 출처가 확정 규칙에 조용히 섞이는 것을 막는다.
+const AUX_LABEL = "보조 근거";
+const unlabeledAux = directRules.flatMap((rule) => rule.sources
+  .filter((src) => src.url !== VERSION_5_6_URL)
+  .filter((src) => !src.document.includes("[별표 15] 표준약관") && !src.document.includes(AUX_LABEL))
+  .map((src) => `${rule.ruleId} → ${src.document}`));
+check("직독 규칙의 원문 외 출처는 별표 15이거나 보조 근거로 명시됨",
+  unlabeledAux.length === 0, unlabeledAux.join(" | "));
+// 보조 근거는 값의 근거가 아니라 적용 순서 확인용이다. 쓰이는 규칙을 고정한다.
+const AUX_ALLOWED_RULES = new Set(["GEN2026-ROOM-CHARGE-DAILY-CAP-BASIS"]);
+const auxUsers = rules
+  .filter((rule) => rule.sources.some((src) => src.document.includes(AUX_LABEL)))
+  .map((rule) => rule.ruleId);
+check("보조 근거는 지정된 규칙에서만 쓰인다",
+  auxUsers.every((id) => AUX_ALLOWED_RULES.has(id)) && auxUsers.length === AUX_ALLOWED_RULES.size,
+  auxUsers.join(" | "));
+check("보조 근거는 5세대 원문이 아니라고 표시됨",
+  rules.flatMap((r) => r.sources).filter((src) => src.document.includes(AUX_LABEL))
+    .every((src) => src.document.includes("표준약관 원문 아님")));
 check("직독 규칙에 뒤 판본 주소가 섞이지 않음",
   directRules.every((rule) => rule.sources.every((src) =>
     !src.url.includes("2200000108867") && !src.url.includes("2200000108939"))));

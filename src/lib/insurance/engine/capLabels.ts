@@ -30,4 +30,6 @@ export const CAP_LABELS: Record<CapCode, string> = {
   GEN2026_INJECTION_ANNUAL_VISITS: "비급여 주사료 연간 50회 한도 초과",
   GEN2026_CRITICAL_MRI_ANNUAL_COVERAGE: "중증 비급여 MRI 연간 300만 원 한도",
   GEN2026_NONCRITICAL_MRI_ANNUAL_COVERAGE: "비중증 비급여 MRI 연간 200만 원 한도",
+  GEN2026_ROOM_CHARGE_DAILY_AVERAGE_LIMIT: "상급병실료 차액 1일 평균 보험금 10만 원 한도",
+  GEN2026_ROOM_CHARGE_ANNUAL_COVERAGE: "상급병실료 차액 연간 보험가입금액 한도",
 };

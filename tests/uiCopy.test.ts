@@ -73,10 +73,24 @@ check("5세대 페이지: 단건 미반영 범위를 연간 항목으로 한정"
   check("5세대 다회 UI: 미선택이면 결과가 null",
     /: null;/.test(gen5Multi) && /const plainResult = coverage === "benefit"/.test(gen5Multi));
   // 선택값이 실제 엔진 입력으로 전달되는지 — 화면에만 있고 엔진이 받지 않으면 차단이 무의미하다.
-  check("5세대 다회 UI: 치료유형이 경로 판정과 엔진 입력으로 전달됨",
+  check("5세대 다회 UI: 치료유형이 경로 판정으로 전달됨",
     /routeOfGen2026Item\(severity, specialItem/.test(gen5Multi)
-    && /item: specialItem/.test(gen5Multi)
     && /nonBenefitItem: "general"/.test(gen5Multi));
+  // 엔진에 넘기는 item 리터럴은 반드시 화면 선택값(specialItem, 주사료는 injectionPurpose)
+  //   분기 안에서만 나와야 한다. 한 곳이라도 고정 리터럴로 박히면 선택과 계산이 어긋난다.
+  {
+    const literals = [...gen5Multi.matchAll(/item: "(musculoskeletal_esw|mri|injection)"/g)];
+    check("5세대 다회 UI: 세 치료유형이 모두 엔진 입력으로 전달됨",
+      new Set(literals.map((m) => m[1])).size === 3,
+      literals.map((m) => m[1]).join(","));
+    const unguarded = literals.filter((m) => {
+      const before = gen5Multi.slice(Math.max(0, (m.index ?? 0) - 400), m.index ?? 0);
+      return !before.includes(`specialItem === "${m[1]}"`)
+        && !(m[1] === "injection" && /injectionPurpose (===|!==)/.test(before));
+    });
+    check("5세대 다회 UI: item 리터럴이 화면 선택값 분기 안에서만 나옴",
+      unguarded.length === 0, unguarded.map((m) => m[0]).join(" | "));
+  }
   check("5세대 다회 UI: 질환 구분이 엔진 입력으로 전달됨",
     /severity: "critical"/.test(gen5Multi) && /severity: "non_critical"/.test(gen5Multi) && /severity,/.test(gen5Multi));
 

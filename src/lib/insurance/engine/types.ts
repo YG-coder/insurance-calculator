@@ -195,19 +195,75 @@ export interface MultiClaimResult {
 }
 
 /** 4세대는 한 계산 묶음을 동일한 (상해/질병)×(급여/비급여) 보장축으로 받는다. */
-export interface Gen2021MultiClaimInput {
+interface Gen2021MultiCommonInput {
   cause: Cause;
-  coverage: Coverage;
   visit: Visit;
   tier?: Tier;
-  rider?: Gen2021Rider;
   amounts: number[];
   annualCoverageLimit?: number; // 증권상 선택 가입금액(최대 5천만원). 미입력 시 적용하지 않음
   priorAnnualInsurancePaid?: number;
-  priorAnnualOutpatientVisits?: number; // 비급여 일반 통원에만 적용
   priorAnnualRiderPaid?: number;
-  priorAnnualRiderVisits?: number;
+  // ⚠ 두 횟수 축은 여기 두지 않는다. 공통 베이스에 두면 어느 조합에나 아무 축이나 실을 수
+  //   있게 된다. 쓰는 변형에서만 number로 열고 나머지는 never로 닫는다.
 }
+
+/**
+ * 이미 사용한 횟수 축의 공통 계약(4세대 전용).
+ *   ⚠ 미입력(undefined)과 확인 결과 0은 다른 상태다. 한도가 걸린 경로에서 미입력은
+ *     0으로 추정하지 않고 차단한다. 음수·소수·NaN·Infinity·안전 정수 초과·문자열도
+ *     정규화하지 않고 차단한다. 한도를 넘는 값은 유효한 과거 상태이므로 절삭하지 않는다.
+ *   ⚠ 일반 통원(연 100회)과 3대비급여 특약(연 50회)은 한도·근거가 다른 별개 축이다.
+ *     서로 대신 쓰지 않으며, 반대 축이 실리면 값이 0이어도 차단한다.
+ */
+
+/** 비급여 통원 — 연 100회 한도가 걸리는 유일한 일반 경로. */
+export interface Gen2021MultiGeneralNonBenefitOutpatientInput extends Gen2021MultiCommonInput {
+  rider?: "none";
+  coverage: "non_benefit";
+  visit: "outpatient";
+  priorAnnualOutpatientVisits?: number;
+  priorAnnualRiderVisits?: never;
+}
+
+/** 급여 — 연간 횟수 한도가 없다(약관의 '90회'는 계약 종료 후 계속 통원 규정이다). */
+export interface Gen2021MultiGeneralBenefitInput extends Gen2021MultiCommonInput {
+  rider?: "none";
+  coverage: "benefit";
+  priorAnnualOutpatientVisits?: never;
+  priorAnnualRiderVisits?: never;
+}
+
+/** 비급여 입원 — 통원 횟수 한도가 적용되지 않는다. */
+export interface Gen2021MultiGeneralNonBenefitInpatientInput extends Gen2021MultiCommonInput {
+  rider?: "none";
+  coverage: "non_benefit";
+  visit: "inpatient";
+  priorAnnualOutpatientVisits?: never;
+  priorAnnualRiderVisits?: never;
+}
+
+/** 도수치료·체외충격파·증식치료 / 비급여 주사료 — 각각 연 50회 한도. */
+export interface Gen2021MultiRiderCountedInput extends Gen2021MultiCommonInput {
+  rider: "manual_therapy" | "injection";
+  coverage: Coverage;
+  priorAnnualRiderVisits?: number;
+  priorAnnualOutpatientVisits?: never;
+}
+
+/** MRI·MRA — 금액 한도만 있고 **횟수 한도가 없다**. 횟수 축을 요구하지도 받지도 않는다. */
+export interface Gen2021MultiRiderMriInput extends Gen2021MultiCommonInput {
+  rider: "mri";
+  coverage: Coverage;
+  priorAnnualOutpatientVisits?: never;
+  priorAnnualRiderVisits?: never;
+}
+
+export type Gen2021MultiClaimInput =
+  | Gen2021MultiGeneralNonBenefitOutpatientInput
+  | Gen2021MultiGeneralBenefitInput
+  | Gen2021MultiGeneralNonBenefitInpatientInput
+  | Gen2021MultiRiderCountedInput
+  | Gen2021MultiRiderMriInput;
 
 // 5세대 다회 청구. 단건과 같은 정책 — 비급여에서 치료유형은 필수다.
 interface Gen2026MultiCommonInput {

@@ -1,4 +1,5 @@
 import { calculateMany2021 } from "../src/lib/insurance/engine/multiClaim2021";
+import { Gen2021MultiClaimInput } from "../src/lib/insurance/engine/types";
 
 let pass = 0, fail = 0;
 function check(name: string, ok: boolean, detail = "") {
@@ -8,13 +9,13 @@ function check(name: string, ok: boolean, detail = "") {
 
 // 1건은 기존 단건 산식과 같고, 회당 20만원 한도가 각 건에 적용된다.
 {
-  const r = calculateMany2021({ cause: "disease", coverage: "non_benefit", visit: "outpatient", amounts: [1_000_000, 300_000] });
+  const r = calculateMany2021({ cause: "disease", coverage: "non_benefit", visit: "outpatient", amounts: [1_000_000, 300_000], priorAnnualOutpatientVisits: 0 });
   check("회당 한도 두 건 독립 적용", r.totalInsurancePay === 400_000 && r.lines.every((x) => x.insurancePay === 200_000));
   check("회당 한도 코드", r.appliedCaps.includes("GEN2021_OUTPATIENT_PER_VISIT"));
   check("가입금액 미입력 고지", r.notes.some((x) => x.includes("증권의 금액")));
   check("질병·비급여 보장축을 결과에 명시", r.notes.some((x) => x.includes("질병·비급여 보장축")));
 
-  const injury = calculateMany2021({ cause: "injury", coverage: "non_benefit", visit: "outpatient", amounts: [100_000] });
+  const injury = calculateMany2021({ cause: "injury", coverage: "non_benefit", visit: "outpatient", amounts: [100_000], priorAnnualOutpatientVisits: 0 });
   check("상해 보장축을 별도로 명시", injury.notes.some((x) => x.includes("상해·비급여 보장축")));
 }
 
@@ -28,8 +29,14 @@ function check(name: string, ok: boolean, detail = "") {
   check("101번째는 전액 본인부담", !r.lines[1].covered && r.lines[1].ownPay === 100_000);
   check("연 100회 코드", r.lines[1].appliedCaps.includes("GEN2021_NONBENEFIT_OUTPATIENT_ANNUAL_VISITS"));
 
-  const benefit = calculateMany2021({ cause: "injury", coverage: "benefit", visit: "outpatient", amounts: [100_000], priorAnnualOutpatientVisits: 100 });
+  // 급여 통원에는 연간 횟수 한도가 없다. 그래서 이 축을 요구하지도, 받지도 않는다.
+  //   ⚠ 종전에는 필드를 넘겨도 조용히 무시하고 계산했다. 안전성 커밋에서 차단으로 바뀌었다.
+  const benefit = calculateMany2021({ cause: "injury", coverage: "benefit", visit: "outpatient", amounts: [100_000] });
   check("급여 통원에는 100회 한도 없음", benefit.lines[0].covered);
+  const benefitStray = calculateMany2021({ cause: "injury", coverage: "benefit", visit: "outpatient",
+    amounts: [100_000], priorAnnualOutpatientVisits: 100 } as unknown as Gen2021MultiClaimInput);
+  check("급여 통원에 횟수 축이 실리면 차단", benefitStray.status === "PENDING_UNVERIFIED"
+    && benefitStray.lines.length === 0 && benefitStray.totalAmount === 100_000);
 }
 
 // 연간 가입금액은 사용자 입력값으로만 적용하고 입원·통원 보험금을 합산한다.
@@ -50,8 +57,7 @@ function check(name: string, ok: boolean, detail = "") {
 {
   const deductibleBoundary = calculateMany2021({
     cause: "disease", coverage: "non_benefit", visit: "outpatient", rider: "manual_therapy",
-    amounts: [50_000],
-  });
+    amounts: [50_000], priorAnnualRiderVisits: 0 });
   check("3대비급여 5만원은 최소공제 3만원 적용", deductibleBoundary.totalOwnPay === 30_000 && deductibleBoundary.totalInsurancePay === 20_000);
 
   const manual = calculateMany2021({
@@ -63,16 +69,23 @@ function check(name: string, ok: boolean, detail = "") {
 
   const injection = calculateMany2021({
     cause: "injury", coverage: "non_benefit", visit: "inpatient", rider: "injection",
-    amounts: [1_000_000], priorAnnualRiderPaid: 2_400_000,
-  });
+    amounts: [1_000_000], priorAnnualRiderPaid: 2_400_000, priorAnnualRiderVisits: 0 });
   check("주사료 잔여 10만원만 지급", injection.totalInsurancePay === 100_000 && injection.totalOwnPay === 900_000);
   check("주사료 금액 한도 코드", injection.appliedCaps.includes("GEN2021_INJECTION_ANNUAL"));
 
+  // MRI는 금액 한도만 있고 횟수 한도가 없다. 횟수 축을 요구하지 않는다.
+  //   ⚠ 종전에는 실려 온 횟수를 조용히 버렸다. 안전성 커밋에서 차단으로 바뀌었다.
   const mri = calculateMany2021({
     cause: "disease", coverage: "non_benefit", visit: "outpatient", rider: "mri",
-    amounts: [1_000_000], priorAnnualRiderPaid: 2_900_000, priorAnnualRiderVisits: 999,
+    amounts: [1_000_000], priorAnnualRiderPaid: 2_900_000,
   });
   check("MRI는 횟수 제한 없이 잔여 10만원 지급", mri.lines[0].covered && mri.totalInsurancePay === 100_000);
+  const mriStray = calculateMany2021({
+    cause: "disease", coverage: "non_benefit", visit: "outpatient", rider: "mri",
+    amounts: [1_000_000], priorAnnualRiderVisits: 0,
+  } as unknown as Gen2021MultiClaimInput);
+  check("MRI에 횟수 축이 실리면 값 0이어도 차단",
+    mriStray.status === "PENDING_UNVERIFIED" && mriStray.lines.length === 0);
 }
 
 // 정규화 및 합계 불변식.

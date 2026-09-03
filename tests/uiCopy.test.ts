@@ -45,7 +45,8 @@ check("5세대 페이지: 단건 미반영 범위를 연간 항목으로 한정"
       /useState<Gen2026NonBenefitItem \| (?:null>\(null\)|"">\(""\))/.test(src), src.slice(0, 0));
     check(`5세대 ${name} UI: 치료유형이 "general"로 자동 선택되지 않음`,
       !/useState<[^>]*>\(\s*"general"\s*\)/.test(src));
-    check(`5세대 ${name} UI: 치료유형 선택 전에는 계산하지 않음`, src.includes("needsItem"));
+    check(`5세대 ${name} UI: 치료유형 선택 전에는 계산하지 않음`,
+      /needsItem[\s\S]{0,40}\? null/.test(src));
     check(`5세대 ${name} UI: 치료유형 라벨 5종 노출`,
       src.includes("NON_BENEFIT_ITEMS") && src.includes("GEN2026_NON_BENEFIT_ITEM_LABEL"));
     check(`5세대 ${name} UI: 미선택 시 계산 차단 안내`,
@@ -53,6 +54,34 @@ check("5세대 페이지: 단건 미반영 범위를 연간 항목으로 한정"
     // 입력이 실제 엔진에 전달되는지 — 화면에 선택지만 있고 엔진이 받지 않으면 차단이 무의미하다.
     check(`5세대 ${name} UI: 치료유형이 엔진 입력으로 전달됨`, /nonBenefitItem:\s*nonBenefitItem/.test(src));
   }
+
+  // 질환 구분(중증/비중증)도 기본 선택이 없어야 한다. 단건은 처음부터 null이었고,
+  //   다회만 "critical"이 기본이라 두 화면의 정책이 어긋나 있었다.
+  //   잘못 고르면 자기부담률 30% vs 50%, 연간 한도 5천만 vs 1천만으로 결과 차이가 크다.
+  for (const [name, src] of [["단건", gen5], ["다회", gen5Multi]] as const) {
+    check(`5세대 ${name} UI: 질환 구분 초기값이 미선택`,
+      /useState<Severity \| (?:null>\(null\)|"">\(""\))/.test(src));
+    check(`5세대 ${name} UI: 질환 구분이 "critical"로 자동 선택되지 않음`,
+      !/useState<Severity[^>]*>\(\s*"critical"\s*\)/.test(src));
+    // ⚠ 변수 존재만 보면 게이트에서 빠져도 통과한다. 결과를 null로 만드는
+    //    분기에 실제로 연결돼 있는지까지 본다.
+    check(`5세대 ${name} UI: 질환 구분 선택 전에는 계산하지 않음`,
+      /needsItem \|\| needsSeverity[\s\S]{0,40}\? null/.test(src));
+    check(`5세대 ${name} UI: 미선택 시 질환 구분 선택 안내`,
+      src.includes("질환 구분을 선택해 주세요"));
+  }
+  // 다회는 select라서 빈 옵션이 실제로 있어야 미선택이 표현된다.
+  // ⚠ select 태그 안에 화살표 함수(=>)가 있어 [^>]* 로는 태그 끝을 잡지 못한다.
+  //    "질환 구분"부터 </select>까지를 잘라 그 안에 빈 옵션이 있는지 본다.
+  const severitySelect = gen5Multi.slice(
+    gen5Multi.indexOf("질환 구분<select"),
+    gen5Multi.indexOf("</select>", gen5Multi.indexOf("질환 구분<select")),
+  );
+  check("5세대 다회 UI: 질환 구분에 빈 선택지 존재",
+    severitySelect.includes('<option value="">'), severitySelect.slice(0, 120));
+  check("5세대 다회 UI: 질환 구분에 따라 문구가 달라지는 블록은 선택 후에만 노출",
+    (gen5Multi.match(/severity !== ""/g) ?? []).length >= 3,
+    String((gen5Multi.match(/severity !== ""/g) ?? []).length));
 
   // 결과 안내는 엔진이 만든 사유를 그대로 보여준다(화면에서 지어내지 않는다).
   check("5세대 단건 UI: PENDING 사유를 엔진 notes로 표시",

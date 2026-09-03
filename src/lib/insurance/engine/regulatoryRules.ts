@@ -195,6 +195,15 @@ const GEN5_NONCRITICAL_MRI_TABLE: RegulatorySource = {
   locator: "별표/서식 → [별표 15] 표준약관(별표 식별번호 3216359) → 실손의료보험 특별약관2(비중증 비급여 실손의료비) 제3조 (3)비급여 자기공명영상진단 제1항 <표1>·제3항, 2026. 5. 6. 공포·시행본 인쇄 p.293~294",
 };
 
+/**
+ * 특약2 (1)①·(2)① 입원 <구분·보상금액> — 1회당 300만원 한도의 **적용 대상 의료기관**.
+ * 2026-09-03에 두 조문을 판본 직행 주소로 다시 읽었다.
+ */
+const GEN5_NONCRITICAL_INPATIENT_LIMIT: RegulatorySource = {
+  ...GEN5_DIRECT_BASE,
+  locator: "별표/서식 → [별표 15] 표준약관(별표 식별번호 3216359) → 실손의료보험 특별약관2(비중증 비급여 실손의료비) 제3조 (1)상해비급여 제1항·(2)질병비급여 제1항 <구분·보상금액> 입원 행, 2026. 5. 6. 공포·시행본 인쇄 p.287·p.290",
+};
+
 /** 특약2 (1)①·(2)① — 배제 대상이 MRI뿐이라 비중증 근골격계·주사료는 일반 경로다. */
 const GEN5_NONCRITICAL_GENERAL_SCOPE: RegulatorySource = {
   ...GEN5_DIRECT_BASE,
@@ -718,8 +727,17 @@ export const REGULATORY_RULES = {
     "통원 1일당(외래 및 처방·조제비 합산) 기준으로 한 번 적용한다",
   ),
   GEN2026_NONCRITICAL_INPATIENT_PER_VISIT_LIMIT: confirmed5th(
-    "GEN2026-NONCRITICAL-INPATIENT-PER-VISIT-LIMIT", 3_000_000, [GEN5_NONCRITICAL_TERMS],
+    "GEN2026-NONCRITICAL-INPATIENT-PER-VISIT-LIMIT", 3_000_000, [GEN5_NONCRITICAL_INPATIENT_LIMIT],
     "「의료법」 제3조제2항 의료기관(종합병원 제외)에서 발생한 비급여 의료비는 1회당 300만원 한도",
+  ),
+  // ⚠ 값이 아니라 **적용 대상**이 쟁점이다. 위 한도는 모든 입원에 걸리지 않는다.
+  //    「의료법」 제3조제2항은 의원급·조산원·병원급을 열거하고, 단서가 제3조의3의 종합병원을
+  //    제외한다. 상급종합병원(제3조의4)은 종합병원 중에서 지정되므로 함께 제외된다.
+  //    이 저장소의 Tier 축으로는 "clinic"(병·의원급)만 대상이고 "hospital"(상급종합·종합)은 아니다.
+  GEN2026_NONCRITICAL_INPATIENT_PER_VISIT_LIMIT_TIERS: confirmed5th(
+    "GEN2026-NONCRITICAL-INPATIENT-PER-VISIT-LIMIT-TIERS", ["clinic"] as const,
+    [GEN5_NONCRITICAL_INPATIENT_LIMIT],
+    "1회당 300만원 한도의 적용 대상 — 「의료법」 제3조제2항 의료기관 중 종합병원(제3조의3)을 제외한 곳. 상급종합·종합병원 입원에는 적용하지 않는다",
   ),
   // ⚠ 상수가 아니라 상한선이다. 약관 제5조③: "통원 1일당 20만원 이내에서 회사가 정한
   //    금액 중 계약자가 선택한 금액".

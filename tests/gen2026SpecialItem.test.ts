@@ -336,7 +336,8 @@ console.log("\n[결과 계약] route로 좁혀 특별 필드를 읽는다");
   } else {
     check("route 좁힘", false, "special_item이어야 한다");
   }
-  const g = calculateGen2026Item({ route: "general", coverage: "non_benefit", severity: "non_critical", item: "injection", cause: "injury", visit: "inpatient", amounts: [1_000_000] });
+  // ⚠ 비중증 입원은 의료기관 종별이 1회당 300만원 한도 적용 여부를 가른다(특별약관2 제3조 (1)①·(2)①).
+  const g = calculateGen2026Item({ route: "general", coverage: "non_benefit", severity: "non_critical", item: "injection", cause: "injury", visit: "inpatient", tier: "clinic", amounts: [1_000_000] });
   check("일반 전환 결과의 route", g.route === "general" && g.status === "OK");
 }
 
@@ -421,7 +422,8 @@ console.log("\n[가드] 축·문구·출처의 금지형");
   check("UI 원인 선택지에 빈 값이 있음", /<option value="">선택해 주세요<\/option><option value="disease">/.test(ui));
   check("UI 미선택 안내가 있음", ui.includes("<b>원인</b>을 선택해 주세요"));
   // ⚠ 초기값만 보면 게이트에서 빠져도 통과한다. 실제 계산 진입 조건에 연결됐는지 본다.
-  check("일반 전환 계산이 원인 미선택을 배제", /!\(route === "general" && cause === ""\)/.test(ui));
+  check("일반 전환 계산이 원인 미선택을 배제", /!\(route === "general" && \(cause === ""/.test(ui));
+  check("일반 전환 계산이 입원 종별 미선택도 배제", /visit === "inpatient" && nbInpatientTier === ""/.test(ui));
   check("일반 비급여 계산이 원인 미선택을 배제", /nonBenefitItem === "general" && severity !== "" && cause !== ""/.test(ui));
   check("needsCause가 안내와 같은 값을 씀", /const needsCause = showGeneralForm && severity !== "" && cause === "";/.test(ui) && /submitted && needsCause/.test(ui));
   check("별도 보장종목에는 원인을 노출하지 않음", /\{showGeneralForm && <label className="text-sm font-semibold">원인/.test(ui));

@@ -103,7 +103,9 @@ for (const item of BLOCKED) {
     { name: "중증 통원 100만 + 가입금액 20만", got: calc2026({ amount: 1_000_000, coverage: "non_benefit", nonBenefitItem: "general", visit: "outpatient", severity: "critical", perVisitCoverageLimit: 200_000 }), own: 800_000, ins: 200_000 },
     { name: "중증 입원 1천만 상급종합(상한 500만)", got: calc2026({ amount: 10_000_000, coverage: "non_benefit", nonBenefitItem: "general", visit: "inpatient", severity: "critical", tier: "hospital" }), own: 3_000_000, ins: 7_000_000 },
     { name: "중증 입원 3천만 상급종합(상한 구속)", got: calc2026({ amount: 30_000_000, coverage: "non_benefit", nonBenefitItem: "general", visit: "inpatient", severity: "critical", tier: "hospital" }), own: 5_000_000, ins: 25_000_000 },
-    { name: "비중증 입원 1천만(1회당 300만 한도)", got: calc2026({ amount: 10_000_000, coverage: "non_benefit", nonBenefitItem: "general", visit: "inpatient", severity: "non_critical" }), own: 7_000_000, ins: 3_000_000 },
+    // ⚠ 300만원 한도는 병·의원급에만 적용된다(특별약관2 제3조 (1)①·(2)①, 인쇄 p.287·p.290).
+    { name: "비중증 입원 1천만·병·의원급(1회당 300만 한도)", got: calc2026({ amount: 10_000_000, coverage: "non_benefit", nonBenefitItem: "general", visit: "inpatient", severity: "non_critical", tier: "clinic" }), own: 7_000_000, ins: 3_000_000 },
+    { name: "비중증 입원 1천만·상급종합/종합(한도 미적용)", got: calc2026({ amount: 10_000_000, coverage: "non_benefit", nonBenefitItem: "general", visit: "inpatient", severity: "non_critical", tier: "hospital" }), own: 5_000_000, ins: 5_000_000 },
     { name: "비중증 통원 10만", got: calc2026({ amount: 100_000, coverage: "non_benefit", nonBenefitItem: "general", visit: "outpatient", severity: "non_critical" }), own: 50_000, ins: 50_000 },
     { name: "급여 입원 30만", got: calc2026({ amount: 300_000, coverage: "benefit", visit: "inpatient" }), own: 60_000, ins: 240_000 },
   ];

@@ -14,8 +14,11 @@ function check(name: string, ok: boolean, detail = "") {
   check("회당 한도 코드", r.appliedCaps.includes("GEN2026_CRITICAL_OUTPATIENT_PER_VISIT"));
 }
 {
-  const r = calculateMany2026({ cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "non_critical", visit: "inpatient", amounts: [10_000_000, 10_000_000] });
+  // ⚠ 300만원 한도는 병·의원급에만 적용된다(특별약관2 제3조 (1)①·(2)①, 인쇄 p.287·p.290).
+  const r = calculateMany2026({ cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "non_critical", visit: "inpatient", tier: "clinic", amounts: [10_000_000, 10_000_000] });
   check("비중증 입원 회당 300만 두 번", r.totalInsurancePay === 6_000_000);
+  const h = calculateMany2026({ cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "non_critical", visit: "inpatient", tier: "hospital", amounts: [10_000_000, 10_000_000] });
+  check("상급종합·종합 입원 두 건은 회당 한도 미적용", h.totalInsurancePay === 10_000_000 && h.appliedCaps.length === 0, JSON.stringify(h.totalInsurancePay));
   check("회당 한도 코드", r.appliedCaps.includes("GEN2026_NONCRITICAL_INPATIENT_PER_VISIT"));
 }
 {
@@ -72,7 +75,7 @@ function check(name: string, ok: boolean, detail = "") {
 
   // 입원에는 통원 가입금액을 적용하지 않는다
   const inpatient = calculateMany2026({
-    cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "non_critical", visit: "inpatient",
+    cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "non_critical", visit: "inpatient", tier: "clinic",
     amounts: [1_000_000], outpatientCoverageLimit: 100_000,
   });
   check("입원에는 통원 가입금액 미적용", inpatient.totalOwnPay === 500_000 && inpatient.totalInsurancePay === 500_000);
@@ -112,7 +115,7 @@ function check(name: string, ok: boolean, detail = "") {
   // 비급여 통원에는 붙고, 비급여 입원에는 통원 안내가 붙지 않는다.
   const nbOut = calculateMany2026({ cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "critical", visit: "outpatient", amounts: [300_000] });
   check("비급여 통원에는 통원 안내가 붙음", nbOut.notes.join(" ").includes("통원 가입금액"));
-  const nbIn = calculateMany2026({ cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "critical", visit: "inpatient", amounts: [300_000] });
+  const nbIn = calculateMany2026({ cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "critical", visit: "inpatient", tier: "clinic", amounts: [300_000] });
   check("비급여 입원에는 통원 안내가 붙지 않음", !nbIn.notes.join(" ").includes("한 행으로 합쳐 입력"));
 
   // (3) 중증 합산 안내는 약관의 "같은 치료 목적"·"동일 의료기관" 조건을 담아야 한다.
@@ -169,7 +172,7 @@ function check(name: string, ok: boolean, detail = "") {
   });
   check("연간 가입금액 0은 미입력으로 처리", annualZero.totalInsurancePay === 500_000);
   const annualOver = calculateMany2026({
-    cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "critical", visit: "inpatient",
+    cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "critical", visit: "inpatient", tier: "clinic",
     amounts: [100_000_000], annualCoverageLimit: 90_000_000,
   });
   check("연간 가입금액이 상한선 5천만을 넘으면 5천만으로 절삭", annualOver.totalInsurancePay === 50_000_000, JSON.stringify(annualOver));

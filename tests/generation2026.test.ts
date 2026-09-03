@@ -69,9 +69,13 @@ function checkInvariant(name: string, result: ReturnType<typeof calc2026>) {
   check("중증 입원 상한: 병·의원급엔 미적용", clinic.ownPay === 9000000 && clinic.appliedCaps.length === 0, JSON.stringify(clinic));
 }
 // #7·9 비중증 입원 50% + 회당 300만 한도
+//   ⚠ 300만원 한도는 「의료법」 제3조제2항 의료기관 중 종합병원을 제외한 곳(=병·의원급)에만
+//     적용된다(특별약관2 제3조 (1)제1항·(2)제1항, 인쇄 p.287·p.290). 종별 미지정은 계산하지 않는다.
 {
-  const r = calc2026({ amount: 10000000, coverage: "non_benefit", nonBenefitItem: "general", visit: "inpatient", severity: "non_critical" });
+  const r = calc2026({ amount: 10000000, coverage: "non_benefit", nonBenefitItem: "general", visit: "inpatient", severity: "non_critical", tier: "clinic" });
   check("비중증 입원 50% + 회당 300만 한도", r.ownPay === 7000000 && r.insurancePay === 3000000 && r.appliedCaps.includes("GEN2026_NONCRITICAL_INPATIENT_PER_VISIT"), JSON.stringify(r));
+  const h = calc2026({ amount: 10000000, coverage: "non_benefit", nonBenefitItem: "general", visit: "inpatient", severity: "non_critical", tier: "hospital" });
+  check("비중증 입원 상급종합·종합에는 회당 한도 미적용", h.ownPay === 5000000 && h.insurancePay === 5000000 && h.appliedCaps.length === 0, JSON.stringify(h));
   checkInvariant("비중증 입원 한도 적용", r);
 }
 // #7·9 비중증 통원 Max(50%,5만) + 1일당 가입금액(계약자 선택값)

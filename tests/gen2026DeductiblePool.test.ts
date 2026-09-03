@@ -91,7 +91,8 @@ console.log("\n[deductibleApplied] ownPay와 다른 값임을 고정 (회귀 가
 }
 {
   // 비중증 입원 회당 300만원 한도가 구속되는 경우.
-  const r = calc2026({ amount: 10_000_000, coverage: "non_benefit", nonBenefitItem: "general", severity: "non_critical", visit: "inpatient" });
+  // ⚠ 1회당 300만원 한도는 병·의원급에만 적용된다(특별약관2 제3조 (1)①·(2)①, 인쇄 p.287·p.290).
+  const r = calc2026({ amount: 10_000_000, coverage: "non_benefit", nonBenefitItem: "general", severity: "non_critical", visit: "inpatient", tier: "clinic" });
   check("비중증 입원 한도 구속: 공제 500만 < 자기부담 700만",
     r.deductibleApplied === 5_000_000 && r.ownPay === 7_000_000, JSON.stringify(r));
 }

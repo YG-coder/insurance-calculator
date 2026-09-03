@@ -28,7 +28,12 @@ export default function HealthCalc5th() {
   const [amount, setAmount] = useState<string>("300000");
   const [coverage, setCoverage] = useState<Coverage>("non_benefit");
   const [visit, setVisit] = useState<Visit>("inpatient");
-  const [tier, setTier] = useState<Tier>("clinic");
+  // 급여 통원의 의료기관 종별. 최소공제가 갈리지만 종전부터 기본값이 있었고 이번에 바꾸지 않는다.
+  const [benefitTier, setBenefitTier] = useState<Tier>("clinic");
+  // 비급여 **입원**의 의료기관 종별. ⚠ 기본값을 두지 않는다.
+  //   중증은 공제금액 상한 500만원(특약1 제5조⑤), 비중증은 1회당 300만원 한도(특약2 제3조 (1)①·(2)①)가
+  //   종별에 따라 갈린다. 자동 선택되면 사용자가 인식하지 못한 채 한쪽으로 계산된다.
+  const [nbInpatientTier, setNbInpatientTier] = useState<Tier | null>(null);
   const [severity, setSeverity] = useState<Severity | null>(null);
   // 초기값은 미선택이어야 한다. "general"을 기본값으로 두면 안전 차단이 무력화된다.
   const [nonBenefitItem, setNonBenefitItem] = useState<Gen2026NonBenefitItem | null>(null);
@@ -45,6 +50,13 @@ export default function HealthCalc5th() {
   const needsItem = coverage === "non_benefit" && nonBenefitItem === null;
   const needsSeverity =
     coverage === "non_benefit" && nonBenefitItem === "general" && severity === null;
+  // 비급여 입원은 종별을 고르기 전에는 계산하지 않는다(중증·비중증 모두).
+  //   ⚠ 종별 입력은 질환 구분을 고른 뒤에야 화면에 나타난다. severity 조건을 빼면
+  //     아직 보이지도 않는 입력을 선택하라는 안내가 질환 구분 안내와 함께 뜬다.
+  //     안내 순서를 화면에 나타나는 순서와 맞춘다.
+  const needsTier =
+    coverage === "non_benefit" && nonBenefitItem === "general" && severity !== null
+    && visit === "inpatient" && nbInpatientTier === null;
 
   // calc2026을 직접 호출한다 — 비급여에서 치료유형 누락이 컴파일 에러가 되는 경로다.
   const result =
@@ -53,23 +65,24 @@ export default function HealthCalc5th() {
           amount: num,
           coverage: "benefit",
           visit,
-          tier,
+          tier: benefitTier,
           nhisCoinsuranceRate:
             visit === "outpatient" && nhisRate.trim() !== ""
               ? Math.min(100, Math.max(0, Number(nhisRate))) / 100
               : undefined,
         })
-      : needsItem || needsSeverity
+      : needsItem || needsSeverity || needsTier
         ? null
         : calc2026({
             amount: num,
             coverage: "non_benefit",
             visit,
-            tier,
+            // ⚠ 빈 값을 Tier로 단언해 넘기지 않는다. 위 게이트가 미선택을 이미 배제한다.
+            tier: visit === "inpatient" ? nbInpatientTier ?? undefined : undefined,
             severity: severity ?? undefined,
             nonBenefitItem: nonBenefitItem as Gen2026NonBenefitItem,
             priorAnnualDeductible:
-              severity === "critical" && visit === "inpatient" && tier === "hospital"
+              severity === "critical" && visit === "inpatient" && nbInpatientTier === "hospital"
                 ? priorDeductibleNum
                 : undefined,
             perVisitCoverageLimit:
@@ -167,10 +180,10 @@ export default function HealthCalc5th() {
             <div className="sm:col-span-2">
               <label className="label-base">방문 의료기관</label>
               <div className="grid grid-cols-2 gap-2 max-w-md">
-                <button type="button" onClick={() => setTier("clinic")} className={btn(tier === "clinic")}>
+                <button type="button" onClick={() => setBenefitTier("clinic")} className={btn(benefitTier === "clinic")}>
                   병·의원급
                 </button>
-                <button type="button" onClick={() => setTier("hospital")} className={btn(tier === "hospital")}>
+                <button type="button" onClick={() => setBenefitTier("hospital")} className={btn(benefitTier === "hospital")}>
                   상급종합·종합병원
                 </button>
               </div>
@@ -212,23 +225,36 @@ export default function HealthCalc5th() {
           </div>
         )}
 
-        {coverage === "non_benefit" && nonBenefitItem === "general" && severity === "critical" && visit === "inpatient" && (
+        {/* 입원 의료기관 종별은 중증·비중증 **모두** 결과를 바꾼다.
+            중증 — 상급종합·종합병원에만 공제금액 상한 500만원(특별약관1 제5조⑤)
+            비중증 — 병·의원급에만 1회당 300만원 한도(특별약관2 제3조 (1)①·(2)①)
+            둘 다 종별에 따라 보험금이 달라지므로 기본값으로 계산하지 않는다. */}
+        {coverage === "non_benefit" && nonBenefitItem === "general" && severity !== null && visit === "inpatient" && (
           <>
             <div className="sm:col-span-2">
               <label className="label-base">입원 의료기관</label>
               <div className="grid grid-cols-2 gap-2 max-w-md">
-                <button type="button" onClick={() => setTier("clinic")} className={btn(tier === "clinic")}>
+                <button type="button" onClick={() => setNbInpatientTier("clinic")} className={btn(nbInpatientTier === "clinic")}>
                   병·의원급
                 </button>
-                <button type="button" onClick={() => setTier("hospital")} className={btn(tier === "hospital")}>
+                <button type="button" onClick={() => setNbInpatientTier("hospital")} className={btn(nbInpatientTier === "hospital")}>
                   상급종합·종합병원
                 </button>
               </div>
             </div>
+            {severity === "non_critical" && (
+              <div className="sm:col-span-2">
+                <p className="text-xs text-slate-500">
+                  비중증 입원의 <b>1회당 300만 원 한도</b>는 「의료법」 제3조제2항 의료기관 중
+                  <b> 종합병원을 제외한 곳</b>(병·의원급)에서 발생한 비급여 의료비에만 적용됩니다
+                  (표준약관 특별약관2 제3조 (1)제1항·(2)제1항). 상급종합·종합병원 입원에는 적용하지 않습니다.
+                </p>
+              </div>
+            )}
             {/* 공제금액 상한(500만)은 상급종합·종합병원 입원에만 적용된다.
                 병·의원급에서 이 값을 받으면 계산에 반영되지 않아 사용자가 오인한다.
                 ⚠ 누적 대상은 약관상 공제금액이며 최종 자기부담금이 아니다(특별약관1 제5조⑤). */}
-            {tier === "hospital" ? (
+            {severity === "critical" && (nbInpatientTier === "hospital" ? (
               <div>
                 <label className="label-base" htmlFor="med5-prior-annual-deductible">
                   계약해당일 기준 1년간 이미 누적된 중증 비급여 입원 공제금액 (원)
@@ -252,7 +278,7 @@ export default function HealthCalc5th() {
                   적용되지 않아 연간 누적 공제금액을 입력받지 않습니다.
                 </p>
               </div>
-            )}
+            ))}
           </>
         )}
       </div>
@@ -275,6 +301,15 @@ export default function HealthCalc5th() {
           {needsSeverity && (
             <NoticeBox variant="info">
               비급여는 <b>중증 / 비중증</b>에 따라 자기부담률과 한도가 다릅니다. 질환 구분을 선택해 주세요.
+            </NoticeBox>
+          )}
+
+          {needsTier && (
+            <NoticeBox variant="info">
+              비급여 <b>입원</b>은 <b>의료기관 종별</b>에 따라 보험금이 달라집니다. 중증은 공제금액
+              상한 500만 원이 상급종합·종합병원 입원에만 적용되고(특별약관1 제5조 제5항), 비중증은
+              1회당 300만 원 한도가 병·의원급에만 적용됩니다(특별약관2 제3조 (1)제1항·(2)제1항).
+              입원 의료기관을 선택해 주세요. 선택 전에는 계산하지 않습니다.
             </NoticeBox>
           )}
 

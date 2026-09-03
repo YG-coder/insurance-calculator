@@ -157,6 +157,14 @@ export function calc2026(input: Gen2026ClaimInput): CalcResult {
     const c = GEN2026.nonBenefit.critical;
     notes.push(`연간 보험가입금액(약관상 ${c.annualLimitMax.toLocaleString("ko-KR")}원 이내에서 계약 시 정한 금액, 상해·질병 각각)은 1건 계산에 반영되지 않습니다.`);
     if (input.visit === "inpatient") {
+      // ⚠ 종별에 따라 공제금액 상한 500만원(제5조⑤) 적용 여부가 갈린다. 미지정으로 계산하면
+      //   상급종합·종합병원 입원에서 공제가 과다 적용돼 보험금이 과소 산출된다.
+      //   비중증 입원의 1회당 300만원 한도와 같은 이유로, 값을 확인하기 전에는 계산하지 않는다.
+      if (input.tier !== "clinic" && input.tier !== "hospital") {
+        return pending(amount, [
+          "중증 비급여 입원: 의료기관 종별 미지정 → 계산 불가. 공제금액 상한 500만원은 상급종합·종합병원 입원에만 적용되므로(특별약관1 제5조 제5항), 병·의원급인지 상급종합·종합병원인지에 따라 보험금이 달라집니다.",
+        ]);
+      }
       const rate = c.inpatientRate; // 30% A
       let deductRaw = amount * rate;
       const appliedCaps: CapCode[] = [];
@@ -191,7 +199,24 @@ export function calc2026(input: Gen2026ClaimInput): CalcResult {
   notes.push(`연간 보험가입금액(약관상 ${n.annualLimitMax.toLocaleString("ko-KR")}원 이내에서 계약 시 정한 금액, 상해·질병 각각)은 1건 계산에 반영되지 않습니다.`);
   if (input.visit === "inpatient") {
     const rate = n.inpatientRate; // 50% A
-    const s = settle(amount, amount * rate, n.inpatientPerVisitLimit);
+    // 1회당 300만원 한도는 **모든 입원**에 걸리지 않는다. 특별약관2 제3조 (1)제1항·(2)제1항
+    //   <구분·보상금액> 입원 행(인쇄 p.287·p.290):
+    //   "…50%에 해당하는 금액. 다만, 「의료법」 제3조제2항에 의한 의료기관(동법 제3조의3에 의한
+    //    종합병원은 제외)에서 발생한 비급여 의료비는 1회당 300만원을 한도로 합니다."
+    //   → 병·의원급(clinic)만 대상이고 상급종합·종합병원(hospital)에는 적용하지 않는다.
+    //   ⚠ 종별에 따라 지급 보험금이 갈리므로 미지정 상태로는 계산하지 않는다.
+    //     기본값으로 계산하면 상급종합·종합병원 입원에서 보험금이 과소 산출된다.
+    if (input.tier !== "clinic" && input.tier !== "hospital") {
+      return pending(amount, [
+        "비중증 비급여 입원: 의료기관 종별 미지정 → 계산 불가. 1회당 300만원 한도는 「의료법」 제3조제2항 의료기관 중 종합병원을 제외한 곳에서 발생한 비급여 의료비에만 적용되므로(특별약관2 제3조 (1)제1항·(2)제1항), 병·의원급인지 상급종합·종합병원인지에 따라 보험금이 달라집니다.",
+      ]);
+    }
+    const limitTiers: readonly string[] = n.inpatientPerVisitLimitTiers;
+    const perVisitLimit = limitTiers.includes(input.tier) ? n.inpatientPerVisitLimit : undefined;
+    notes.push(perVisitLimit === undefined
+      ? "1회당 300만원 한도는 「의료법」 제3조제2항 의료기관 중 종합병원을 제외한 곳에만 적용됩니다. 상급종합·종합병원 입원에는 적용하지 않았습니다(특별약관2 제3조 (1)제1항·(2)제1항)."
+      : "병·의원급 입원의 비급여 의료비는 1회당 300만원이 한도입니다(특별약관2 제3조 (1)제1항·(2)제1항).");
+    const s = settle(amount, amount * rate, perVisitLimit);
     const appliedCaps: CapCode[] = s.capped ? ["GEN2026_NONCRITICAL_INPATIENT_PER_VISIT"] : [];
     return ok(amount, s.ownPay, s.insurancePay, rate, 0, notes, appliedCaps, deductibleOf(amount, amount * rate));
   }

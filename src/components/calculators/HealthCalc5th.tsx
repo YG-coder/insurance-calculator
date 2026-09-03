@@ -32,13 +32,13 @@ export default function HealthCalc5th() {
   const [severity, setSeverity] = useState<Severity | null>(null);
   // 초기값은 미선택이어야 한다. "general"을 기본값으로 두면 안전 차단이 무력화된다.
   const [nonBenefitItem, setNonBenefitItem] = useState<Gen2026NonBenefitItem | null>(null);
-  const [priorAnnualPaid, setPriorAnnualPaid] = useState<string>("0");
+  const [priorDeductible, setPriorDeductible] = useState<string>("0");
   const [outpatientLimit, setOutpatientLimit] = useState<string>("");
   const [nhisRate, setNhisRate] = useState<string>("");
   const [submitted, setSubmitted] = useState(false);
 
   const num = Number(amount.replace(/[^0-9]/g, "")) || 0;
-  const priorAnnualPaidNum = Number(priorAnnualPaid.replace(/[^0-9]/g, "")) || 0;
+  const priorDeductibleNum = Number(priorDeductible.replace(/[^0-9]/g, "")) || 0;
 
   // 비급여는 ①치료유형 ②중증/비중증을 모두 고른 뒤에만 계산한다(엔진 호출 전 UI 가드).
   //   치료유형이 "일반 비급여"가 아니면 질환 구분과 무관하게 엔진이 차단한다.
@@ -68,9 +68,9 @@ export default function HealthCalc5th() {
             tier,
             severity: severity ?? undefined,
             nonBenefitItem: nonBenefitItem as Gen2026NonBenefitItem,
-            priorAnnualPaid:
+            priorAnnualDeductible:
               severity === "critical" && visit === "inpatient" && tier === "hospital"
-                ? priorAnnualPaidNum
+                ? priorDeductibleNum
                 : undefined,
             perVisitCoverageLimit:
               visit === "outpatient" && outpatientLimit.trim() !== ""
@@ -225,29 +225,31 @@ export default function HealthCalc5th() {
                 </button>
               </div>
             </div>
-            {/* 자기부담 상한(500만)은 상급종합·종합병원 입원에만 적용된다.
-                병·의원급에서 이 값을 받으면 계산에 반영되지 않아 사용자가 오인한다. */}
+            {/* 공제금액 상한(500만)은 상급종합·종합병원 입원에만 적용된다.
+                병·의원급에서 이 값을 받으면 계산에 반영되지 않아 사용자가 오인한다.
+                ⚠ 누적 대상은 약관상 공제금액이며 최종 자기부담금이 아니다(특별약관1 제5조⑤). */}
             {tier === "hospital" ? (
               <div>
-                <label className="label-base" htmlFor="med5-prior-annual-paid">
-                  계약해당일 기준 1년간 이미 부담한 중증 비급여 입원 자기부담금 (원)
+                <label className="label-base" htmlFor="med5-prior-annual-deductible">
+                  계약해당일 기준 1년간 이미 누적된 중증 비급여 입원 공제금액 (원)
                 </label>
                 <AmountInput
-                  id="med5-prior-annual-paid"
-                  value={priorAnnualPaid}
-                  onChange={setPriorAnnualPaid}
+                  id="med5-prior-annual-deductible"
+                  value={priorDeductible}
+                  onChange={setPriorDeductible}
                   placeholder="없으면 0"
                 />
                 <p className="mt-2 text-xs text-slate-500">
-                  자기부담 상한 500만 원은 <b>계약일 또는 매년 계약해당일부터 1년</b> 단위로 누적됩니다
-                  (표준약관 특별약관1 제5조). 그 기간에 이미 부담한 금액을 입력하면 상한에 누적 반영됩니다.
+                  공제금액 상한 500만 원은 <b>계약일 또는 매년 계약해당일부터 1년</b> 단위로 누적됩니다
+                  (표준약관 특별약관1 제5조 제5항). 누적되는 것은 약관상 <b>공제금액</b>이며, 보험가입금액
+                  한도로 추가 부담한 금액은 포함되지 않습니다.
                 </p>
               </div>
             ) : (
               <div className="sm:col-span-2">
                 <p className="text-xs text-slate-500">
-                  자기부담 상한(500만 원)은 상급종합·종합병원 입원에만 적용됩니다. 병·의원급 입원에는
-                  적용되지 않아 연간 누적 자기부담금을 입력받지 않습니다.
+                  공제금액 상한(500만 원)은 상급종합·종합병원 입원에만 적용됩니다. 병·의원급 입원에는
+                  적용되지 않아 연간 누적 공제금액을 입력받지 않습니다.
                 </p>
               </div>
             )}

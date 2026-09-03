@@ -68,7 +68,10 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
   }
 
   let insurancePaid = nonNegInt(input.priorAnnualInsurancePaid);
-  let ownPayPaid = nonNegInt(nb?.priorAnnualOwnPay);
+  // 특별약관1 제5조⑤ 500만원 상한의 누적 대상은 약관상 **공제금액**이다(인쇄 p.280).
+  //   ⚠ single.ownPay를 누적하면 안 된다. 연간 보험가입금액 한도로 잘려 추가 부담한 금액이
+  //     섞여 pool이 과대 소진되고, 이후 건의 공제가 사라져 보험금이 과다 산출된다.
+  let deductiblePaid = nonNegInt(nb?.priorAnnualDeductible);
   let outpatientVisits = nonNegInt(nb?.priorAnnualOutpatientVisits);
   // 연간 보험가입금액도 "N원 이내에서 계약자가 선택한 금액"이다(제5조①).
   // 0·음수·미입력은 미적용으로 본다. 상한선을 넘겨 입력하면 상한선으로 깎는다.
@@ -91,7 +94,8 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
       results.push({
         status: "OK", generation: "2026", index, covered: false,
         amount, ownPay: amount, insurancePay: 0,
-        rateBased: 0, rateApplied: 0, minDeductible: 0,
+        // 보상 대상이 아닌 건은 약관상 공제 자체가 적용되지 않는다 → 500만원 pool도 소진하지 않는다.
+        rateBased: 0, rateApplied: 0, minDeductible: 0, deductibleApplied: 0,
         notes: [`계약해당일 기준 1년간 통원 ${GEN2026.nonBenefit.critical.outpatientAnnualVisits}회 한도를 이미 채워 이 건은 보상 대상이 아닙니다.`],
         appliedCaps: ["GEN2026_CRITICAL_OUTPATIENT_ANNUAL_VISITS"],
       });
@@ -104,8 +108,8 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
           amount, coverage: "non_benefit", visit: nb.visit, tier: nb.tier, severity,
           nonBenefitItem: nb.nonBenefitItem,
           perVisitCoverageLimit: nb.visit === "outpatient" ? nb.outpatientCoverageLimit : undefined,
-          priorAnnualPaid: severity === "critical" && nb.visit === "inpatient" && nb.tier === "hospital"
-            ? ownPayPaid : undefined,
+          priorAnnualDeductible: severity === "critical" && nb.visit === "inpatient" && nb.tier === "hospital"
+            ? deductiblePaid : undefined,
         })
       : calc2026({
           amount, coverage: "benefit", visit: input.visit, tier: input.tier,
@@ -129,7 +133,9 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
 
     insurancePaid += single.insurancePay ?? 0;
     if (nb && severity === "critical" && nb.visit === "inpatient" && nb.tier === "hospital") {
-      ownPayPaid += single.ownPay ?? 0;
+      // 연간 보험가입금액 클램프는 insurancePay·ownPay만 바꾸고 deductibleApplied는 건드리지
+      // 않는다. 그래서 한도 구속 건에서도 약관상 공제금액만 정확히 누적된다.
+      deductiblePaid += single.deductibleApplied ?? 0;
     }
     results.push({ ...single, index, covered: true });
   }

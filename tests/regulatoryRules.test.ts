@@ -47,7 +47,7 @@ check("4세대 급여·비급여 출처 위치 분리", REGULATORY_RULES.GEN2021
 check("4세대 3대비급여 금액·횟수 출처 위치 통일", REGULATORY_RULES.GEN2021_MANUAL_THERAPY_ANNUAL_LIMIT.sources[0].locator === REGULATORY_RULES.GEN2021_MANUAL_THERAPY_ANNUAL_VISITS.sources[0].locator);
 check("4세대 3대비급여 출처는 인쇄 p.251로 특정", REGULATORY_RULES.GEN2021_RIDER_MIN_DEDUCTIBLE.sources[0].locator.includes("인쇄 p.251"));
 check("5세대 급여 통원 최소공제 추적", GEN2026.benefit.outpatient.minDeductible === REGULATORY_RULES.GEN2026_BENEFIT_OUTPATIENT_MIN_DEDUCTIBLE.value);
-check("5세대 중증 자기부담 상한 추적", GEN2026.nonBenefit.critical.annualOwnPayCap === REGULATORY_RULES.GEN2026_CRITICAL_ANNUAL_OWN_PAY_CAP.value);
+check("5세대 중증 공제금액 상한 추적", GEN2026.nonBenefit.critical.annualDeductibleCap === REGULATORY_RULES.GEN2026_CRITICAL_ANNUAL_DEDUCTIBLE_CAP.value);
 check("5세대 비중증 입원 한도 추적", GEN2026.nonBenefit.nonCritical.inpatientPerVisitLimit === REGULATORY_RULES.GEN2026_NONCRITICAL_INPATIENT_PER_VISIT_LIMIT.value);
 
 

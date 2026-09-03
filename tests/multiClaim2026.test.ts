@@ -19,9 +19,9 @@ function check(name: string, ok: boolean, detail = "") {
   check("회당 한도 코드", r.appliedCaps.includes("GEN2026_NONCRITICAL_INPATIENT_PER_VISIT"));
 }
 {
-  const r = calculateMany2026({ cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "critical", visit: "inpatient", tier: "hospital", amounts: [10_000_000, 10_000_000], priorAnnualOwnPay: 4_000_000 });
+  const r = calculateMany2026({ cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "critical", visit: "inpatient", tier: "hospital", amounts: [10_000_000, 10_000_000], priorAnnualDeductible: 4_000_000 });
   check("중증 입원 자기부담 잔여 100만을 건 사이 누적", r.lines[0].ownPay === 1_000_000 && r.lines[1].ownPay === 0);
-  check("500만 자기부담 상한 코드", r.appliedCaps.includes("GEN2026_CRITICAL_INPATIENT_OWN_PAY_ANNUAL"));
+  check("500만 공제금액 상한 코드", r.appliedCaps.includes("GEN2026_CRITICAL_INPATIENT_DEDUCTIBLE_ANNUAL"));
 }
 {
   // 2026-09-03: 연간 보험가입금액도 "1천만원 이내에서 계약자가 선택한 금액"(제5조①)이라

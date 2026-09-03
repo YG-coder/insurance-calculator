@@ -526,8 +526,10 @@ export const REGULATORY_RULES = {
     "GEN2026-CRITICAL-ANNUAL-LIMIT-MAX", 50_000_000, [GEN5_CRITICAL_ANNUAL_TERMS],
     "상해비급여·질병비급여 각 축의 연간 보험가입금액 상한선. 계약값이 아니다",
   ),
-  GEN2026_CRITICAL_ANNUAL_OWN_PAY_CAP: confirmed5th(
-    "GEN2026-CRITICAL-ANNUAL-OWN-PAY-CAP", 5_000_000, [GEN5_CRITICAL_LIMIT_TERMS],
+  // ⚠ 누적 대상은 약관상 **공제금액**이지 최종 자기부담금이 아니다.
+  //    보험가입금액 한도로 잘려 추가로 부담한 금액은 이 500만원 누적에 들어가지 않는다.
+  GEN2026_CRITICAL_ANNUAL_DEDUCTIBLE_CAP: confirmed5th(
+    "GEN2026-CRITICAL-ANNUAL-DEDUCTIBLE-CAP", 5_000_000, [GEN5_CRITICAL_LIMIT_TERMS],
     "제5조⑤ — 상급종합·종합병원 입원의 공제금액이 계약일 또는 매년 계약해당일부터 기산하여 연간 500만원을 초과하면 500만원까지만 공제",
   ),
   // 5세대 약관이 '연간'을 스스로 정의한다. 역년이 아니다.

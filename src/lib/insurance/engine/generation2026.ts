@@ -19,6 +19,19 @@ import { GEN2026 } from "./constants";
 import { settle, normalizeAmount } from "../common/settle";
 import { topic } from "../common/korean";
 
+/**
+ * 약관상 실제 공제금액.
+ *
+ * ⚠ ownPay와 다른 값이다. 지급 한도(통원 1회당·1일당 가입금액, 비중증 입원 회당 300만원,
+ *   다회의 연간 보험가입금액)로 잘려 추가로 부담한 금액은 공제금액이 아니다.
+ *   특별약관1 제5조⑤의 500만원 누적 대상은 이 값이지 최종 자기부담금이 아니다(인쇄 p.280).
+ *
+ * settle()과 같은 순서로 확정한다 — 반올림 후 진료비로 클램프.
+ */
+function deductibleOf(amount: number, rateBasedOwnPay: number): number {
+  return Math.min(amount, Math.max(0, Math.round(rateBasedOwnPay)));
+}
+
 function ok(
   amount: number,
   ownPay: number,
@@ -27,8 +40,13 @@ function ok(
   minDeductible: number,
   notes: string[] = [],
   appliedCaps: CapCode[] = [],
+  // 비급여 전용. 500만원 공제 pool(제5조⑤)은 급여와 무관하므로 급여 결과에는
+  // 값을 넣지 않는 것으로 끝내지 않고 **키 자체를 만들지 않는다**.
+  deductibleApplied?: number,
 ): CalcResult {
-  return { status: "OK", generation: "2026", amount, ownPay, insurancePay, rateBased: Math.round(amount * rateApplied), rateApplied, minDeductible, notes, appliedCaps };
+  const r: CalcResult = { status: "OK", generation: "2026", amount, ownPay, insurancePay, rateBased: Math.round(amount * rateApplied), rateApplied, minDeductible, notes, appliedCaps };
+  if (deductibleApplied !== undefined) r.deductibleApplied = deductibleApplied;
+  return r;
 }
 
 /**
@@ -79,6 +97,18 @@ export function calc2026(input: Gen2026ClaimInput): CalcResult {
   const amount = normalizeAmount(input.amount);
   const notes: string[] = [];
 
+  // 5세대는 priorAnnualPaid를 읽지 않는다. 이 필드는 2·3세대 입원 자기부담 상한(200만원)용이고,
+  // 5세대 500만원 상한(제5조⑤)은 자기부담금이 아니라 약관상 **공제금액**을 누적한다.
+  //   제네릭 진입점(calculate)은 ClaimInput을 그대로 넘기므로 잘못된 필드가 들어올 수 있다.
+  //   ⚠ 값이 무엇이든, priorAnnualDeductible을 함께 넘겼든 **존재 자체를 거부**한다.
+  //     "둘 다 넘겼으면 통과"로 두면 레거시 값이 조용히 무시되어 사용자가 반영됐다고 오인한다.
+  //     0도 명시적으로 전달된 레거시 필드이므로 차단한다.
+  if ((input as { priorAnnualPaid?: number }).priorAnnualPaid !== undefined) {
+    return pending(amount, [
+      "5세대: priorAnnualPaid는 2·3세대 입원 자기부담 상한용 필드라 5세대에서는 읽지 않습니다. 5세대 500만원 상한은 약관상 공제금액을 누적하므로 priorAnnualDeductible로 넘겨 주세요.",
+    ]);
+  }
+
   // ── 급여 ──
   if (input.coverage === "benefit") {
     if (input.visit === "inpatient") {
@@ -121,24 +151,26 @@ export function calc2026(input: Gen2026ClaimInput): CalcResult {
   if (!input.severity) {
     return pending(amount, ["비급여: 중증/비중증(severity) 미지정 → 계산 불가"]);
   }
-  const prior = Math.max(0, input.priorAnnualPaid ?? 0);
+  const priorDeductible = Math.max(0, input.priorAnnualDeductible ?? 0);
 
   if (input.severity === "critical") {
     const c = GEN2026.nonBenefit.critical;
     notes.push(`연간 보험가입금액(약관상 ${c.annualLimitMax.toLocaleString("ko-KR")}원 이내에서 계약 시 정한 금액, 상해·질병 각각)은 1건 계산에 반영되지 않습니다.`);
     if (input.visit === "inpatient") {
       const rate = c.inpatientRate; // 30% A
-      let ownPayRaw = amount * rate;
+      let deductRaw = amount * rate;
       const appliedCaps: CapCode[] = [];
-      // #6 상급종합·종합 입원 자기부담 상한 500만(연 누적).
-      // 이 상한은 ownPay 측 구속이므로 settle의 insuranceCap이 아니라 ownPayRaw를 깎는다.
+      // #6 상급종합·종합 입원 **공제금액** 상한 500만(연 누적). 특별약관1 제5조⑤(인쇄 p.280)
+      //   "…상해·질병 및 3대비급여 의료비(…) 중 **공제금액**이 …연간 500만원을 초과하는
+      //    때에는 500만원까지 공제합니다."
+      //   자기부담금 상한이 아니라 공제 상한이므로 settle의 insuranceCap이 아니라 공제액을 깎는다.
       if (input.tier === "hospital") {
-        const remaining = Math.max(c.annualOwnPayCap - prior, 0);
-        if (ownPayRaw > remaining) { ownPayRaw = remaining; appliedCaps.push("GEN2026_CRITICAL_INPATIENT_OWN_PAY_ANNUAL"); }
-        notes.push("자기부담 상한 500만원은 계약일 또는 매년 계약해당일부터 1년간 누적 기준입니다(priorAnnualPaid 반영).");
+        const remaining = Math.max(c.annualDeductibleCap - priorDeductible, 0);
+        if (deductRaw > remaining) { deductRaw = remaining; appliedCaps.push("GEN2026_CRITICAL_INPATIENT_DEDUCTIBLE_ANNUAL"); }
+        notes.push("공제금액 상한 500만원은 계약일 또는 매년 계약해당일부터 1년간 누적 기준입니다(priorAnnualDeductible 반영). 누적 대상은 약관상 공제금액이며, 보험가입금액 한도로 추가 부담한 금액은 포함되지 않습니다.");
       }
-      const s = settle(amount, ownPayRaw);
-      return ok(amount, s.ownPay, s.insurancePay, rate, 0, notes, appliedCaps);
+      const s = settle(amount, deductRaw);
+      return ok(amount, s.ownPay, s.insurancePay, rate, 0, notes, appliedCaps, deductibleOf(amount, deductRaw));
     }
     // 중증 통원: Max(30%, 3만). 1회당 가입금액은 계약자 선택값이라 있을 때만 적용한다.
     const rate = c.outpatientRate;
@@ -147,9 +179,11 @@ export function calc2026(input: Gen2026ClaimInput): CalcResult {
       notes.push(`통원 1회당 가입금액(약관상 ${c.outpatientPerVisitLimitMax.toLocaleString("ko-KR")}원 이내에서 계약 시 정한 금액)은 입력하지 않아 적용하지 않았습니다.`);
     }
     notes.push(`중증 통원은 약관상 계약해당일 기준 1년간 ${c.outpatientAnnualVisits}회가 한도이지만, 1건 계산에는 반영되지 않습니다. 횟수를 반영하려면 여러 건 합산 계산을 이용해 주세요.`);
-    const s = settle(amount, Math.max(amount * rate, c.outpatientMinDeductible), limit);
+    const ownPayRaw = Math.max(amount * rate, c.outpatientMinDeductible);
+    const s = settle(amount, ownPayRaw, limit);
     const appliedCaps: CapCode[] = s.capped ? ["GEN2026_CRITICAL_OUTPATIENT_PER_VISIT"] : [];
-    return ok(amount, s.ownPay, s.insurancePay, rate, c.outpatientMinDeductible, notes, appliedCaps);
+    // 1회당 가입금액이 구속되면 ownPay가 공제금액보다 커진다. 공제금액은 한도 반영 전 값이다.
+    return ok(amount, s.ownPay, s.insurancePay, rate, c.outpatientMinDeductible, notes, appliedCaps, deductibleOf(amount, ownPayRaw));
   }
 
   // 비중증(특약2)
@@ -159,7 +193,7 @@ export function calc2026(input: Gen2026ClaimInput): CalcResult {
     const rate = n.inpatientRate; // 50% A
     const s = settle(amount, amount * rate, n.inpatientPerVisitLimit);
     const appliedCaps: CapCode[] = s.capped ? ["GEN2026_NONCRITICAL_INPATIENT_PER_VISIT"] : [];
-    return ok(amount, s.ownPay, s.insurancePay, rate, 0, notes, appliedCaps);
+    return ok(amount, s.ownPay, s.insurancePay, rate, 0, notes, appliedCaps, deductibleOf(amount, amount * rate));
   }
   // 비중증 통원: Max(50%, 5만). 약관이 "통원 1일당(외래 및 처방·조제비 합산)"으로 규정하므로
   // 한 건은 하루치를 합산한 금액이며, 최소공제도 하루에 한 번만 적용된다.
@@ -168,7 +202,8 @@ export function calc2026(input: Gen2026ClaimInput): CalcResult {
   if (dayLimit === undefined) {
     notes.push(`통원 1일당 가입금액(약관상 ${n.outpatientPerDayLimitMax.toLocaleString("ko-KR")}원 이내에서 계약 시 정한 금액)은 입력하지 않아 적용하지 않았습니다.`);
   }
-  const s = settle(amount, Math.max(amount * rate, n.outpatientMinDeductible), dayLimit);
+  const ownPayRaw = Math.max(amount * rate, n.outpatientMinDeductible);
+  const s = settle(amount, ownPayRaw, dayLimit);
   const appliedCaps: CapCode[] = s.capped ? ["GEN2026_NONCRITICAL_OUTPATIENT_PER_DAY"] : [];
-  return ok(amount, s.ownPay, s.insurancePay, rate, n.outpatientMinDeductible, notes, appliedCaps);
+  return ok(amount, s.ownPay, s.insurancePay, rate, n.outpatientMinDeductible, notes, appliedCaps, deductibleOf(amount, ownPayRaw));
 }

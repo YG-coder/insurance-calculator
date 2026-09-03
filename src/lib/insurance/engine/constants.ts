@@ -82,7 +82,7 @@ export const GEN2026 = {
       outpatientPerVisitLimitMax: R.GEN2026_CRITICAL_OUTPATIENT_PER_VISIT_LIMIT_MAX.value,
       outpatientAnnualVisits: R.GEN2026_CRITICAL_OUTPATIENT_ANNUAL_VISITS.value,
       annualLimitMax: R.GEN2026_CRITICAL_ANNUAL_LIMIT_MAX.value,
-      annualOwnPayCap: R.GEN2026_CRITICAL_ANNUAL_OWN_PAY_CAP.value,
+      annualDeductibleCap: R.GEN2026_CRITICAL_ANNUAL_DEDUCTIBLE_CAP.value,
     },
     nonCritical: {
       inpatientRate: R.GEN2026_NONCRITICAL_INPATIENT_RATE.value,

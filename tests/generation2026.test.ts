@@ -60,9 +60,9 @@ function checkInvariant(name: string, result: ReturnType<typeof calc2026>) {
 // #6 중증 입원 상한 500만 (상급종합·종합만)
 {
   const hosp = calc2026({ amount: 30000000, coverage: "non_benefit", nonBenefitItem: "general", visit: "inpatient", severity: "critical", tier: "hospital" });
-  check("중증 입원 상한 500만 (상급종합·종합)", hosp.ownPay === 5000000 && hosp.appliedCaps.includes("GEN2026_CRITICAL_INPATIENT_OWN_PAY_ANNUAL"), JSON.stringify(hosp));
+  check("중증 입원 상한 500만 (상급종합·종합)", hosp.ownPay === 5000000 && hosp.appliedCaps.includes("GEN2026_CRITICAL_INPATIENT_DEDUCTIBLE_ANNUAL"), JSON.stringify(hosp));
   checkInvariant("중증 입원 상한 적용", hosp);
-  const accumulated = calc2026({ amount: 10000000, coverage: "non_benefit", nonBenefitItem: "general", visit: "inpatient", severity: "critical", tier: "hospital", priorAnnualPaid: 4000000 });
+  const accumulated = calc2026({ amount: 10000000, coverage: "non_benefit", nonBenefitItem: "general", visit: "inpatient", severity: "critical", tier: "hospital", priorAnnualDeductible: 4000000 });
   check("중증 입원 상한에 연 누적 자기부담 반영", accumulated.ownPay === 1000000 && accumulated.insurancePay === 9000000, JSON.stringify(accumulated));
   checkInvariant("중증 입원 연 누적 상한 적용", accumulated);
   const clinic = calc2026({ amount: 30000000, coverage: "non_benefit", nonBenefitItem: "general", visit: "inpatient", severity: "critical", tier: "clinic" });
@@ -107,11 +107,11 @@ function checkInvariant(name: string, result: ReturnType<typeof calc2026>) {
       for (const visit of visits)
         for (const tier of tiers)
           for (const severity of severities)
-            for (const priorAnnualPaid of priors) {
+            for (const priorAnnualDeductible of priors) {
               cases++;
               const r = coverage === "benefit"
                 ? calc2026({ amount, coverage: "benefit", visit, tier })
-                : calc2026({ amount, coverage: "non_benefit", nonBenefitItem: "general", visit, tier, severity, priorAnnualPaid });
+                : calc2026({ amount, coverage: "non_benefit", nonBenefitItem: "general", visit, tier, severity, priorAnnualDeductible });
               if (r.status !== "OK") continue; // PENDING은 금액을 반환하지 않는다
               const own = r.ownPay ?? NaN;
               const ins = r.insurancePay ?? NaN;
@@ -122,7 +122,7 @@ function checkInvariant(name: string, result: ReturnType<typeof calc2026>) {
               if (!ok) {
                 bad++;
                 if (firstFails.length < 5)
-                  firstFails.push(`[${amount}/${coverage}/${visit}/${tier}/${severity}/prior:${priorAnnualPaid}] own=${own} ins=${ins} amount=${r.amount}`);
+                  firstFails.push(`[${amount}/${coverage}/${visit}/${tier}/${severity}/prior:${priorAnnualDeductible}] own=${own} ins=${ins} amount=${r.amount}`);
               }
             }
   check(`전 매트릭스 불변식 (${cases}케이스): 합계·비음수·정수`, bad === 0, firstFails.join(" | "));

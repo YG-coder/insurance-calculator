@@ -41,6 +41,35 @@ HOLD가 아니라 **정상적인 입력 검증**이다.
 > (타입 union의 잔존 이름, 공유 컴포넌트에 위치한 JSON-LD, 다른 문맥의 "소멸"). 실제 코드를
 > 열어 확인한 뒤 전부 오탐으로 확정했다. **얕은 신호로 판정하지 않는다.**
 
+### 5세대 500만원 상한의 의미 정정 (2026-09-03)
+
+별표15 2026.5.6 공포·시행본 특별약관1 제5조⑤(인쇄 p.280)를 직독한 결과, 이 상한의 누적 대상은
+**약관상 공제금액**이지 최종 자기부담금이 아니다.
+
+> 입원의 경우 상급종합병원·종합병원의 상해·질병 및 3대 비급여 의료비(3대 비급여 중 근골격계
+> 이학요법치료·체외충격파치료 및 주사료 관련 비급여 의료비는 제외) 중 **공제금액**이 계약일 또는
+> 매년 계약해당일부터 기산하여 연간 500만원을 초과하는 때에는 500만원까지 공제합니다.
+
+종전 구현은 다회 계산에서 각 건의 최종 자기부담금(`ownPay`)을 누적했다. 연간 보험가입금액 한도로
+잘려 추가 부담한 금액이 섞이면 pool이 과대 소진되고, 이후 건의 공제가 사라져 보험금이 과다
+산출될 수 있다. `CalcResult.deductibleApplied`를 신설해 약관상 공제금액만 누적하도록 고쳤다.
+
+**종전 명칭 대조표** — 아래 이름은 이 표에서만 설명 목적으로 남긴다. 실행 코드·UI·다른 문서에는
+남아 있지 않아야 하며, `tests/gen2026DeductiblePool.test.ts`가 이를 검사한다.
+
+| 구분 | 종전 명칭 | 현재 명칭 |
+|---|---|---|
+| 규칙 ID | `GEN2026-CRITICAL-ANNUAL-OWN-PAY-CAP` | `GEN2026-CRITICAL-ANNUAL-DEDUCTIBLE-CAP` |
+| 레지스트리 키 | `GEN2026_CRITICAL_ANNUAL_OWN_PAY_CAP` | `GEN2026_CRITICAL_ANNUAL_DEDUCTIBLE_CAP` |
+| 상수 | `annualOwnPayCap` | `annualDeductibleCap` |
+| CapCode | `GEN2026_CRITICAL_INPATIENT_OWN_PAY_ANNUAL` | `GEN2026_CRITICAL_INPATIENT_DEDUCTIBLE_ANNUAL` |
+| 단건 입력 | `priorAnnualPaid`(5세대 경로) | `priorAnnualDeductible` |
+| 다회 입력 | `priorAnnualOwnPay` | `priorAnnualDeductible` |
+
+⚠ `priorAnnualPaid` 자체는 2·3세대 입원 자기부담 상한 200만원용으로 계속 쓰인다. 5세대 경로에서만
+의미가 달랐고, 5세대 입력에서는 제거했다. 5세대 호출이 `priorAnnualPaid`를 넘기면 조용히 0으로
+처리하지 않고 `PENDING_UNVERIFIED`로 막는다.
+
 ---
 
 ## 2. 설계 원칙 — 이 저장소가 지키는 것

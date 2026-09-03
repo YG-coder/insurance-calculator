@@ -49,7 +49,12 @@ export interface ClaimInput {
   plan?: Plan;                 // 2·3세대 필수. 미지정 시 계산 불가(PENDING_UNVERIFIED)
   severity?: Severity;         // 5세대 비급여에서 필수
   nhisCoinsuranceRate?: number; // 5세대 급여 통원용 건강보험 본인부담률(0~1). 미확정 시 undefined
-  priorAnnualPaid?: number;    // 연 누적 본인부담(자기부담 상한 계산용). 기본 0
+  // 2·3세대 전용 — 입원 자기부담 상한 200만원의 연 누적 자기부담금. 기본 0.
+  //   ⚠ 5세대는 이 필드를 읽지 않는다. 5세대 500만원 상한은 자기부담금이 아니라
+  //     약관상 **공제금액**을 누적하므로 별도 필드(priorAnnualDeductible)를 쓴다.
+  priorAnnualPaid?: number;
+  // 5세대 전용 — 특별약관1 제5조⑤ 상급종합·종합병원 입원 공제금액의 연 누적. 기본 0.
+  priorAnnualDeductible?: number;
   // 계약자가 정한 회(건)당 보험가입금액(원). 2·3세대 통원의 30만원 이내 설정값이 대표적이다.
   // 상수화할 수 없는 계약별 값이므로 사용자가 준 경우에만 적용하고, 미제공 시 미적용 고지만 한다.
   perVisitCoverageLimit?: number;
@@ -78,7 +83,8 @@ export interface Gen2026NonBenefitInput extends Gen2026CommonInput {
   coverage: "non_benefit";
   severity?: Severity;                    // 미지정 시 런타임에서 PENDING_UNVERIFIED
   nonBenefitItem: Gen2026NonBenefitItem;  // 필수
-  priorAnnualPaid?: number;
+  // 특별약관1 제5조⑤ 500만원 상한의 연 누적 **공제금액**. 최종 자기부담금이 아니다.
+  priorAnnualDeductible?: number;
   perVisitCoverageLimit?: number;
 }
 
@@ -103,7 +109,7 @@ export type CapCode =
   | "GEN2021_INJECTION_ANNUAL"
   | "GEN2021_INJECTION_ANNUAL_VISITS"
   | "GEN2021_MRI_ANNUAL"
-  | "GEN2026_CRITICAL_INPATIENT_OWN_PAY_ANNUAL"
+  | "GEN2026_CRITICAL_INPATIENT_DEDUCTIBLE_ANNUAL"
   | "GEN2026_CRITICAL_OUTPATIENT_PER_VISIT"
   | "GEN2026_NONCRITICAL_INPATIENT_PER_VISIT"
   | "GEN2026_NONCRITICAL_OUTPATIENT_PER_DAY"
@@ -119,7 +125,13 @@ export interface CalcResult {
   insurancePay: number | null;  // 보험 적용 금액
   rateBased: number | null;     // 정률 적용액 (최소공제 비교 전, = 금액 × 자기부담률)
   rateApplied: number | null;   // 적용 자기부담률
-  minDeductible: number | null; // 적용 최소공제
+  minDeductible: number | null; // 적용 최소공제(약관상 정액 기준. 실제 공제액이 아니다)
+  // 약관상 실제로 공제된 금액. 지급 한도(회당 가입금액·연간 보험가입금액)로 잘려
+  // 추가로 부담한 금액은 여기에 포함되지 않으므로 ownPay보다 작을 수 있다.
+  //   ⚠ 절대로 ownPay를 그대로 담지 말 것. 5세대 500만원 공제 누적이 이 값을 쓴다.
+  // 현재 **5세대 비급여**의 정상 결과에만 존재한다. 급여 결과, PENDING_UNVERIFIED 결과,
+  // 2·3·4세대 결과에는 키 자체가 없다(500만원 공제 pool이 비급여 전용이기 때문).
+  deductibleApplied?: number;
   notes: string[];              // HOLD/상한/미적용 사유
   appliedCaps: CapCode[];       // 실제로 구속된 한도 코드
 }
@@ -204,7 +216,8 @@ export interface Gen2026MultiNonBenefitInput extends Gen2026MultiCommonInput {
   coverage: "non_benefit";
   severity?: Severity;
   nonBenefitItem: Gen2026NonBenefitItem; // 필수
-  priorAnnualOwnPay?: number;
+  // 특별약관1 제5조⑤ 500만원 상한의 연 누적 **공제금액**(중증·입원·상급종합/종합 전용).
+  priorAnnualDeductible?: number;
   // 통원 가입금액(중증은 1회당, 비중증은 1일당). 약관상 20만원 "이내에서 계약자가 선택한 금액"
   // 이므로 상수화할 수 없다. 미제공 시 적용하지 않고 미적용 사실만 알린다.
   outpatientCoverageLimit?: number;

@@ -17,7 +17,7 @@ export const CAP_LABELS: Record<CapCode, string> = {
   GEN2021_INJECTION_ANNUAL: "비급여 주사료 연간 250만 원 한도",
   GEN2021_INJECTION_ANNUAL_VISITS: "비급여 주사료 연간 50회 한도",
   GEN2021_MRI_ANNUAL: "비급여 MRI/MRA 연간 300만 원 한도",
-  GEN2026_CRITICAL_INPATIENT_OWN_PAY_ANNUAL: "중증 입원 자기부담 상한 500만 원(상급종합·종합병원·연 누적)",
+  GEN2026_CRITICAL_INPATIENT_DEDUCTIBLE_ANNUAL: "중증 입원 공제금액 상한 500만 원(상급종합·종합병원·연 누적)",
   GEN2026_CRITICAL_OUTPATIENT_PER_VISIT: "중증 통원 1회당 가입금액 한도",
   GEN2026_NONCRITICAL_INPATIENT_PER_VISIT: "비중증 입원 회당 보험금 300만 원 한도",
   GEN2026_CRITICAL_OUTPATIENT_ANNUAL_VISITS: "중증 통원 연간 100회 한도 초과",

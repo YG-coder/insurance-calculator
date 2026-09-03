@@ -60,7 +60,7 @@ for (const item of BLOCKED) {
   const label = GEN2026_NON_BENEFIT_ITEM_LABEL[item];
   for (const severity of ["critical", "non_critical"] as const) {
     for (const visit of ["inpatient", "outpatient"] as const) {
-      const r = calc2026({ amount: 1_000_000, coverage: "non_benefit", visit, severity, nonBenefitItem: item, tier: "hospital", priorAnnualPaid: 4_800_000 });
+      const r = calc2026({ amount: 1_000_000, coverage: "non_benefit", visit, severity, nonBenefitItem: item, tier: "hospital", priorAnnualDeductible: 4_800_000 });
       check(`단건 ${label}/${severity}/${visit}: 숫자 반환 없이 차단`, noNumbers(r), JSON.stringify(r));
       check(`단건 ${label}/${severity}/${visit}: 항목명을 밝힘`, r.notes.some((n) => n.includes(label)), JSON.stringify(r.notes));
 
@@ -113,7 +113,7 @@ for (const item of BLOCKED) {
 
   const m = calculateMany2026({ cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "critical", visit: "outpatient", amounts: [1_000_000, 1_000_000], outpatientCoverageLimit: 200_000 });
   check("기준 결과 고정 — 다회 중증 통원 2건", m.status === "OK" && m.totalInsurancePay === 400_000 && m.totalOwnPay === 1_600_000, JSON.stringify(m));
-  const mi = calculateMany2026({ cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "critical", visit: "inpatient", tier: "hospital", amounts: [10_000_000, 10_000_000], priorAnnualOwnPay: 4_000_000 });
+  const mi = calculateMany2026({ cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "critical", visit: "inpatient", tier: "hospital", amounts: [10_000_000, 10_000_000], priorAnnualDeductible: 4_000_000 });
   check("기준 결과 고정 — 다회 중증 입원 자기부담 상한 이월", mi.status === "OK" && mi.totalOwnPay === 1_000_000, JSON.stringify(mi));
 }
 

@@ -197,11 +197,12 @@ function validateItemInput(input: Exclude<Gen2026ItemClaimInput, Gen2026RoomChar
   if (raw.visit === "inpatient" && (days !== undefined || visits !== undefined)) {
     return rejected("통원 카운터는 입원 계산에 쓰이지 않습니다 —", days ?? visits);
   }
-  // 비중증 통원 일수는 0 이상의 안전 정수만 받는다. 정규화하지 않는다.
-  if (days !== undefined
-    && !(typeof days === "number" && Number.isSafeInteger(days) && days >= 0)) {
-    return rejected("이미 사용한 통원일수(priorAnnualOutpatientDays)는 0 이상의 정수여야 합니다 —", days);
-  }
+  // ── 이미 사용한 통원 횟수·일수의 값 검증은 여기서 하지 않는다 ──────
+  //   일반 전환 경로는 calculateMany2026에 그대로 위임하고, 그쪽이 미입력·음수·소수·
+  //   NaN·Infinity·안전 정수 초과·문자열을 모두 막는다. 여기서 rejected()로 먼저 막으면
+  //   **totalAmount가 0으로 보고되어** 차단 결과의 계약(진료비 합계는 유지)이 깨진다.
+  //   ⚠ 검증을 없앤 것이 아니라 한 곳으로 모은 것이다. 두 진입점이 서로 다른 계약을
+  //     갖지 않도록, 이 경로에는 검증을 우회하는 두 번째 공개 진입점을 만들지 않는다.
   return null;
 }
 

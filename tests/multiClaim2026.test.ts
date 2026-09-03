@@ -9,7 +9,7 @@ function check(name: string, ok: boolean, detail = "") {
 {
   // 2026-09-03: 통원 가입금액은 약관상 "20만원 이내에서 계약자가 선택한 금액"이라
   //   상수로 자동 적용하지 않는다. 사용자가 준 경우에만 구속된다.
-  const r = calculateMany2026({ cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "critical", visit: "outpatient", amounts: [1_000_000, 1_000_000], outpatientCoverageLimit: 200_000 });
+  const r = calculateMany2026({ cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "critical", visit: "outpatient", amounts: [1_000_000, 1_000_000], outpatientCoverageLimit: 200_000, priorAnnualOutpatientVisits: 0 });
   check("중증 통원 1회당 가입금액 20만 두 번", r.totalInsurancePay === 400_000);
   check("회당 한도 코드", r.appliedCaps.includes("GEN2026_CRITICAL_OUTPATIENT_PER_VISIT"));
 }
@@ -29,7 +29,7 @@ function check(name: string, ok: boolean, detail = "") {
 {
   // 2026-09-03: 연간 보험가입금액도 "1천만원 이내에서 계약자가 선택한 금액"(제5조①)이라
   //   입력한 경우에만 적용된다.
-  const r = calculateMany2026({ cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "non_critical", visit: "outpatient", amounts: [1_000_000], priorAnnualInsurancePaid: 9_900_000, annualCoverageLimit: 10_000_000 });
+  const r = calculateMany2026({ cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "non_critical", visit: "outpatient", amounts: [1_000_000], priorAnnualInsurancePaid: 9_900_000, annualCoverageLimit: 10_000_000, priorAnnualOutpatientDays: 0 });
   check("비중증 연간 보험금 잔여 10만 적용", r.totalInsurancePay === 100_000 && r.totalOwnPay === 900_000, JSON.stringify(r));
   check("비중증 연간 한도 코드", r.appliedCaps.includes("GEN2026_NONCRITICAL_ANNUAL_COVERAGE"));
   // 같은 날 통원은 약관이 1건으로 규정한다(특별약관2는 조문 자체가 "통원 1일당").
@@ -62,15 +62,13 @@ function check(name: string, ok: boolean, detail = "") {
 
   // 통원 가입금액은 계약자 선택값 — 미입력 시 미적용
   const noLimit = calculateMany2026({
-    cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "critical", visit: "outpatient", amounts: [1_000_000],
-  });
+    cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "critical", visit: "outpatient", amounts: [1_000_000], priorAnnualOutpatientVisits: 0 });
   check("통원 가입금액 미입력 시 한도 미적용", noLimit.totalInsurancePay === 700_000 && noLimit.totalOwnPay === 300_000);
   check("미입력 안내 문구", noLimit.notes.some((n) => n.includes("입력하지 않으면 적용하지 않습니다")));
 
   const withLimit = calculateMany2026({
     cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "critical", visit: "outpatient",
-    amounts: [1_000_000], outpatientCoverageLimit: 100_000,
-  });
+    amounts: [1_000_000], outpatientCoverageLimit: 100_000, priorAnnualOutpatientVisits: 0 });
   check("계약자가 정한 통원 가입금액 10만이 구속", withLimit.totalInsurancePay === 100_000 && withLimit.totalOwnPay === 900_000);
 
   // 입원에는 통원 가입금액을 적용하지 않는다
@@ -82,8 +80,7 @@ function check(name: string, ok: boolean, detail = "") {
 
   // 같은 날 통원은 합산해 한 행으로 — 약관 근거가 있으므로 미지원 고지가 아니라 합산 안내
   const nonCritical = calculateMany2026({
-    cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "non_critical", visit: "outpatient", amounts: [100_000],
-  });
+    cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "non_critical", visit: "outpatient", amounts: [100_000], priorAnnualOutpatientDays: 0 });
   check("비중증 통원은 1일당 기준 안내", nonCritical.notes.some((n) => n.includes("통원 1일당")));
   check("합산 입력 안내", nonCritical.notes.some((n) => n.includes("한 행으로 합쳐 입력")));
   check("미지원 고지 제거", !nonCritical.notes.some((n) => n.includes("정확히 계산할 수 없습니다")));
@@ -113,7 +110,7 @@ function check(name: string, ok: boolean, detail = "") {
   check("급여 경로에는 비급여 전용 안내가 붙지 않음", leaked === 0, `누출 ${leaked}건`);
 
   // 비급여 통원에는 붙고, 비급여 입원에는 통원 안내가 붙지 않는다.
-  const nbOut = calculateMany2026({ cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "critical", visit: "outpatient", amounts: [300_000] });
+  const nbOut = calculateMany2026({ cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "critical", visit: "outpatient", amounts: [300_000], priorAnnualOutpatientVisits: 0 });
   check("비급여 통원에는 통원 안내가 붙음", nbOut.notes.join(" ").includes("통원 가입금액"));
   const nbIn = calculateMany2026({ cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "critical", visit: "inpatient", tier: "clinic", amounts: [300_000] });
   check("비급여 입원에는 통원 안내가 붙지 않음", !nbIn.notes.join(" ").includes("한 행으로 합쳐 입력"));
@@ -141,7 +138,7 @@ function check(name: string, ok: boolean, detail = "") {
   check("경계를 걸치는 2건은 앞만 보상", across.lines[0].covered === true && across.lines[1].covered === false);
 
   // (5) 통원 가입금액 경계: 미입력 / 0 / 음수 / 10만 / 20만 초과
-  const base = () => ({ cause: "disease" as const, coverage: "non_benefit" as const, nonBenefitItem: "general" as const, severity: "critical" as const, visit: "outpatient" as const, amounts: [1_000_000] });
+  const base = () => ({ cause: "disease" as const, coverage: "non_benefit" as const, nonBenefitItem: "general" as const, severity: "critical" as const, visit: "outpatient" as const, amounts: [1_000_000], priorAnnualOutpatientVisits: 0 });
   const none = calculateMany2026(base());
   const zero = calculateMany2026({ ...base(), outpatientCoverageLimit: 0 });
   const neg = calculateMany2026({ ...base(), outpatientCoverageLimit: -50_000 });
@@ -157,19 +154,16 @@ function check(name: string, ok: boolean, detail = "") {
   // (6) 연간 보험가입금액도 계약자 선택값이다.
   const noAnnual = calculateMany2026({
     cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "non_critical", visit: "outpatient",
-    amounts: [1_000_000], priorAnnualInsurancePaid: 9_900_000,
-  });
+    amounts: [1_000_000], priorAnnualInsurancePaid: 9_900_000, priorAnnualOutpatientDays: 0 });
   check("연간 가입금액 미입력이면 연간 한도를 적용하지 않음", noAnnual.totalInsurancePay === 500_000, JSON.stringify(noAnnual));
   check("연간 가입금액 미적용 안내", noAnnual.notes.some((n) => n.includes("연간 보험가입금액도 계약자가 선택한 값")));
   const withAnnual = calculateMany2026({
     cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "non_critical", visit: "outpatient",
-    amounts: [1_000_000], priorAnnualInsurancePaid: 9_900_000, annualCoverageLimit: 10_000_000,
-  });
+    amounts: [1_000_000], priorAnnualInsurancePaid: 9_900_000, annualCoverageLimit: 10_000_000, priorAnnualOutpatientDays: 0 });
   check("연간 가입금액 입력 시 잔여 10만 적용", withAnnual.totalInsurancePay === 100_000, JSON.stringify(withAnnual));
   const annualZero = calculateMany2026({
     cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "non_critical", visit: "outpatient",
-    amounts: [1_000_000], priorAnnualInsurancePaid: 9_900_000, annualCoverageLimit: 0,
-  });
+    amounts: [1_000_000], priorAnnualInsurancePaid: 9_900_000, annualCoverageLimit: 0, priorAnnualOutpatientDays: 0 });
   check("연간 가입금액 0은 미입력으로 처리", annualZero.totalInsurancePay === 500_000);
   const annualOver = calculateMany2026({
     cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "critical", visit: "inpatient", tier: "clinic",
@@ -206,14 +200,12 @@ function check(name: string, ok: boolean, detail = "") {
   // 기존 지급보험금도 축별로 따로 누적된다 — 같은 입력이라도 축이 다르면 별도 계산이다.
   const injuryPrior = calculateMany2026({
     cause: "injury", coverage: "non_benefit", nonBenefitItem: "general", severity: "non_critical", visit: "outpatient",
-    amounts: [1_000_000], priorAnnualInsurancePaid: 9_900_000, annualCoverageLimit: 10_000_000,
-  });
+    amounts: [1_000_000], priorAnnualInsurancePaid: 9_900_000, annualCoverageLimit: 10_000_000, priorAnnualOutpatientDays: 0 });
   check("축별 기존 지급보험금 누적", injuryPrior.totalInsurancePay === 100_000);
   // 미적용 안내는 가입금액을 입력하지 않은 경우에만 나온다. 그때 축이 명시되어야 한다.
   const injuryNoLimit = calculateMany2026({
     cause: "injury", coverage: "non_benefit", nonBenefitItem: "general", severity: "non_critical", visit: "outpatient",
-    amounts: [1_000_000],
-  });
+    amounts: [1_000_000], priorAnnualOutpatientDays: 0 });
   check("연간 가입금액 미적용 안내에 축 명시", injuryNoLimit.notes.join(" ").includes("상해비급여 축의 가입금액"), injuryNoLimit.notes.join(" | "));
 }
 

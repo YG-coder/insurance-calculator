@@ -44,10 +44,10 @@ const BLOCKED: Gen2026NonBenefitItem[] = ["musculoskeletal_esw", "injection", "m
   const bad = calc2026({ amount: 300_000, coverage: "non_benefit", visit: "inpatient", severity: "critical", nonBenefitItem: "made_up" } as never);
   check("단건: 알 수 없는 치료유형도 차단", noNumbers(bad), JSON.stringify(bad));
 
-  const m = calculateMany2026({ cause: "disease", coverage: "non_benefit", visit: "outpatient", severity: "critical", amounts: [300_000] } as never);
+  const m = calculateMany2026({ cause: "disease", coverage: "non_benefit", visit: "outpatient", severity: "critical", amounts: [300_000], priorAnnualOutpatientVisits: 0 } as never);
   check("다회: 치료유형 미지정 → 계산 불가", noNumbers(m), JSON.stringify(m));
 
-  const empty = calculateMany2026({ cause: "disease", coverage: "non_benefit", visit: "outpatient", severity: "critical", amounts: [] } as never);
+  const empty = calculateMany2026({ cause: "disease", coverage: "non_benefit", visit: "outpatient", severity: "critical", amounts: [], priorAnnualOutpatientVisits: 0 } as never);
   check("다회: 행이 없어도 치료유형 미지정이면 차단", noNumbers(empty), JSON.stringify(empty));
 
   // 제네릭 진입점도 같은 정책이어야 한다(타입 강제가 없는 경로).
@@ -113,7 +113,7 @@ for (const item of BLOCKED) {
     check(`기준 결과 고정 — ${c.name}`, c.got.status === "OK" && c.got.ownPay === c.own && c.got.insurancePay === c.ins, JSON.stringify(c.got));
   }
 
-  const m = calculateMany2026({ cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "critical", visit: "outpatient", amounts: [1_000_000, 1_000_000], outpatientCoverageLimit: 200_000 });
+  const m = calculateMany2026({ cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "critical", visit: "outpatient", amounts: [1_000_000, 1_000_000], outpatientCoverageLimit: 200_000, priorAnnualOutpatientVisits: 0 });
   check("기준 결과 고정 — 다회 중증 통원 2건", m.status === "OK" && m.totalInsurancePay === 400_000 && m.totalOwnPay === 1_600_000, JSON.stringify(m));
   const mi = calculateMany2026({ cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "critical", visit: "inpatient", tier: "hospital", amounts: [10_000_000, 10_000_000], priorAnnualDeductible: 4_000_000 });
   check("기준 결과 고정 — 다회 중증 입원 자기부담 상한 이월", mi.status === "OK" && mi.totalOwnPay === 1_000_000, JSON.stringify(mi));
@@ -121,7 +121,7 @@ for (const item of BLOCKED) {
 
 // ── 6. 일반 비급여 결과에도 미지원 범위를 알린다 ──
 {
-  const m = calculateMany2026({ cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "critical", visit: "outpatient", amounts: [300_000] });
+  const m = calculateMany2026({ cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "critical", visit: "outpatient", amounts: [300_000], priorAnnualOutpatientVisits: 0 });
   const joined = m.notes.join(" ");
   check("다회 일반 비급여: 4종 미지원 범위를 명시", 
     joined.includes("근골격계") && joined.includes("주사료") && joined.includes("MRI") && joined.includes("상급병실료"), joined);

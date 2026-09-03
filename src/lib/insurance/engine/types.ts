@@ -223,6 +223,10 @@ interface Gen2026MultiCommonInput {
 export interface Gen2026MultiBenefitInput extends Gen2026MultiCommonInput {
   coverage: "benefit";
   nhisCoinsuranceRate?: number;
+  // ⚠ 통원 카운터는 비급여 통원 전용이다(특약1 제5조④ '보상한 횟수' / 특약2 제5조④
+  //   '보상한 일수'). 급여에는 연간 횟수·일수 한도가 없다. 타입에서 닫고 런타임에서도 막는다.
+  priorAnnualOutpatientVisits?: never;
+  priorAnnualOutpatientDays?: never;
 }
 
 export interface Gen2026MultiNonBenefitInput extends Gen2026MultiCommonInput {
@@ -237,11 +241,18 @@ export interface Gen2026MultiNonBenefitInput extends Gen2026MultiCommonInput {
   // ⚠ 아래 두 카운터를 혼용하지 않는다. 단위가 회 ≠ 일이고 근거 조문도 다르다
   //   (특약1 제5조④ '보상한 횟수' / 특약2 제5조④ '보상한 일수').
   //   대상 통원 경로에서 반대편 필드가 존재하면 값이 0이어도 런타임에서 차단한다.
-  priorAnnualOutpatientVisits?: number; // 중증 통원 연간 100회 한도용
+  /**
+   * 중증 통원 연간 100**회** 한도용(특약1 (1)(2) 표 인쇄 p.258·261, 제5조④ p.280).
+   *   ⚠ 미입력(undefined)과 확인 결과 0은 다른 상태다. 중증 통원 경로에서 미입력은
+   *     0으로 추정하지 않고 차단한다. 음수·소수·NaN·Infinity·안전 정수 초과·문자열도
+   *     정규화하지 않고 차단한다. 100을 넘는 값은 유효한 과거 상태이므로 절삭하지 않는다.
+   */
+  priorAnnualOutpatientVisits?: number;
   /**
    * 비중증 통원 연간 100**일** 한도용(특약2 (1)(2) 표 인쇄 p.288·291, 제5조④ p.309).
-   *   미입력은 0일로 본다. 음수·소수·NaN·Infinity·안전 정수 초과는 정규화하지 않고 차단한다.
-   *   100을 넘는 값도 유효한 과거 상태로 받는다(절삭하지 않는다).
+   *   ⚠ 미입력(undefined)과 확인 결과 0은 다른 상태다. 비중증 통원 경로에서 미입력은
+   *     0으로 추정하지 않고 차단한다. 음수·소수·NaN·Infinity·안전 정수 초과·문자열도
+   *     정규화하지 않고 차단한다. 100을 넘는 값은 유효한 과거 상태이므로 절삭하지 않는다.
    */
   priorAnnualOutpatientDays?: number;
   // 연간 보험가입금액. 약관 제5조①이 "N원 이내에서 계약자가 선택한 금액"으로 규정하므로
@@ -408,7 +419,10 @@ export interface Gen2026CriticalExceptionalInjectionInput extends Gen2026RoutedG
   severity: "critical";
   item: "injection";
   injectionPurpose: "anticancer" | "antibiotic" | "orphan_drug";
-  /** 중증 통원은 연 100**회**(특약1 제3조·제5조④ '보상한 횟수'). */
+  /**
+   * 중증 통원은 연 100**회**(특약1 제3조·제5조④ '보상한 횟수').
+   *   통원 계산에서 미입력은 0으로 추정하지 않고 차단한다(일반 경로와 같은 계약).
+   */
   priorAnnualOutpatientVisits?: number;
   priorAnnualOutpatientDays?: never;
 }

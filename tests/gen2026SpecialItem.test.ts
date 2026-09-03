@@ -245,17 +245,19 @@ console.log("\n[HOLD] 지급 0원 행위의 횟수 소진");
 
 console.log("\n[일반 경로 전환] 기존 결과와 동일 + 안내 한 줄");
 {
+  // ⚠ 두 통원 축은 미입력을 0으로 추정하지 않는다. 확인된 0을 명시해야 계산된다.
+  //   축은 severity가 정하므로 shared에 넣지 않고 분기마다 자기 축만 싣는다.
   const shared = { cause: "disease" as Cause, visit: "outpatient" as Visit, amounts: [1_000_000, 2_000_000], annualCoverageLimit: 10_000_000, outpatientCoverageLimit: 200_000, priorAnnualInsurancePaid: 0 };
-  const baseline = calculateMany2026({ ...shared, coverage: "non_benefit", severity: "non_critical", nonBenefitItem: "general" });
+  const baseline = calculateMany2026({ ...shared, coverage: "non_benefit", severity: "non_critical", nonBenefitItem: "general", priorAnnualOutpatientDays: 0 });
   for (const item of ["musculoskeletal_esw", "injection"] as const) {
-    const routed = calculateRoutedGeneral2026({ route: "general", coverage: "non_benefit", severity: "non_critical", item, ...shared });
+    const routed = calculateRoutedGeneral2026({ route: "general", coverage: "non_benefit", severity: "non_critical", item, ...shared, priorAnnualOutpatientDays: 0 });
     check(`비중증 ${item}: 행 결과가 일반 경로와 동일`, JSON.stringify(routed.lines) === JSON.stringify(baseline.lines));
     check(`비중증 ${item}: 합계 동일`, routed.totalOwnPay === baseline.totalOwnPay && routed.totalInsurancePay === baseline.totalInsurancePay && JSON.stringify(routed.appliedCaps) === JSON.stringify(baseline.appliedCaps));
     check(`비중증 ${item}: notes는 안내 한 줄만 추가`, routed.notes.length === baseline.notes.length + 1 && JSON.stringify(routed.notes.slice(1)) === JSON.stringify(baseline.notes));
   }
-  const critBase = calculateMany2026({ ...shared, coverage: "non_benefit", severity: "critical", nonBenefitItem: "general" });
+  const critBase = calculateMany2026({ ...shared, coverage: "non_benefit", severity: "critical", nonBenefitItem: "general", priorAnnualOutpatientVisits: 0 });
   const exceptional = (["anticancer", "antibiotic", "orphan_drug"] as const).map((p) =>
-    calculateRoutedGeneral2026({ route: "general", coverage: "non_benefit", severity: "critical", item: "injection", injectionPurpose: p, ...shared }));
+    calculateRoutedGeneral2026({ route: "general", coverage: "non_benefit", severity: "critical", item: "injection", injectionPurpose: p, ...shared, priorAnnualOutpatientVisits: 0 }));
   check("예외 주사 3종: 행 결과가 일반 경로와 동일", exceptional.every((r) => JSON.stringify(r.lines) === JSON.stringify(critBase.lines)));
   check("예외 주사 3종: 계산 결과는 서로 같음", new Set(exceptional.map((r) => JSON.stringify(r.lines))).size === 1);
   check("예외 주사 3종: 안내 문구는 약제별로 다름", new Set(exceptional.map((r) => r.notes[0])).size === 3);

@@ -94,7 +94,9 @@ console.log("\n[경계] 기존 사용 횟수");
   check("99회 + 2건: 첫째에는 CapCode 없음", !cr([A, A], 99).lines[0].appliedCaps.includes(CAP));
   check("100회 + 정상 1건 → 제외", paid(cr([A], 100)) === "0" && cr([A], 100).lines[0].covered === false);
   check("101회 + 정상 1건 → 제외", paid(cr([A], 101)) === "0");
-  check("미입력은 0회로 본다", paid(cr([A], undefined)) === String(PAY));
+  // ⚠ 종전에는 미입력을 0회로 봤다. 안전성 커밋에서 차단으로 바뀌었다.
+  check("미입력은 0회로 추정하지 않고 차단", cr([A], undefined).status === "PENDING_UNVERIFIED");
+  check("확인된 0은 유효값", paid(cr([A], 0)) === String(PAY));
   for (const cause of ["injury", "disease"] as const) {
     check(`${cause} 축에도 적용`, paid(cr([A, A], 99, {}, cause)) === [PAY, 0].join());
   }
@@ -222,15 +224,14 @@ console.log("\n[입력축] 두 통원 카운터를 섞지 않는다");
       tier: "clinic", severity: "non_critical", nonBenefitItem: "general", amounts: [A],
       priorAnnualOutpatientVisits: 0, priorAnnualOutpatientDays: 0,
     } as unknown as Gen2026MultiClaimInput).status === "PENDING_UNVERIFIED");
-  // ⚠ Visits의 관용 정규화는 이번 커밋에서 바꾸지 않는다(별도 결함으로 보고).
-  check("Visits의 관용 정규화는 종전 그대로(음수 → 0)",
-    cr([A], -1).status === "OK" && paid(cr([A], -1)) === "350000");
-  check("Visits의 관용 정규화는 종전 그대로(소수 내림)",
-    cr([A], 99.9).status === "OK" && paid(cr([A], 99.9)) === "350000");
+  // ⚠ 종전에는 Visits만 nonNegInt의 관용(음수→0, 소수 내림)을 남겨 두 축의 안전성이 달랐다.
+  //   안전성 커밋에서 같은 수준으로 맞췄다. 상수·카운터·안내 문구는 계속 분리한다.
+  check("Visits의 음수는 0으로 바뀌지 않고 차단", cr([A], -1).status === "PENDING_UNVERIFIED");
+  check("Visits의 소수는 내림되지 않고 차단", cr([A], 99.9).status === "PENDING_UNVERIFIED");
   const src = readFileSync("src/lib/insurance/engine/multiClaim2026.ts", "utf8");
-  check("Visits는 여전히 nonNegInt로 정규화된다",
-    /let outpatientVisits = nonNegInt\(nb\?\.priorAnnualOutpatientVisits\)/.test(src));
-  check("Days는 엄격 검증을 유지한다", /badOutpatientDays\(/.test(src));
+  check("Visits는 더 이상 nonNegInt로 정규화되지 않는다",
+    !/nonNegInt\(nb\?\.priorAnnualOutpatientVisits\)/.test(src));
+  check("두 축이 같은 형식 검증을 쓴다", /const badCount = /.test(src));
 }
 
 // ── 구조 가드 ────────────────────────────────────────────────────────

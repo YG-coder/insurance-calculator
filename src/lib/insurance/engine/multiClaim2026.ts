@@ -7,15 +7,21 @@ const nonNegInt = (v: number | undefined) =>
   v !== undefined && Number.isFinite(v) ? Math.max(0, Math.floor(v)) : 0;
 
 /**
- * 비중증 통원 일수 카운터 전용 검증.
+ * 통원 카운터 검증. **회와 일이 같은 형식 규칙을 쓴다** — 둘 다 0 이상의 안전 정수다.
  *
  * ⚠ 기존 필드들이 쓰는 nonNegInt()의 관용(음수→0, NaN·Infinity→0, 소수→내림)을 물려받지
  *   않는다. 잘못된 값을 조용히 0으로 만들면 한도가 통째로 사라져 보험금이 과다 산출된다.
+ *   실제로 nonNegInt()는 문자열 "99"와 Infinity를 **0**으로 만들었다 — "이미 100회 썼다"가
+ *   "한 번도 안 썼다"가 되는 방향이라 가장 위험한 변형이다.
  *   ⚠ 100을 넘는 값도 유효한 과거 상태다. 절삭하지 않는다.
- *   (기존 필드의 관용은 이번 변경 범위가 아니라 그대로 둔다.)
+ *
+ * ⚠ 형식 규칙만 공유한다. 단위(회 ≠ 일)·근거 조문·안내 문구·카운터는 계속 분리한다.
+ *   (nonNegInt() 자체는 2·3·4세대와 다른 필드가 계속 쓰므로 그대로 둔다.)
  */
-const badOutpatientDays = (v: number | undefined): boolean =>
-  v !== undefined && (typeof v !== "number" || !Number.isSafeInteger(v) || v < 0);
+const badCount = (v: unknown): boolean =>
+  !(typeof v === "number" && Number.isSafeInteger(v) && v >= 0);
+const readCount = (o: object | undefined, key: string): unknown =>
+  (o as Record<string, unknown> | undefined)?.[key];
 
 /**
  * 두 해석의 결과가 실제로 같은지 비교하는 지문.
@@ -106,6 +112,20 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
     totalAmount, totalOwnPay: null, totalInsurancePay: null, appliedCaps: [], notes,
   });
 
+  // 두 통원 카운터는 **비급여 통원 전용**이다. 급여 묶음에 실려 오면 쓰이지 않는 입력이므로
+  //   조용히 버리지 않는다. 타입에서는 never로 닫았지만 외부 런타임 데이터는 타입을 우회한다.
+  if (bf) {
+    const strayVisits = readCount(bf, "priorAnnualOutpatientVisits");
+    const strayDays = readCount(bf, "priorAnnualOutpatientDays");
+    if (strayVisits !== undefined || strayDays !== undefined) {
+      return blocked([
+        "통원 횟수·일수 카운터는 비급여 통원 전용입니다. 급여 계산에는 쓰이지 않습니다.",
+        "쓰이지 않는 입력을 조용히 버리면 한도를 반영했다고 오해할 수 있어 계산하지 않았습니다.",
+        `받은 값: ${JSON.stringify(strayVisits ?? strayDays)}`,
+      ]);
+    }
+  }
+
   // 단건과 같은 정책을 행 수와 무관하게 먼저 적용한다(빈 입력도 막힌다).
   //   calc2026의 사유 문구를 그대로 쓰기 위해 0원 1건으로 물어본다.
   if (nb) {
@@ -116,30 +136,68 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
     });
     if (probe.status !== "OK") return blocked(probe.notes);
 
+    const visits = readCount(nb, "priorAnnualOutpatientVisits");
+    const days = readCount(nb, "priorAnnualOutpatientDays");
+
+    // 통원 카운터는 통원에서만 쓰인다. 입원에 실려 오면 조용히 버리지 않는다.
+    //   ⚠ 일반 경로로 전환되는 치료유형(specialItem2026)은 이미 같은 계약이었다.
+    //     직접 경로만 뚫려 있어 두 진입점의 계약이 갈렸다.
+    if (nb.visit === "inpatient" && (visits !== undefined || days !== undefined)) {
+      return blocked([
+        "통원 횟수·일수 카운터는 입원 계산에 쓰이지 않습니다.",
+        "쓰이지 않는 입력을 조용히 버리면 한도를 반영했다고 오해할 수 있어 계산하지 않았습니다.",
+        `받은 값: ${JSON.stringify(visits ?? days)}`,
+      ]);
+    }
+
     // ── 통원 카운터 축 분리 ───────────────────────────────────────
     //   중증은 '통원 100회'(특약1 제5조④ '보상한 횟수'), 비중증은 '통원 100일'
     //   (특약2 제5조④ '보상한 일수')로 단위가 다르다. 반대편 필드를 넘겼다면 호출자가
     //   단위를 잘못 알고 있다는 뜻이므로, 값이 0이어도 계산하지 않는다.
     //   ⚠ 대상은 해당 통원 경로뿐이다. 다른 경로의 기존 관용 동작은 이번에 정리하지 않는다.
-    if (nb.visit === "outpatient" && severity === "critical"
-      && (nb as { priorAnnualOutpatientDays?: number }).priorAnnualOutpatientDays !== undefined) {
+    if (nb.visit === "outpatient" && severity === "critical" && days !== undefined) {
       return blocked([
         "중증 통원의 연간 한도는 약관상 통원 100회입니다(특별약관1 제3조 <구분·보상금액>·제5조 제4항 '보상한 횟수').",
         "일수 카운터(priorAnnualOutpatientDays)는 비중증 전용이라 중증 계산에 쓰지 않습니다. 통원 횟수(priorAnnualOutpatientVisits)로 넘겨 주세요.",
       ]);
     }
-    if (nb.visit === "outpatient" && severity === "non_critical"
-      && nb.priorAnnualOutpatientVisits !== undefined) {
+    if (nb.visit === "outpatient" && severity === "non_critical" && visits !== undefined) {
       return blocked([
         "비중증 통원의 연간 한도는 약관상 통원 100일입니다(특별약관2 제3조 <구분·보상금액>·제5조 제4항 '보상한 일수').",
         "횟수 카운터(priorAnnualOutpatientVisits)는 중증 전용이라 비중증 계산에 쓰지 않습니다. 통원일수(priorAnnualOutpatientDays)로 넘겨 주세요.",
       ]);
     }
-    if (badOutpatientDays((nb as { priorAnnualOutpatientDays?: number }).priorAnnualOutpatientDays)) {
-      return blocked([
-        "이미 사용한 통원일수는 0 이상의 정수여야 합니다. 음수·소수·NaN·Infinity·안전 정수 범위를 넘는 값은 계산하지 않습니다.",
-        `받은 값: ${JSON.stringify((nb as { priorAnnualOutpatientDays?: number }).priorAnnualOutpatientDays)}`,
-      ]);
+    // ── 이미 사용한 통원 횟수·일수: 미입력을 0으로 추정하지 않는다 ──
+    //   한도가 걸린 축이므로 과거 사용량을 모르면 계산 자체가 성립하지 않는다.
+    //   ⚠ 미입력(undefined)과 확인 결과 0은 다른 상태다. 0은 유효값이다.
+    //   ⚠ 회와 일은 안내 문구·근거 조문을 섞지 않는다.
+    if (nb.visit === "outpatient" && severity === "critical") {
+      if (visits === undefined) {
+        return blocked([
+          "중증 통원은 계약해당일 기준 1년간 통원 100회가 한도입니다(특별약관1 제3조 <구분·보상금액>·제5조 제4항 '보상한 횟수').",
+          "이미 사용한 통원 횟수(priorAnnualOutpatientVisits)를 알아야 이후 청구의 보상 여부가 정해지므로, 입력 전에는 계산하지 않습니다. 사용한 통원이 없으면 0을 넣어 주세요.",
+        ]);
+      }
+      if (badCount(visits)) {
+        return blocked([
+          "이미 사용한 통원 횟수는 0 이상의 정수여야 합니다. 음수·소수·NaN·Infinity·안전 정수 범위를 넘는 값·문자열은 계산하지 않습니다.",
+          `받은 값: ${JSON.stringify(visits)}`,
+        ]);
+      }
+    }
+    if (nb.visit === "outpatient" && severity === "non_critical") {
+      if (days === undefined) {
+        return blocked([
+          "비중증 통원은 계약해당일 기준 1년간 통원 100일이 한도입니다(특별약관2 제3조 <구분·보상금액>·제5조 제4항 '보상한 일수').",
+          "이미 사용한 통원일수(priorAnnualOutpatientDays)를 알아야 이후 청구의 보상 여부가 정해지므로, 입력 전에는 계산하지 않습니다. 사용한 통원이 없으면 0을 넣어 주세요.",
+        ]);
+      }
+      if (badCount(days)) {
+        return blocked([
+          "이미 사용한 통원일수는 0 이상의 정수여야 합니다. 음수·소수·NaN·Infinity·안전 정수 범위를 넘는 값·문자열은 계산하지 않습니다.",
+          `받은 값: ${JSON.stringify(days)}`,
+        ]);
+      }
     }
   }
 
@@ -174,8 +232,10 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
     //   ⚠ single.ownPay를 누적하면 안 된다. 연간 보험가입금액 한도로 잘려 추가 부담한 금액이
     //     섞여 pool이 과대 소진되고, 이후 건의 공제가 사라져 보험금이 과다 산출된다.
     let deductiblePaid = nonNegInt(nb?.priorAnnualDeductible);
-    let outpatientVisits = nonNegInt(nb?.priorAnnualOutpatientVisits);
-    // 비중증은 '일'이다. 미입력은 0일. 잘못된 값은 이미 위에서 차단됐다.
+    // ⚠ 두 카운터 모두 정규화하지 않는다. 대상 통원 경로에서는 위에서 미입력·잘못된 값을
+    //   이미 차단했고, 그 밖의 경로에서는 실려 오는 것 자체가 차단된다. 여기서 ?? 0은
+    //   "쓰이지 않는 축"의 자리값일 뿐 미입력을 0으로 추정하는 것이 아니다.
+    let outpatientVisits = (nb?.priorAnnualOutpatientVisits as number | undefined) ?? 0;
     let outpatientDays = (nb as { priorAnnualOutpatientDays?: number } | undefined)
       ?.priorAnnualOutpatientDays ?? 0;
     const results: ClaimLineResult[] = [];

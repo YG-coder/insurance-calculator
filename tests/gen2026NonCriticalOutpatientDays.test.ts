@@ -131,7 +131,10 @@ console.log("\n[경계] 기존 사용일수 0·99·100·101");
   check("제외 행 키 집합이 보상 행과 동일",
     Object.keys(r.lines[0]).sort().join(",") === Object.keys(r.lines[1]).sort().join(","));
   check("정확히 100일 도달 시 다음 건부터 제외", paid(nc([A, A, A], 98)).join() === [PAY, PAY, 0].join());
-  check("미입력은 0일로 본다", paid(nc([A], undefined))[0] === PAY);
+  // ⚠ 종전에는 미입력을 0일로 봤다. 안전성 커밋에서 **차단**으로 바뀌었다 —
+  //   과거 사용량을 모르면 한도를 반영할 수 없어 보험금이 과다 산출된다.
+  check("미입력은 0일로 추정하지 않고 차단", isBlocked(nc([A], undefined), A));
+  check("확인된 0은 유효값", paid(nc([A], 0))[0] === PAY);
   for (const cause of ["injury", "disease"] as const) {
     check(`${cause} 축에도 적용`, paid(nc([A, A], 99, {}, cause)).join() === [PAY, 0].join());
   }
@@ -193,9 +196,18 @@ console.log("\n[축 분리] 중증 100회 무회귀 · 다른 경로 미적용")
     severity: "non_critical", nonBenefitItem: "general", amounts: [A, A],
     priorAnnualOutpatientDays: 100,
   } as unknown as Gen2026MultiClaimInput);
-  check("비중증 입원에는 적용하지 않음",
-    inpatient.status === "OK" && !inpatient.appliedCaps.includes(CAP)
-    && inpatient.lines.every((l) => l.covered));
+  // ⚠ 입원에는 통원 한도가 적용되지 않는다. 종전에는 실려 온 카운터를 조용히 버렸으나,
+  //   안전성 커밋에서 **차단**으로 바뀌었다(일반 전환 경로는 이미 같은 계약이었다).
+  check("비중증 입원에 일수 카운터가 실리면 차단",
+    inpatient.status === "PENDING_UNVERIFIED" && inpatient.lines.length === 0
+    && inpatient.notes.some((n) => n.includes("입원 계산에 쓰이지 않습니다")));
+  const inpatientClean = calculateMany2026({
+    cause: "disease", coverage: "non_benefit", visit: "inpatient", tier: "clinic",
+    severity: "non_critical", nonBenefitItem: "general", amounts: [A, A],
+  } as unknown as Gen2026MultiClaimInput);
+  check("비중증 입원 자체에는 통원 한도를 적용하지 않음",
+    inpatientClean.status === "OK" && !inpatientClean.appliedCaps.includes(CAP)
+    && inpatientClean.lines.every((l) => l.covered));
   const benefit = calculateMany2026({
     cause: "disease", coverage: "benefit", visit: "outpatient", tier: "clinic", amounts: [A, A],
   } as unknown as Gen2026MultiClaimInput);
@@ -233,8 +245,10 @@ console.log("\n[차단] 교차 필드와 잘못된 값");
   check("잘못된 값을 0으로 변형하지 않는다", nc([A], -1).lines.length === 0);
   check("100 초과는 유효한 과거 상태로 받는다",
     nc([A], 5_000).status === "OK" && paid(nc([A], 5_000))[0] === 0);
-  check("중증 경로는 관용 동작을 유지(이번 커밋에서 정리하지 않음)",
-    cr([A], -1).status === "OK");
+  // ⚠ 종전에는 중증 '회' 축만 nonNegInt의 관용(음수→0)을 남겨 두 축의 안전성이 달랐다.
+  //   안전성 커밋에서 같은 수준으로 맞췄다. 두 축은 여전히 별개 상수·카운터·안내를 쓴다.
+  check("중증 경로도 같은 수준으로 엄격해졌다",
+    cr([A], -1).status === "PENDING_UNVERIFIED");
 }
 
 
@@ -275,7 +289,11 @@ for (const item of ROUTED) {
     && split.totalAmount === 5_040_000, split.status);
   check(`${item}: 99일 + [0, 30만] → 정상`,
     routed(item, [0, 300_000], { priorAnnualOutpatientDays: 99 }).totalInsurancePay === 150_000);
-  check(`${item}: 미입력은 0일`, routed(item, [300_000]).totalInsurancePay === 150_000);
+  // ⚠ 종전에는 미입력을 0일로 봤다. 안전성 커밋에서 차단으로 바뀌었다.
+  check(`${item}: 미입력은 0일로 추정하지 않고 차단`,
+    routed(item, [300_000]).status === "PENDING_UNVERIFIED");
+  check(`${item}: 확인된 0은 유효값`,
+    routed(item, [300_000], { priorAnnualOutpatientDays: 0 }).totalInsurancePay === 150_000);
   // 축 교차·잘못된 값
   const cross = routed(item, [300_000], { priorAnnualOutpatientVisits: 0 });
   check(`${item}: Visits가 실리면 차단(값 0이어도)`,
@@ -380,10 +398,18 @@ for (const item of ROUTED) {
   const router = readFileSync("src/lib/insurance/engine/specialItem2026.ts", "utf8");
   check("라우터가 축에 맞는 카운터만 전달",
     /input\.severity === "critical"\s*\n?\s*\? \{ priorAnnualOutpatientVisits: input\.priorAnnualOutpatientVisits \}\s*\n?\s*: \{ priorAnnualOutpatientDays: input\.priorAnnualOutpatientDays \}/.test(router));
-  // ⚠ 값 검증은 calculateMany2026에도 있어 이중 방어다. 그래서 라우터 쪽만 지워도
-  //   런타임 결과가 같다 — 진입점 검증이 남아 있는지는 소스로 확인한다.
-  check("라우터 진입점이 Days를 0 이상 안전 정수로 검증",
-    /if \(days !== undefined\s*\n?\s*&& !\(typeof days === "number" && Number\.isSafeInteger\(days\) && days >= 0\)\) \{/.test(router));
+  // ⚠ 값 검증은 calculateMany2026 한 곳으로 모았다. 라우터가 rejected()로 먼저 막으면
+  //   차단 결과의 totalAmount가 0으로 보고되어 계약이 깨지기 때문이다.
+  //   검증이 사라진 것이 아님을 **런타임 결과로** 확인한다(문구 존재 검사가 아니다).
+  check("전환 경로에서도 잘못된 Days가 차단되고 진료비 합계는 유지된다", (() => {
+    const bad = routed("injection", [300_000], { priorAnnualOutpatientDays: -1 });
+    return bad.status === "PENDING_UNVERIFIED" && bad.lines.length === 0
+      && bad.totalOwnPay === null && bad.totalInsurancePay === null && bad.totalAmount === 300_000;
+  })());
+  check("전환 경로에서도 미입력이 차단된다", (() => {
+    const none = routed("injection", [300_000]);
+    return none.status === "PENDING_UNVERIFIED" && none.totalAmount === 300_000;
+  })());
   check("라우터 진입점이 축 교차를 막는다",
     /if \(raw\.severity === "critical" && days !== undefined\) \{/.test(router)
     && /if \(raw\.severity === "non_critical" && visits !== undefined\) \{/.test(router));
@@ -456,7 +482,8 @@ console.log("\n[화면] 상태 전이");
   const names = stateNamesFrom(uiSrc);
   const fresh = () => mount(HealthCalcMulti2026 as unknown as () => unknown, names);
   const DAYS_LABEL = "계약해당일 기준 1년간 이미 사용한 통원일수";
-  const VISITS_LABEL = "이미 사용한 통원 횟수";
+  //   ⚠ has()는 앞부분 일치라 라벨 전문을 그대로 쓴다. 두 라벨은 '통원일수'/'통원 횟수'에서 갈린다.
+  const VISITS_LABEL = "계약해당일 기준 1년간 이미 사용한 통원 횟수";
   const setup = (over: Record<string, unknown> = {}) => {
     const h = fresh();
     const base: Record<string, unknown> = {
@@ -488,9 +515,12 @@ console.log("\n[화면] 상태 전이");
     const s = setup({ submitted: true, priorOutDays: bad }).render();
     check(`⑥ 잘못된 값 ${JSON.stringify(bad)} → 계산 차단`, warned(s) && s.resultItems() === null);
   }
-  const sc = setup({ submitted: true, severity: "critical", priorOutDays: "50" }).render();
+  const sc = setup({ submitted: true, severity: "critical", priorOutDays: "50", priorVisits: "3" }).render();
   check("⑦ 중증 전환: 통원일수 숨김·통원 횟수 노출", !sc.has(DAYS_LABEL) && sc.has(VISITS_LABEL));
   check("⑦ 중증 전환: 숨겨진 Days를 넘기지 않아 계산됨", sc.resultItems() !== null);
+  // 숨겨진 Days가 전달되면 중증 축 교차 가드에 걸려 계산 자체가 막힌다. 계산이 되면 안 넘어간 것이다.
+  const scNoVisits = setup({ submitted: true, severity: "critical", priorOutDays: "50" }).render();
+  check("⑦ 중증 전환: 횟수 미입력이면 계산하지 않음", scNoVisits.resultItems() === null);
   for (const [what, over] of [
     ["입원", { visit: "inpatient", nbInpatientTier: "clinic" }],
     ["MRI", { nonBenefitItem: "mri" }],
@@ -535,15 +565,18 @@ console.log("\n[가드] 단위와 파생");
     /const needsOutDays = [^;]*outpatientDays\(priorOutDays\) === null;/.test(ui)
     && /!needsTier && !needsOutDays/.test(ui) && /nbInpatientTier === ""\) \|\| needsOutDays/.test(ui));
   check("UI 파서가 0 이상 안전 정수만 허용",
-    /const OUTPATIENT_DAYS_FORMAT = \/\^\[0-9\]\+\$\//.test(ui)
+    /const VISIT_COUNT_FORMAT = \/\^\[0-9\]\+\$\//.test(ui)
     && /Number\.isSafeInteger\(n\) && n >= 0 \? n : null/.test(ui));
+  check("두 축이 같은 형식 파서를 쓰되 도메인 필드는 분리",
+    /const outpatientDays = nonNegSafeInt;/.test(ui) && /const outpatientVisits = nonNegSafeInt;/.test(ui));
   check("UI가 잘못된 값을 정규화하지 않는다",
     !/outpatientDays[\s\S]{0,160}replace\(/.test(ui) && !/num\(priorOutDays\)/.test(ui));
   check("UI가 100을 재기재하지 않고 상수에서 읽는다",
     /통원 \{GEN2026\.nonBenefit\.nonCritical\.outpatientAnnualDays\}일/.test(ui)
     && /연 \{GEN2026\.nonBenefit\.nonCritical\.outpatientAnnualDays\}일/.test(ui));
   check("비중증 문구에 '회'를 쓰지 않는다", !/비중증 통원은[^§]{0,120}100회/.test(ui));
-  check("중증 문구는 '회'를 유지", ui.includes("중증 통원은 계약해당일 기준 1년간 100회가 한도입니다"));
+  check("중증 문구는 '회'를 유지",
+    /중증 통원은 약관상 <b>계약일 또는 매년 계약해당일부터 1년간 통원 \{GEN2026\.nonBenefit\.critical\.outpatientAnnualVisits\}회<\/b>/.test(ui));
   check("UI가 같은 날 합산과 일수 소진을 연결해 설명",
     ui.includes("같은 날을 여러 행으로 나누면 일수가 실제보다 빨리 소진됩니다"));
   check("UI가 계약해당일 1년 기준을 명시",

@@ -216,7 +216,10 @@ check("H-4: 결과 안내가 1년치 견적 전제 표시", carCalc.includes("1�
   const readmeDoc = readFileSync("README.md", "utf8");
 
   // 현재 상태 설명에서 금지. 과거 경위 서술은 §3.1에 따로 두고 그때만 인용부호로 남긴다.
-  const STALE = ["시행세칙 공포 대기", "감독규정 확정 후", "판매약관 확인 필요", "자료 미발견"];
+  // 조사 전 사유. 넷은 feature 3종용, 뒤 셋은 할인·할증용이다.
+  //   할인·할증은 2026-09-03 약관 직독으로 구간·요율이 확정돼, 종전 서술이 틀렸다.
+  const STALE = ["시행세칙 공포 대기", "감독규정 확정 후", "판매약관 확인 필요", "자료 미발견",
+    "등급 경계·할증률이 없다", "상품별 계산 수치가 전혀 없다", "4세대 제도 설명이며"];
   for (const [label, text] of [["README", readmeDoc], ["gen123 설계 문서", gen123Design]] as const) {
     for (const stale of STALE) {
       check(`${label}: 낡은 HOLD 사유 "${stale}" 없음`, !text.includes(stale));
@@ -246,6 +249,15 @@ check("H-4: 결과 안내가 1년치 견적 전제 표시", carCalc.includes("1�
   check("audit-status: 비중증 제외항목 근거 조문 명시", current.includes("특별약관2 제4조"));
   check("audit-status: 할인·할증 감독규정 조문 명시", current.includes("제7-63조"));
   check("audit-status: 할인·할증이 보험료 영역임을 명시", current.includes("보험료 영역"));
+  // 확정된 것을 "미확정"으로 되돌리지 않는다.
+  check("audit-status: 할인·할증 5단계 구간과 요율이 확정됐음을 명시",
+    current.includes("100·200·300·400%") && current.includes("특별약관2 제6조"));
+  check("audit-status: 미확정은 1단계 할인율뿐임을 명시", current.includes("1단계 할인율"));
+  check("audit-status: 95% 가정과 무사고 할인이 예시임을 명시",
+    auditStatus.includes("예시상의 가정"));
+  // 판본과 시행일 구분
+  check("audit-status: 공포일과 시행일을 구분해 기록", auditStatus.includes("2026. 9. 10.") && auditStatus.includes("아직 시행 전"));
+  check("audit-status: 현재 시행 중인 판본을 명시", auditStatus.includes("현재 시행 중"));
   check("audit-status: 할인·할증 해제 조건이 상품·보험사별 요율표", current.includes("요율표"));
   check("audit-status: 4세대 보도자료 구간을 전용하지 않음을 명시", auditStatus.includes("전용하지 않는다"));
 
@@ -255,7 +267,7 @@ check("H-4: 결과 안내가 1년치 견적 전제 표시", carCalc.includes("1�
   //    금지 대상은 단정하는 형태(무변경이다 / 무변경임을 확인 / 무변경으로 확인)뿐이다.
   const affirmsUnchanged = auditStatus.match(/무변경(이다|임을 확인|으로 확인|이 확인)/g) ?? [];
   check("audit-status: 전체 무변경 단정 없음", affirmsUnchanged.length === 0, affirmsUnchanged.join(" / "));
-  check("audit-status: 확대 해석 금지를 명시", auditStatus.includes("확대 해석하지 않는다"));
+  check("audit-status: 확대 해석 금지를 명시", /확대 해석하지 않(는다|습니다)/.test(auditStatus));
   check("audit-status: 쪽수 1쪽 이동 사실 기록", auditStatus.includes("1쪽씩"));
 
   // 진입점은 루트 README 하나. docs/ 안에 색인 문서를 새로 만들지 않는다.

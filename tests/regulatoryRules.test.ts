@@ -8,6 +8,9 @@ function check(name: string, cond: boolean, detail = "") {
 }
 
 const rules = Object.values(REGULATORY_RULES);
+/** regulatoryRules.ts의 FSS_BYLAW15_URL(별표 검색 페이지). 판본 구분이 안 되는 주소다. */
+const FSS_BYLAW15_URL_FOR_TEST =
+  "https://www.law.go.kr/admRulBylSc.do?menuId=9&subMenuId=57&tabMenuId=267&query=%ED%91%9C%EC%A4%80%EC%95%BD%EA%B4%80";
 const ids = rules.map((rule) => rule.ruleId);
 const isConfirmedGradeValid = (rule: { status: string; evidenceGrade: string }) =>
   rule.status !== "CONFIRMED" || rule.evidenceGrade === "A";
@@ -49,12 +52,16 @@ check("5세대 비중증 입원 한도 추적", GEN2026.nonBenefit.nonCritical.i
 
 
 // 2026-09-03 별표15 2026.5.6 연혁본(5세대 표준약관) 재대조분
-// HOLD 규칙은 2026-09-03 조사분이므로 검증일이 다르다. 확정 규칙만 대상으로 한다.
+// 2026-09-03 별표15 2026.5.6 연혁본 직독분. HOLD 규칙은 검증일이 달라 확정분만 본다.
+//   ⚠ 날짜를 특정 값으로 못 박지 않는다. 나중에 같은 연혁본을 다시 읽고 규칙을
+//     추가하면 그 규칙의 검증일은 더 뒤가 되는 것이 정상이다. 막아야 하는 것은
+//     이미 확인한 규칙의 검증일이 조사 이전으로 되돌아가는 쪽이다.
 const gen5Bylaw = rules.filter((rule) =>
   rule.generation === "2026" && rule.status === "CONFIRMED"
   && rule.sources[0]?.document.includes("2026. 5. 6. 연혁본"));
 check(`5세대 표준약관 확정 규칙에 재대조일 기록 (${gen5Bylaw.length}건)`,
-  gen5Bylaw.length >= 12 && gen5Bylaw.every((rule) => rule.verifiedAt === "2026-09-03"));
+  gen5Bylaw.length >= 12 && gen5Bylaw.every((rule) => rule.verifiedAt >= "2026-09-03"),
+  gen5Bylaw.filter((rule) => rule.verifiedAt < "2026-09-03").map((rule) => `${rule.ruleId}:${rule.verifiedAt}`).join(", "));
 
 check("5세대 '연간' 기산점이 계약해당일 기준으로 등록",
   REGULATORY_RULES.GEN2026_ANNUAL_PERIOD_BASIS.value === "contract_anniversary");
@@ -74,7 +81,8 @@ const HOLD_RULES = [
   ["발달장애", REGULATORY_RULES.GEN2026_DEVELOPMENTAL_DISORDER_BENEFIT],
   ["임신·출산", REGULATORY_RULES.GEN2026_PREGNANCY_CHILDBIRTH_BENEFIT],
   ["비중증 제외항목", REGULATORY_RULES.GEN2026_NONCRITICAL_EXCLUSION_ITEMS],
-  ["비급여 보험료 할인·할증", REGULATORY_RULES.GEN2026_NON_BENEFIT_PREMIUM_ADJUSTMENT],
+  ["할인·할증 1단계 할인율", REGULATORY_RULES.GEN2026_PREMIUM_ADJ_TIER1_DISCOUNT_RATE],
+  ["할인·할증 최종 보험료 적용", REGULATORY_RULES.GEN2026_PREMIUM_ADJ_FINAL_PREMIUM],
 ] as const;
 
 for (const [name, rule] of HOLD_RULES) {
@@ -92,26 +100,170 @@ check("HOLD 발달장애: '가입당시 태아' 조건이 빠지지 않음",
 check("HOLD 임신·출산: 조건부 보장(280일)과 일부 본인부담금을 명시",
   Boolean(REGULATORY_RULES.GEN2026_PREGNANCY_CHILDBIRTH_BENEFIT.note?.includes("280일"))
   && Boolean(REGULATORY_RULES.GEN2026_PREGNANCY_CHILDBIRTH_BENEFIT.note?.includes("일부 본인부담금")));
-check("HOLD 할인·할증: 출처가 보험업감독규정 조문을 특정",
-  REGULATORY_RULES.GEN2026_NON_BENEFIT_PREMIUM_ADJUSTMENT.sources.every((src) =>
-    src.document.includes("보험업감독규정") && src.locator.includes("제7-63조")));
-check("HOLD 할인·할증: 보험료 영역이며 별도 도메인이라는 판단 기록",
-  Boolean(REGULATORY_RULES.GEN2026_NON_BENEFIT_PREMIUM_ADJUSTMENT.note?.includes("보험료"))
-  && Boolean(REGULATORY_RULES.GEN2026_NON_BENEFIT_PREMIUM_ADJUSTMENT.note?.includes("별도")));
-check("HOLD 할인·할증: 해제 조건이 상품·보험사별 요율표/약관",
-  Boolean(REGULATORY_RULES.GEN2026_NON_BENEFIT_PREMIUM_ADJUSTMENT.note?.includes("요율표")));
-check("HOLD 할인·할증: 4세대 보도자료 구간을 상수로 쓰지 않음을 명시",
-  Boolean(REGULATORY_RULES.GEN2026_NON_BENEFIT_PREMIUM_ADJUSTMENT.note?.includes("전용하지 않는다")));
+// ── 할인·할증: 확정된 것과 미확정인 것을 각각 강제한다 ────────────────
+// 2026-09-03 약관 직독 전에는 전부 HOLD였다. 그때의 사유("등급 경계·할증률이 없다")는
+// 감독규정만 보고 내린 판단이라 틀렸다. 확정값이 다시 HOLD로 되돌아가지 않도록 못 박는다.
+{
+  const A = REGULATORY_RULES;
+  check("할인·할증 산정기간 확정", A.GEN2026_PREMIUM_ADJ_LOOKBACK.status === "CONFIRMED"
+    && A.GEN2026_PREMIUM_ADJ_LOOKBACK.value === "renewal_minus_3months_month_end_prior_12months");
+  check("할인·할증 산정기간이 '3개월 전 말일'을 명시",
+    Boolean(A.GEN2026_PREMIUM_ADJ_LOOKBACK.note?.includes("3개월 전 말일")));
+  check("할인·할증 적용 대상은 특별약관2 순보험료 총액",
+    A.GEN2026_PREMIUM_ADJ_BASE.status === "CONFIRMED"
+    && A.GEN2026_PREMIUM_ADJ_BASE.value === "special_terms2_net_premium_total");
+  check("할인·할증 제외 대상은 장기요양 1·2등급 판정자",
+    A.GEN2026_PREMIUM_ADJ_EXCLUDED_CLAIMS.status === "CONFIRMED"
+    && A.GEN2026_PREMIUM_ADJ_EXCLUDED_CLAIMS.value === "ltc_grade_1_or_2_beneficiary");
+  check("할인·할증 할증 적용 요건은 연간 지급실적 100만원 이상",
+    A.GEN2026_PREMIUM_ADJ_SURCHARGE_THRESHOLD.status === "CONFIRMED"
+    && A.GEN2026_PREMIUM_ADJ_SURCHARGE_THRESHOLD.value === 1_000_000);
+
+  // 5단계 구간표 — 경계와 요율을 단계별로 검사한다.
+  const tiers = A.GEN2026_PREMIUM_ADJ_TIERS.value;
+  check("할인·할증 구간이 5단계", A.GEN2026_PREMIUM_ADJ_TIERS.status === "CONFIRMED" && tiers.length === 5);
+  const expectTiers = [
+    { tier: 1, kind: "discount", minInclusive: 0, maxExclusive: 1, relativity: null },
+    { tier: 2, kind: "keep", minInclusive: 1, maxExclusive: 1_000_000, relativity: 1.0 },
+    { tier: 3, kind: "surcharge", minInclusive: 1_000_000, maxExclusive: 1_500_000, relativity: 2.0 },
+    { tier: 4, kind: "surcharge", minInclusive: 1_500_000, maxExclusive: 3_000_000, relativity: 3.0 },
+    { tier: 5, kind: "surcharge", minInclusive: 3_000_000, maxExclusive: null, relativity: 4.0 },
+  ];
+  for (const want of expectTiers) {
+    const got = tiers.find((t) => t.tier === want.tier);
+    check(`할인·할증 ${want.tier}단계 경계·요율 고정`, JSON.stringify(got) === JSON.stringify(want), JSON.stringify(got));
+  }
+  check("할인·할증 1단계 요율은 표에 값이 없으므로 null", tiers[0].relativity === null);
+
+  // 미확정은 1단계 할인율과 최종 보험료 적용뿐이다.
+  check("할인·할증 1단계 할인율은 HOLD",
+    A.GEN2026_PREMIUM_ADJ_TIER1_DISCOUNT_RATE.status === "HOLD"
+    && A.GEN2026_PREMIUM_ADJ_TIER1_DISCOUNT_RATE.value === null);
+  check("할인·할증 1단계 할인율 사유가 '할증재원 배분'임을 명시",
+    Boolean(A.GEN2026_PREMIUM_ADJ_TIER1_DISCOUNT_RATE.note?.includes("할증재원")));
+  check("할인·할증 최종 보험료는 HOLD이며 별도 도메인 판단 기록",
+    A.GEN2026_PREMIUM_ADJ_FINAL_PREMIUM.status === "HOLD"
+    && A.GEN2026_PREMIUM_ADJ_FINAL_PREMIUM.value === null
+    && Boolean(A.GEN2026_PREMIUM_ADJ_FINAL_PREMIUM.note?.includes("별도의 보험료 도메인")));
+
+  // 출처 — 약관 세 판본과 감독규정을 모두 남겼는지
+  const tierSources = A.GEN2026_PREMIUM_ADJ_TIERS.sources;
+  check("할인·할증 구간표 출처가 별표15 특별약관2 제6조를 특정",
+    tierSources.every((src) => src.locator.includes("특별약관2 제6조") || src.locator.includes("특별약관2(비중증 비급여 실손의료비) 제6조")));
+  for (const [label, page] of [["2026. 5. 6.", "p.310"], ["2026. 7. 15. 시행본", "p.310"], ["2026. 9. 10. 시행 예정본", "p.311"]] as const) {
+    check(`할인·할증 출처에 ${label} 기록(${page})`,
+      tierSources.some((src) => src.document.includes(label) && src.locator.includes(page)));
+  }
+  // ── 판본별 출처 재현성 ────────────────────────────────────────────
+  // 문서명·쪽수만 다르고 URL이 같으면, 검색 UI의 기본 선택 판본이 바뀌는 순간
+  // 어느 문언을 읽었는지 재현할 수 없다. 판본 식별번호까지 강제한다.
+  {
+    const byl = tierSources.filter((src) => src.document.includes("별표 15"));
+    check("할인·할증 출처 URL 3개가 서로 다름", new Set(byl.map((src) => src.url)).size === 3,
+      byl.map((src) => src.url).join(" | "));
+    check("할인·할증 출처가 검색 페이지 주소를 쓰지 않음",
+      byl.every((src) => src.url !== FSS_BYLAW15_URL_FOR_TEST), byl.map((src) => src.url).join(" | "));
+    // 시행일 ↔ 판본 식별번호 대응. 2026-09-03에 각 URL이 200이며 [시행] 표기가
+    // 아래와 일치함을 확인했다.
+    const SEQ_BY_EFFECTIVE: Record<string, string> = {
+      "2026-05-06": "2200000108697",
+      "2026-07-15": "2200000108867",
+      "2026-09-10": "2200000108939",
+    };
+    for (const [effective, seq] of Object.entries(SEQ_BY_EFFECTIVE)) {
+      const src = byl.find((x) => x.publishedOrEffective === effective);
+      check(`할인·할증 ${effective} 출처의 식별번호가 ${seq}`,
+        Boolean(src) && src!.url.includes(`admRulSeq=${seq}`), src?.url);
+    }
+    check("할인·할증 출처의 시행일이 세 판본 그대로",
+      byl.map((src) => src.publishedOrEffective).sort().join(",") === "2026-05-06,2026-07-15,2026-09-10",
+      byl.map((src) => src.publishedOrEffective).join(","));
+    // locator에 재현 경로(별표 식별번호 + 조항 + 쪽수)가 남아 있는지
+    for (const [effective, bylSeq, page] of [["2026-05-06", "3216359", "p.310"],
+      ["2026-07-15", "3265643", "p.310"], ["2026-09-10", "3295613", "p.311"]] as const) {
+      const src = byl.find((x) => x.publishedOrEffective === effective);
+      check(`할인·할증 ${effective} locator에 재현 경로(${bylSeq}, ${page})`,
+        Boolean(src) && src!.locator.includes(bylSeq) && src!.locator.includes(page)
+        && src!.locator.includes("제6조"), src?.locator);
+    }
+    // 아직 시행 전인 판본을 "현재 시행 중"이라고 부르지 않는다.
+    const notYet = byl.find((x) => x.publishedOrEffective === "2026-09-10");
+    check("2026.9.10 시행 예정본을 현재 시행본이라 부르지 않음",
+      Boolean(notYet) && !/현재 시행|현행본/.test(notYet!.document), notYet?.document);
+    const inForce = byl.find((x) => x.publishedOrEffective === "2026-07-15");
+    check("현재 시행 중인 판본이 무엇인지 문서명에 표시",
+      Boolean(inForce) && inForce!.document.includes("현재 시행 중"), inForce?.document);
+  }
+
+  check("할인·할증 산정기간 출처에 감독규정 포함",
+    A.GEN2026_PREMIUM_ADJ_LOOKBACK.sources.some((src) => src.document.includes("보험업감독규정")));
+
+  // 금융위 2024.6.7. 보도자료를 5세대 근거로 쓰지 않는다.
+  const premiumRules = [A.GEN2026_PREMIUM_ADJ_LOOKBACK, A.GEN2026_PREMIUM_ADJ_BASE,
+    A.GEN2026_PREMIUM_ADJ_EXCLUDED_CLAIMS, A.GEN2026_PREMIUM_ADJ_TIERS,
+    A.GEN2026_PREMIUM_ADJ_SURCHARGE_THRESHOLD, A.GEN2026_PREMIUM_ADJ_TIER1_DISCOUNT_RATE,
+    A.GEN2026_PREMIUM_ADJ_FINAL_PREMIUM];
+  check("할인·할증 규칙이 보도자료를 근거로 삼지 않음",
+    premiumRules.every((rule) => rule.sources.every((src) => !/보도자료|낮은 보험료로/.test(src.document))));
+}
+
 check("HOLD 규칙은 CONFIRMED A등급 검사를 통과시키지 않음",
   HOLD_RULES.every(([, rule]) => rule.evidenceGrade === "REVIEW"));
 
-// ── 2026.8.28 현행본을 일괄 반영하지 않았음을 고정 ────────────────────
-// 직접 대조한 조문은 특별약관1·2의 제3조·제5조뿐이다. 나머지 규칙의 출처·검증일을
-// 현행본으로 갈아 끼우면 "읽지 않은 것을 읽었다"고 말하는 셈이 된다.
-check("규칙 출처에 2026.8.28 현행본이 일괄 적용되지 않음",
-  rules.every((rule) => rule.sources.every((src) => !src.document.includes("2026. 8. 28"))));
-check("CONFIRMED 5세대 규칙의 출처가 2026.5.6 연혁본으로 유지",
+// ── 판본별 출처가 "실제로 대조한 규칙"에만 머무는지 ────────────────────
+// 2026-09-03 조사에서 세 판본(5.6 / 7.15 시행 / 9.10 시행 예정)을 모두 열어 대조한
+// 것은 특별약관2 제6조③④뿐이다. 그 결과로 등록된 규칙이 아래 7개다.
+//
+// ⚠ ruleId 접두사(PREMIUM-ADJ)로 판별하지 않는다. 앞으로 다른 날 추가될 할인·할증
+//   규칙까지 "이번 세 판본을 모두 인용하라"고 강제하게 되고, 그때는 다른 판본을
+//   읽었을 수도 있다. 이번에 대조한 규칙을 이름으로 못 박는다.
+const VERIFIED_IN_THREE_VERSIONS = new Set([
+  "GEN2026-PREMIUM-ADJ-LOOKBACK",
+  "GEN2026-PREMIUM-ADJ-BASE",
+  "GEN2026-PREMIUM-ADJ-EXCLUDED-CLAIMS",
+  "GEN2026-PREMIUM-ADJ-TIERS",
+  "GEN2026-PREMIUM-ADJ-SURCHARGE-THRESHOLD",
+  "GEN2026-PREMIUM-ADJ-TIER1-DISCOUNT-RATE",
+  "GEN2026-PREMIUM-ADJ-FINAL-PREMIUM",
+]);
+const threeVersionRules = rules.filter((rule) => VERIFIED_IN_THREE_VERSIONS.has(rule.ruleId));
+check(`세 판본 대조 규칙 ${VERIFIED_IN_THREE_VERSIONS.size}개가 모두 등록돼 있음`,
+  threeVersionRules.length === VERIFIED_IN_THREE_VERSIONS.size,
+  `${threeVersionRules.length}건만 발견`);
+
+check("세 판본 대조 규칙은 세 판본을 모두 인용",
+  threeVersionRules.every((rule) => {
+    const byl = rule.sources.filter((src) => src.document.includes("별표 15"));
+    return byl.length === 3
+      && byl.some((s2) => s2.document.includes("2026. 5. 6."))
+      && byl.some((s2) => s2.document.includes("2026. 7. 15."))
+      && byl.some((s2) => s2.document.includes("2026. 8. 28."));
+  }));
+
+// 대조하지 않은 조문의 출처를 뒤 판본으로 갈아 끼우면 "읽지 않은 것을 읽었다"가 된다.
+check("대조하지 않은 규칙에 뒤 판본 출처가 섞이지 않음",
+  rules.filter((rule) => !VERIFIED_IN_THREE_VERSIONS.has(rule.ruleId))
+    .every((rule) => rule.sources.every((src) =>
+      !src.document.includes("2026. 8. 28") && !src.document.includes("2026. 7. 1"))));
+
+// ⚠ "검색 페이지 주소를 영구 유지하라"고 강제하지 않는다. 다른 규칙도 원문을 직접
+//   재대조하면 판본별 직행 링크로 승격하는 것이 정상적인 개선이다. 여기서 막는 것은
+//   이번에 확보한 세 주소가 대조 범위 밖으로 새어 나가는 것뿐이다.
+const THIS_SURVEY_URLS = [
+  "https://www.law.go.kr/LSW/admRulInfoP.do?admRulSeq=2200000108697",
+  "https://www.law.go.kr/LSW/admRulInfoP.do?admRulSeq=2200000108867",
+  "https://www.law.go.kr/LSW/admRulInfoP.do?admRulSeq=2200000108939",
+];
+const leaked = rules
+  .filter((rule) => !VERIFIED_IN_THREE_VERSIONS.has(rule.ruleId))
+  .flatMap((rule) => rule.sources
+    .filter((src) => THIS_SURVEY_URLS.includes(src.url))
+    .map((src) => `${rule.ruleId} → ${src.url}`));
+check("이번 세 판본 주소가 대조 범위 밖으로 누출되지 않음", leaked.length === 0, leaked.join(" | "));
+
+check("계산에 쓰이는 5세대 확정 규칙은 2026.5.6 연혁본 출처를 유지",
   rules.filter((rule) => rule.generation === "2026" && rule.status === "CONFIRMED"
+    && !VERIFIED_IN_THREE_VERSIONS.has(rule.ruleId)
     && rule.sources.some((src) => src.document.includes("별표 15")))
     .every((rule) => rule.sources.every((src) =>
       !src.document.includes("별표 15") || src.document.includes("2026. 5. 6. 연혁본"))));

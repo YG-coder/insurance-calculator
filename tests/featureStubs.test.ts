@@ -57,7 +57,10 @@ for (const [name, status, fn] of stubs) {
   for (const stale of STALE_REASONS) {
     check(`${name}: 낡은 사유 "${stale}" 없음`, !message.includes(stale), message);
   }
-  check(`${name}: 실제 막힌 이유를 밝힘`, /입력축|계산 수치|요율표/.test(message), message);
+  // 사유가 "근거가 없다"가 아니라 실제 장애물을 가리켜야 한다.
+  //   판정 축 부재(세 항목) 또는 공통 고정값 부재·도메인 분리(할인·할증).
+  check(`${name}: 실제 막힌 이유를 밝힘`,
+    /입력축|판정 불가|공통 고정값이 아니|별도 도메인|요율표/.test(message), message);
   check(`${name}: 근거가 확인됐다는 사실을 밝힘`, message.includes("근거는 확인됨"), message);
 }
 

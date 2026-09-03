@@ -287,6 +287,9 @@ const VERIFIED_2026_05_06_DIRECT = new Set([
   //   (인쇄 p.288·291·309). 5.6 판본만 직접 읽었으므로 7.15·9.10 주소는 여전히 금지된다.
   "GEN2026-NONCRITICAL-OUTPATIENT-ANNUAL-DAYS",
   "GEN2026-NONCRITICAL-OUTPATIENT-DAYS-ZEROPAY",
+  // 2026-09-03 재직독 — 특약1 (3)3대비급여 <표1> 주)의 '각 치료횟수를 합산하여'(인쇄 p.264).
+  "GEN2026-MSK-APPROVAL-COUNT-BASIS",
+  "GEN2026-MSK-APPROVAL-PRIOR-ACT-COUNT",
 ]);
 const VERSION_5_6_URL = "https://www.law.go.kr/LSW/admRulInfoP.do?admRulSeq=2200000108697";
 const leaked = rules

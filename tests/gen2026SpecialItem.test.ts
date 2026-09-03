@@ -48,8 +48,14 @@ const general = (input: Gen2026RoutedGeneralInput): Gen2026RoutedGeneralResult =
 const calculateSpecialItem2026 = special;
 const calculateRoutedGeneral2026 = general;
 
-const msk = (lines: Gen2026SpecialLine[], extra: { approvedThroughVisit?: 10 | 20 | 30 | 40 | 50; priorAnnualCoveredCount?: number; priorAnnualInsurancePaid?: number } = {}) =>
-  special({ route: "special_item", coverage: "non_benefit", severity: "critical", item: "musculoskeletal_esw", lines, ...extra });
+// ⚠ 승인 구간은 '치료횟수' 축을 요구한다(<표1> 주)). 미입력이면 계산하지 않으므로,
+//   이 헬퍼는 "확인 결과 0회"를 기본으로 넣고 개별 케이스가 덮어쓴다.
+//   '보상한 횟수'(priorAnnualCoveredCount)는 연 50회 한도 축이라 서로 대신 쓰지 않는다.
+const msk = (lines: Gen2026SpecialLine[], extra: { approvedThroughVisit?: 10 | 20 | 30 | 40 | 50; priorAnnualCoveredCount?: number; priorAnnualInsurancePaid?: number; priorAnnualTreatmentActCount?: number } = {}) =>
+  special({
+    route: "special_item", coverage: "non_benefit", severity: "critical",
+    item: "musculoskeletal_esw", lines, priorAnnualTreatmentActCount: 0, ...extra,
+  });
 const inj = (lines: Gen2026SpecialLine[], extra: { priorAnnualCoveredCount?: number; priorAnnualInsurancePaid?: number } = {}) =>
   special({ route: "special_item", coverage: "non_benefit", severity: "critical", item: "injection", injectionPurpose: "general", lines, ...extra });
 const cMri = (lines: Gen2026CriticalMriLine[], extra: { priorAnnualInpatientDeductible?: number; priorAnnualInsurancePaid?: number } = {}) =>
@@ -139,9 +145,17 @@ console.log("\n[근골격계] 승인 회차 경계 9·10·11 / 승인 10·20");
   check("11회 · 승인 20 → 계산", eleven20.status === "OK" && eleven20.lines.every((l) => l.covered));
   const fifteen = msk(Array.from({ length: 15 }, () => out(100_000)), { approvedThroughVisit: 20 });
   check("15회 · 승인 20 → 15행 모두 보상", fifteen.status === "OK" && fifteen.lines.filter((l) => l.covered).length === 15);
-  const prior = msk([out(100_000)], { priorAnnualCoveredCount: 10 });
-  check("이미 10회 보상 + 1행 · 승인 10 → 차단", prior.status === "PENDING_UNVERIFIED");
-  const zeroRows = msk([out(0), out(0)], { approvedThroughVisit: 10, priorAnnualCoveredCount: 10 });
+  const prior = msk([out(100_000)], { priorAnnualTreatmentActCount: 10 });
+  check("이미 10회 치료 + 1행 · 승인 10 → 차단", prior.status === "PENDING_UNVERIFIED");
+  // ⚠ '보상한 횟수'만 10이고 치료행위가 0회로 확인되면 승인 구간은 소진되지 않는다.
+  //   두 축을 대신 쓰지 않는다는 계약을 여기서 고정한다.
+  const coveredOnly = msk([out(100_000)], { priorAnnualCoveredCount: 10, priorAnnualTreatmentActCount: 0 });
+  check("보상 10회·치료 0회 → 승인 구간은 소진되지 않음", coveredOnly.status === "OK", coveredOnly.status);
+  const missing = calculateGen2026Item({ route: "special_item", coverage: "non_benefit", severity: "critical", item: "musculoskeletal_esw", lines: [out(100_000)], priorAnnualCoveredCount: 10 } as never);
+  check("치료행위 수 미입력 → 차단(보상 횟수로 대신 세지 않음)",
+    missing.status === "PENDING_UNVERIFIED" && missing.lines.length === 0
+    && missing.totalOwnPay === null && missing.totalInsurancePay === null, missing.status);
+  const zeroRows = msk([out(0), out(0)], { approvedThroughVisit: 10, priorAnnualTreatmentActCount: 10 });
   check("0원 행은 승인 판정에 세지 않음", zeroRows.status === "OK", JSON.stringify(zeroRows.notes));
   const badApproved = calculateGen2026Item({ route: "special_item", coverage: "non_benefit", severity: "critical", item: "musculoskeletal_esw", lines: [out(100_000)], approvedThroughVisit: 15 as never });
   check("승인 회차는 10회 단위만", badApproved.status === "PENDING_UNVERIFIED" && badApproved.route === "rejected");
@@ -199,7 +213,7 @@ console.log("\n[중증 MRI] 500만원 공제 pool");
   check("근골격계·주사료 안내에 pool 제외 명시", m.notes.some((n) => n.includes("500만 원 공제금액 상한에서 제외")));
   // ⚠ 근골격계·주사료 행 타입에는 tier가 없다(구조적 차단). 외부 데이터가 tier를 실어 보내도
   //    pool이 적용되면 안 된다 — 제5조⑤ 괄호가 두 항목을 명시적으로 제외한다.
-  const mTier = calculateSpecialItem2026({ route: "special_item", coverage: "non_benefit", severity: "critical", item: "musculoskeletal_esw", lines: [{ amount: 10_000_000, visit: "inpatient", tier: "hospital" } as never], approvedThroughVisit: 10 });
+  const mTier = calculateSpecialItem2026({ route: "special_item", coverage: "non_benefit", severity: "critical", item: "musculoskeletal_esw", lines: [{ amount: 10_000_000, visit: "inpatient", tier: "hospital" } as never], approvedThroughVisit: 10, priorAnnualTreatmentActCount: 0 });
   const iTier = calculateSpecialItem2026({ route: "special_item", coverage: "non_benefit", severity: "critical", item: "injection", injectionPurpose: "general", lines: [{ amount: 10_000_000, visit: "inpatient", tier: "hospital" } as never] });
   check("근골격계 행에 tier가 실려도 pool 미적용",
     mTier.lines[0].deductible.poolUsedAfter === null && mTier.lines[0].deductible.deductibleApplied === 3_000_000, JSON.stringify(mTier.lines[0].deductible));

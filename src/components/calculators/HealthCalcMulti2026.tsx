@@ -118,6 +118,9 @@ export default function HealthCalcMulti2026() {
     GEN2026_MSK_APPROVED_THROUGH_VALUES[0],
   );
   const [priorCount, setPriorCount] = useState("0");
+  // ⚠ 기본값 없음. 승인 구간은 '치료횟수' 축이고 '보상한 횟수'로 대신 셀 수 없다.
+  //   미입력을 0으로 추정하면 승인 경계를 넘겼는지 모르는 채 보험금을 계산하게 된다.
+  const [priorActs, setPriorActs] = useState("");
   const [priorPool, setPriorPool] = useState("0");
   const [submitted, setSubmitted] = useState(false);
 
@@ -148,6 +151,11 @@ export default function HealthCalcMulti2026() {
   //   일수: 0·음수·소수·빈 값은 불완전.
   const rcIncomplete = showRoomChargeForm
     && rcRows.some((r) => roomChargeAmount(r.amount) === null || positiveDays(r.days) === null);
+  // 중증 근골격계는 보상 승인 회차 판정에 '과거 치료행위 수'가 필요하다(<표1> 주)).
+  //   확인된 0회와 미입력을 구분한다 — 0은 유효값이고 빈 값이면 계산하지 않는다.
+  const needsPriorActs = coverage === "non_benefit" && severity === "critical"
+    && specialItem === "musculoskeletal_esw" && route === "special_item"
+    && outpatientDays(priorActs) === null;
   // 비중증 통원은 연 100일 한도가 걸리므로 이미 사용한 일수를 알아야 계산할 수 있다.
   //   빈 값을 0으로 추정하지 않는다 — 한도가 통째로 사라져 보험금이 과다 산출된다.
   const needsOutDays = coverage === "non_benefit" && (nonBenefitItem === "general" || route === "general")
@@ -167,6 +175,7 @@ export default function HealthCalcMulti2026() {
   //   판별 유니온이라 잘못된 조합은 여기서 컴파일되지 않는다.
   let itemResult: Gen2026ItemClaimResult | null = null;
   if (coverage === "non_benefit" && specialItem !== null && severity !== "" && !rowsIncomplete
+      && !needsPriorActs
       && !(route === "general" && (cause === "" || (visit === "inpatient" && nbInpatientTier === "") || needsOutDays))) {
     const generalCommon = {
       route: "general" as const, coverage: "non_benefit" as const, cause: cause as Cause, visit,
@@ -189,7 +198,9 @@ export default function HealthCalcMulti2026() {
           route: "special_item", coverage: "non_benefit", severity: "critical",
           item: "musculoskeletal_esw", lines: specialLines,
           approvedThroughVisit: approvedThrough,
+          // ⚠ 두 축을 서로 대신 쓰지 않는다. 위는 연 50회 한도, 아래는 승인 구간용이다.
           priorAnnualCoveredCount: num(priorCount),
+          priorAnnualTreatmentActCount: outpatientDays(priorActs) ?? undefined,
           priorAnnualInsurancePaid: num(priorInsurance),
         });
       } else if (specialItem === "mri") {
@@ -357,7 +368,8 @@ export default function HealthCalcMulti2026() {
     </div>}
     {showSpecialForm && <div className="mt-5 grid gap-3 sm:grid-cols-2">
       <label className="text-sm font-semibold">계약해당일 기준 1년간 이 보장종목의 기존 지급보험금<input className="input-base mt-1" inputMode="numeric" value={priorInsurance} onChange={(e) => setPriorInsurance(e.target.value)} /></label>
-      {(specialItem === "musculoskeletal_esw" || specialItem === "injection") && <label className="text-sm font-semibold">계약해당일 기준 1년간 이미 보상한 횟수<input className="input-base mt-1" type="number" min="0" value={priorCount} onChange={(e) => setPriorCount(e.target.value)} /></label>}
+      {(specialItem === "musculoskeletal_esw" || specialItem === "injection") && <label className="text-sm font-semibold">계약해당일 기준 1년간 이미 <b>보상한 횟수</b> (연 50회 한도용)<input className="input-base mt-1" type="number" min="0" value={priorCount} onChange={(e) => setPriorCount(e.target.value)} /></label>}
+      {specialItem === "musculoskeletal_esw" && <label className="text-sm font-semibold">계약해당일 기준 1년간 이미 받은 <b>치료행위 수</b> (보상 승인 회차용)<input className="input-base mt-1" inputMode="numeric" value={priorActs} onChange={(e) => setPriorActs(e.target.value)} placeholder="받은 치료가 없으면 0" /><span className="mt-2 block text-xs font-normal text-slate-500">약관은 보상 승인 회차를 <b>&lsquo;각 치료횟수&rsquo;</b>로 셉니다(&lt;표1&gt; 주)). 위의 <b>보상한 횟수</b>는 보험금이 지급된 횟수라, 공제금액에 못 미쳐 <b>0원이 지급된 치료</b>가 있으면 두 값이 달라집니다. 보험사에서 확인한 값을 입력해 주세요.</span></label>}
       {needsRowTier && <label className="text-sm font-semibold">계약해당일 기준 1년간 이미 누적된 공제금액 (500만 원 상한)<input className="input-base mt-1" inputMode="numeric" value={priorPool} onChange={(e) => setPriorPool(e.target.value)} /></label>}
       <p className="text-xs text-slate-500 sm:col-span-2">약관은 연간 보장한도(금액)에서 <b>지급한 금액</b>을, 연간 보장한도(횟수)에서 <b>보상한 횟수</b>를 차감합니다(특별약관1 제3조(3)제7항·제5조 제4항). 일반 비급여의 통원 가입금액(20만 원)과 연간 보험가입금액은 이 보장종목에 적용되지 않습니다.</p>
     </div>}
@@ -368,6 +380,7 @@ export default function HealthCalcMulti2026() {
     {submitted && needsPurpose && <div className="mt-5"><NoticeBox variant="warning">비급여 주사료는 <b>약제 용도</b>에 따라 보상하는 보장종목이 달라집니다(특별약관1 제3조(3)제2항). 약제 용도를 선택해 주세요. 선택 전에는 계산하지 않습니다.</NoticeBox></div>}
     {submitted && rcIncomplete && <div className="mt-5"><NoticeBox variant="warning">각 입원의 <b>차액 총액</b>과 <b>총 입원일수</b>를 올바르게 입력해 주세요. 차액 총액은 <b>0 이상의 숫자</b>, 총 입원일수는 <b>1 이상의 정수</b>여야 합니다. 음수·문자가 섞인 값은 계산기가 임의로 고치지 않고, 약관에 일수 산정 방법이 정해져 있지 않아 일수도 추정하지 않습니다. 올바르게 입력하기 전에는 계산하지 않습니다.</NoticeBox></div>}
     {submitted && needsTier && <div className="mt-5"><NoticeBox variant="warning">비급여 <b>입원</b>은 <b>의료기관 종별</b>에 따라 보험금이 달라집니다. 중증은 공제금액 상한 500만 원이 상급종합·종합병원 입원에만 적용되고(특별약관1 제5조 제5항), 비중증은 1회당 300만 원 한도가 병·의원급에만 적용됩니다(특별약관2 제3조 (1)제1항·(2)제1항). <b>입원 의료기관</b>을 선택해 주세요. 선택 전에는 계산하지 않습니다.</NoticeBox></div>}
+    {submitted && needsPriorActs && <div className="mt-5"><NoticeBox variant="warning">근골격계 이학요법·체외충격파는 최초 10회 이후 증상의 개선·병변호전이 확인된 경우에 한하여 10회 단위로 보상합니다(특별약관1 제3조(3)제1항 &lt;표1&gt; 주)). 승인 회차는 약관상 <b>&lsquo;각 치료횟수&rsquo;</b>로 세므로, 계약해당일 기준 1년간 <b>이미 받은 치료행위 수</b>를 입력해 주세요. 받은 치료가 없으면 <b>0</b>을 입력하시면 됩니다. <b>보상한 횟수</b>는 보험금이 지급된 횟수라 대신 쓰지 않으며, 입력 전에는 계산하지 않습니다.</NoticeBox></div>}
     {submitted && needsOutDays && <div className="mt-5"><NoticeBox variant="warning">계약해당일 기준 1년간 <b>이미 사용한 통원일수</b>를 입력해 주세요. 이전 통원이 없으면 <b>0</b>을 입력하세요. 비중증 통원은 연 {GEN2026.nonBenefit.nonCritical.outpatientAnnualDays}일이 한도라 이 값이 있어야 계산할 수 있고, 계산기가 0으로 추정하지 않습니다. 0 이상의 정수만 받으며 음수·소수는 계산하지 않습니다.</NoticeBox></div>}
     {submitted && needsCause && <div className="mt-5"><NoticeBox variant="warning">일반 상해·질병 비급여는 약관상 <b>상해비급여·질병비급여 각각</b>에 대해 연간 보험가입금액과 누적이 따로 정해집니다(특별약관1·2 제5조 제1항). <b>원인</b>을 선택해 주세요. 선택 전에는 계산하지 않습니다.</NoticeBox></div>}
     {submitted && rowsIncomplete && <div className="mt-5"><NoticeBox variant="warning">각 행의 <b>치료 형태</b>{needsRowTier ? <>와 입원 행의 <b>의료기관 종별</b></> : null}를 선택해 주세요.{needsRowTier ? " 중증 비급여 MRI 입원은 의료기관 종별에 따라 공제금액 상한 500만 원 적용 여부가 달라지므로 기본값으로 계산하지 않습니다." : ""}</NoticeBox></div>}

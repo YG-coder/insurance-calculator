@@ -159,6 +159,17 @@ function validateItemInput(input: Exclude<Gen2026ItemClaimInput, Gen2026RoomChar
       // tier는 조건부 필수다. 값이 실려 왔다면 그 값 자체는 반드시 유효해야 한다.
       if (line.tier !== undefined && !oneOf(line.tier, TIER_VALUES)) return rejected(`${i + 1}번째 행의 의료기관 종별(tier)`, line.tier);
     }
+    // 승인 구간의 '치료횟수' 축은 근골격계 전용이다. 다른 항목에 실리면 조용히 버리지 않고 막는다.
+    //   ⚠ '보상한 횟수'(priorAnnualCoveredCount)와 다른 축이다. 서로 대신 쓰지 않는다.
+    const acts = (raw as { priorAnnualTreatmentActCount?: unknown }).priorAnnualTreatmentActCount;
+    const usesActs = raw.severity === "critical" && raw.item === "musculoskeletal_esw";
+    if (!usesActs && acts !== undefined) {
+      return rejected("과거 치료행위 수(priorAnnualTreatmentActCount)는 근골격계 이학요법·체외충격파의 보상 승인 구간에만 쓰입니다 —", acts);
+    }
+    if (acts !== undefined
+      && !(typeof acts === "number" && Number.isSafeInteger(acts) && acts >= 0)) {
+      return rejected("과거 치료행위 수(priorAnnualTreatmentActCount)는 0 이상의 정수여야 합니다 —", acts);
+    }
     const approved = raw.approvedThroughVisit;
     if (approved !== undefined && !(typeof approved === "number" && (GEN2026_MSK_APPROVED_THROUGH_VALUES as readonly number[]).includes(approved))) {
       return rejected("보상 승인 회차(approvedThroughVisit)", approved);
@@ -212,7 +223,7 @@ const GENERAL_LIMITS_NOTE =
   "일반 비급여의 통원 가입금액(20만 원)과 연간 보험가입금액은 이 보장종목에 적용되지 않습니다. 한도는 약관이 정한 금액·횟수입니다(특별약관1 제5조 제1항 단서·제3항).";
 
 const UNIT_NOTE: Record<Gen2026SpecialItem, string> = {
-  musculoskeletal_esw: "근골격계 이학요법·체외충격파는 치료행위마다 공제금액과 한도를 각각 적용합니다(제3조(3)④제1호). 2종류 이상을 받거나 같은 치료를 2회 이상 받았다면 행을 나눠 입력해 주세요.",
+  musculoskeletal_esw: "근골격계 이학요법·체외충격파는 치료행위마다 공제금액과 한도를 각각 적용합니다(제3조(3)④제1호). 2종류 이상을 받거나 같은 치료를 2회 이상 받았다면 행을 나눠 입력해 주세요. 보상 승인 회차(최초 10회·이후 10회 단위)는 약관상 '각 치료횟수'로 셉니다(<표1> 주)). '이미 보상한 횟수'는 보험금이 지급된 횟수라 지급 0원 치료가 있으면 치료행위 수와 달라지므로, 두 값을 따로 입력받고 서로 대신 쓰지 않습니다.",
   injection: "비급여 주사료는 1회 통원(또는 1회 입원)에서 2회 이상 주사치료를 받아도 1회로 봅니다(제3조(3)④제2호). 같은 1회 안의 주사료는 합산해 한 행에 입력해 주세요.",
   mri: "비급여 MRI는 진단행위마다 공제금액과 한도를 각각 적용합니다(제3조(3)④제3호). 2개 이상 부위를 촬영했거나 같은 부위를 2회 이상 촬영했다면 행을 나눠 입력해 주세요.",
 };
@@ -363,8 +374,25 @@ function calculateSpecialItem2026(input: Gen2026SpecialItemInput): Gen2026Specia
         `보상 승인 회차는 ${GEN2026_MSK_APPROVED_THROUGH_VALUES.join("·")}회 중 하나여야 합니다(<표1> 주) — 10회 단위).`,
       ]);
     }
-    // 모든 행위가 횟수를 소진한다고 본 최대치. 이 기준을 통과하면 0원 해석과 무관하게 승인이 충분하다.
-    const maxCount = nonNegInt(input.priorAnnualCoveredCount)
+    // 승인 구간의 카운터 **단위**는 치료행위다 — <표1> 주)의 "각 치료횟수를 합산하여 최초
+    //   10회 보장"(GEN2026-MSK-APPROVAL-COUNT-BASIS = "treatment_acts", 인쇄 p.264).
+    //
+    // ⚠ 과거분에 priorAnnualCoveredCount('보상한 횟수')를 대신 쓰지 않는다. 두 축은 지급
+    //   0원 치료가 있으면 갈라지고, 그 차이가 승인 판정과 지급 결과를 뒤집는다. 대신 쓰면
+    //   과소 집계된 채 OK와 보험금을 돌려주게 되므로 안전하지 않다.
+    // ⚠ 미입력을 0으로 추정하지도 않는다. "확인 결과 0회"와 "모른다"는 다른 상태다.
+    //   모르는 상태에서는 승인 경계를 넘겼는지 판정할 수 없으므로 **묶음 전체를 막는다.**
+    const priorActs = (input as { priorAnnualTreatmentActCount?: number }).priorAnnualTreatmentActCount;
+    if (priorActs === undefined) {
+      return blocked(totalAmount, [
+        `근골격계 이학요법·체외충격파는 최초 ${S.msk.initialApprovedVisits}회 이후에는 증상의 개선·병변호전 등이 확인된 경우에 한하여 ${S.msk.approvalStep}회 단위로 보상합니다(특별약관1 제3조(3)제1항 <표1> 주)).`,
+        "승인 회차는 약관상 '각 치료횟수'로 세므로, 계약해당일 이후 이미 받은 치료행위 수를 알아야 이번 청구가 승인 범위 안인지 판정할 수 있습니다.",
+        "'이미 보상한 횟수'는 보험금이 지급된 횟수라 치료행위 수와 다를 수 있어 대신 쓰지 않습니다. 보험사에서 확인한 치료행위 수를 입력해 주세요. 받은 치료가 없으면 0을 입력하시면 됩니다.",
+      ]);
+    }
+    // ⚠ 연간 50회 한도의 '보상한 횟수'는 이 규칙으로 확정되지 않는다
+    //   (GEN2026-SPECIAL-ITEM-COUNT-ZEROPAY = HOLD). 아래 두 해석 비교가 그쪽을 담당한다.
+    const maxCount = priorActs
       + lines.filter((l) => normalizeAmount(l.amount) > 0).length;
     const needApproval = Math.min(maxCount, S.msk.annualVisits);
     if (needApproval > approved) {

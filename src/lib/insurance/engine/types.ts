@@ -329,8 +329,18 @@ export interface Gen2026CriticalMskInput extends Gen2026SpecialBase {
   item: "musculoskeletal_esw";
   lines: Gen2026SpecialLine[];
   approvedThroughVisit?: Gen2026MskApprovedThrough; // 미지정 시 10
-  /** ⑦·제5조④의 "보상한 횟수". */
+  /**
+   * ⑦·제5조④의 "보상한 횟수". **연간 50회 한도 전용**이다.
+   *   ⚠ 승인 구간(최초 10회·10회 단위)에 쓰지 않는다 — 그쪽은 '치료횟수' 축이다.
+   */
   priorAnnualCoveredCount?: number;
+  /**
+   * <표1> 주)의 "각 치료횟수" — **승인 구간 전용**. 보험사에서 확인한, 계약해당일 이후
+   * 이미 받은 치료행위 수다. 지급 보험금이 0원이었던 치료도 포함한다.
+   *   ⚠ `undefined`(미입력)와 `0`(확인 결과 없음)은 다른 상태다. 미입력을 0으로 추정하면
+   *     승인 경계를 넘겼는지 알 수 없는 채로 보험금을 계산하게 된다.
+   */
+  priorAnnualTreatmentActCount?: number;
   injectionPurpose?: never;
 }
 
@@ -341,6 +351,8 @@ export interface Gen2026CriticalInjectionInput extends Gen2026SpecialBase {
   injectionPurpose: "general";
   lines: Gen2026SpecialLine[];
   priorAnnualCoveredCount?: number;
+  /** 승인 구간은 근골격계에만 있다. */
+  priorAnnualTreatmentActCount?: never;
 }
 
 export interface Gen2026CriticalMriInput extends Gen2026SpecialBase {
@@ -350,6 +362,7 @@ export interface Gen2026CriticalMriInput extends Gen2026SpecialBase {
   /** 제5조⑤ 500만원 pool의 연 누적 공제금액. 3대비급여 중 MRI만 대상이다. */
   priorAnnualInpatientDeductible?: number;
   injectionPurpose?: never;
+  priorAnnualTreatmentActCount?: never;
   // <표1>에 횟수 한도가 없다 → 횟수 필드 없음
 }
 
@@ -358,6 +371,7 @@ export interface Gen2026NonCriticalMriInput extends Gen2026SpecialBase {
   item: "mri";
   lines: Gen2026SpecialLine[];
   injectionPurpose?: never;
+  priorAnnualTreatmentActCount?: never;
   // 특약2 제5조에는 500만원 조항이 없고(인쇄 p.309~310), <표1>에 횟수 한도도 없다.
 }
 
@@ -382,6 +396,8 @@ interface Gen2026RoutedGeneralBase {
   annualCoverageLimit?: number;
   outpatientCoverageLimit?: number;
   priorAnnualDeductible?: number;
+  /** 승인 구간은 (3)3대비급여의 근골격계에만 있다. 일반 경로에는 없다. */
+  priorAnnualTreatmentActCount?: never;
   // ⚠ 통원 카운터는 여기 두지 않는다. 중증은 '회'(특약1), 비중증은 '일'(특약2)로
   //   단위가 다르므로 공통 베이스에 두면 어느 축이든 아무 필드나 실을 수 있게 된다.
   //   각 변형에서 쓰는 쪽만 열고 반대편은 never로 닫는다.
@@ -458,6 +474,7 @@ export interface Gen2026RoomChargeInput {
   outpatientCoverageLimit?: never;
   priorAnnualOutpatientVisits?: never;
   priorAnnualOutpatientDays?: never;
+  priorAnnualTreatmentActCount?: never;
 }
 
 export type Gen2026ItemClaimInput =

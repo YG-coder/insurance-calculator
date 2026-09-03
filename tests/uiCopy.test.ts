@@ -45,15 +45,40 @@ check("5세대 페이지: 단건 미반영 범위를 연간 항목으로 한정"
       /useState<Gen2026NonBenefitItem \| (?:null>\(null\)|"">\(""\))/.test(src), src.slice(0, 0));
     check(`5세대 ${name} UI: 치료유형이 "general"로 자동 선택되지 않음`,
       !/useState<[^>]*>\(\s*"general"\s*\)/.test(src));
-    check(`5세대 ${name} UI: 치료유형 선택 전에는 계산하지 않음`,
-      /needsItem[\s\S]{0,40}\? null/.test(src));
     check(`5세대 ${name} UI: 치료유형 라벨 5종 노출`,
       src.includes("NON_BENEFIT_ITEMS") && src.includes("GEN2026_NON_BENEFIT_ITEM_LABEL"));
     check(`5세대 ${name} UI: 미선택 시 계산 차단 안내`,
       src.includes("치료유형을 먼저") && src.includes("선택 전에는 계산하지 않습니다"));
-    // 입력이 실제 엔진에 전달되는지 — 화면에 선택지만 있고 엔진이 받지 않으면 차단이 무의미하다.
-    check(`5세대 ${name} UI: 치료유형이 엔진 입력으로 전달됨`, /nonBenefitItem:\s*nonBenefitItem/.test(src));
   }
+  // 단건은 계산 자체를 삼항으로 막는다.
+  check("5세대 단건 UI: 치료유형 선택 전에는 계산하지 않음", /needsItem \|\| needsSeverity[\s\S]{0,40}\? null/.test(gen5));
+  check("5세대 단건 UI: 치료유형이 엔진 입력으로 전달됨", /nonBenefitItem:\s*nonBenefitItem/.test(gen5));
+  // ⚠ 다회는 2026-09-03 커밋 2에서 경로가 셋(일반 / 별도 보장종목 / 일반 경로 전환)으로 갈렸다.
+  //    "삼항으로 null" 한 가지 형태를 강요하지 않고, **선택 전에는 어떤 엔진도 호출되지 않는지**를 본다.
+  //    각 계산 진입 조건에 미선택 배제가 붙어 있어야 한다.
+  // ⚠ 조건문 전체를 통째로 비교하면 조건이 하나 늘 때마다 깨진다. **필요한 배제 조건이
+  //    계산 진입 게이트에 실제로 들어 있는지**를 조각으로 확인한다.
+  const specialGate = (gen5Multi.match(/if \(coverage === "non_benefit"[^)]*\)[^)]*\)[^{]*\{/) ?? [""])[0];
+  check("5세대 다회 UI: 별도 보장종목 계산 게이트에 치료유형 배제",
+    specialGate.includes("specialItem !== null"), specialGate);
+  check("5세대 다회 UI: 별도 보장종목 계산 게이트에 질환 구분 배제",
+    specialGate.includes('severity !== ""'), specialGate);
+  check("5세대 다회 UI: 별도 보장종목 계산 게이트에 행 미완성 배제",
+    specialGate.includes("!rowsIncomplete"), specialGate);
+  const plainGate = (gen5Multi.match(/: nonBenefitItem === "general"[\s\S]{0,120}\? calculateMany2026/) ?? [""])[0];
+  check("5세대 다회 UI: 일반 비급여 계산 게이트에 치료유형 배제",
+    plainGate.includes('nonBenefitItem === "general"'), plainGate);
+  check("5세대 다회 UI: 일반 비급여 계산 게이트에 질환 구분 배제",
+    plainGate.includes('severity !== ""'), plainGate);
+  check("5세대 다회 UI: 미선택이면 결과가 null",
+    /: null;/.test(gen5Multi) && /const plainResult = coverage === "benefit"/.test(gen5Multi));
+  // 선택값이 실제 엔진 입력으로 전달되는지 — 화면에만 있고 엔진이 받지 않으면 차단이 무의미하다.
+  check("5세대 다회 UI: 치료유형이 경로 판정과 엔진 입력으로 전달됨",
+    /routeOfGen2026Item\(severity, specialItem/.test(gen5Multi)
+    && /item: specialItem/.test(gen5Multi)
+    && /nonBenefitItem: "general"/.test(gen5Multi));
+  check("5세대 다회 UI: 질환 구분이 엔진 입력으로 전달됨",
+    /severity: "critical"/.test(gen5Multi) && /severity: "non_critical"/.test(gen5Multi) && /severity,/.test(gen5Multi));
 
   // 질환 구분(중증/비중증)도 기본 선택이 없어야 한다. 단건은 처음부터 null이었고,
   //   다회만 "critical"이 기본이라 두 화면의 정책이 어긋나 있었다.
@@ -63,10 +88,6 @@ check("5세대 페이지: 단건 미반영 범위를 연간 항목으로 한정"
       /useState<Severity \| (?:null>\(null\)|"">\(""\))/.test(src));
     check(`5세대 ${name} UI: 질환 구분이 "critical"로 자동 선택되지 않음`,
       !/useState<Severity[^>]*>\(\s*"critical"\s*\)/.test(src));
-    // ⚠ 변수 존재만 보면 게이트에서 빠져도 통과한다. 결과를 null로 만드는
-    //    분기에 실제로 연결돼 있는지까지 본다.
-    check(`5세대 ${name} UI: 질환 구분 선택 전에는 계산하지 않음`,
-      /needsItem \|\| needsSeverity[\s\S]{0,40}\? null/.test(src));
     check(`5세대 ${name} UI: 미선택 시 질환 구분 선택 안내`,
       src.includes("질환 구분을 선택해 주세요"));
   }

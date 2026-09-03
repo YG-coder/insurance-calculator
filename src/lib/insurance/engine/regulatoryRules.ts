@@ -96,6 +96,18 @@ const GEN3_RIDER_MRI: RegulatorySource = {
 //   항목들(자기부담 상한 기산점, 같은 날 통원 적용 단위)은 이 원문으로 확정된다.
 //   재현 절차: 아래 URL → "[별표 15] 표준약관(제5-13조제1항관련)" → 별표연혁에서 2026. 5. 6. 선택.
 // ─────────────────────────────────────────────────────────────────────
+/**
+ * 판본 직행 주소. 별표 PDF로 직행하는 안정적 주소가 없어(뷰어가 1회용 key를 쓴다)
+ * 각 판본의 admRulSeq가 박힌 공식 행정규칙 주소를 쓴다.
+ * 2026-09-03 확인: 아래 주소로 [별표 15](식별번호 3216359) 뷰어에 도달하며
+ * [시행] 2026. 5. 6. / [공포] 2026. 5. 6. 표기가 일치했다.
+ */
+const BYLAW15_VERSION_URL_FOR_RULES = {
+  "2026-05-06": "https://www.law.go.kr/LSW/admRulInfoP.do?admRulSeq=2200000108697",
+  "2026-07-15": "https://www.law.go.kr/LSW/admRulInfoP.do?admRulSeq=2200000108867",
+  "2026-09-10": "https://www.law.go.kr/LSW/admRulInfoP.do?admRulSeq=2200000108939",
+} as const;
+
 const GEN5_SOURCE_BASE = {
   document: "보험업감독업무시행세칙 [별표 15] 표준약관 — 2026. 5. 6. 연혁본",
   issuer: "금융감독원",
@@ -126,6 +138,67 @@ const GEN5_NONCRITICAL_TERMS: RegulatorySource = {
 const GEN5_CRITICAL_ANNUAL_TERMS: RegulatorySource = {
   ...GEN5_SOURCE_BASE,
   locator: "□ 실손의료보험 특별약관1 제5조(보험가입금액 한도 등) 제1항, 인쇄 p.279",
+};
+
+// ─────────────────────────────────────────────────────────────────────
+// 별도 보장종목(3대비급여·비중증 MRI) 근거.
+//   2026-09-03에 아래 조문을 판본 직행 주소로 직접 읽었으므로, 검색 페이지 주소가 아니라
+//   admRulSeq가 박힌 2026.5.6 공포·시행본 주소를 쓴다. 별표 식별번호는 3216359다.
+//   ⚠ 이 규칙들은 **2026.5.6 판본만** 대조했다. 7.15·9.10 판본 주소를 붙이지 않는다.
+// ─────────────────────────────────────────────────────────────────────
+const GEN5_DIRECT_BASE = {
+  document: "보험업감독업무시행세칙 [별표 15] 표준약관 — 2026. 5. 6. 연혁본",
+  issuer: "금융감독원",
+  publishedOrEffective: "2026-05-06",
+  url: BYLAW15_VERSION_URL_FOR_RULES["2026-05-06"],
+};
+
+/** 특약1 제3조(3)① <표1> 공제금액 및 보장한도 — 3대비급여 3종의 공제·한도가 한 표에 있다. */
+const GEN5_THIRD_TABLE: RegulatorySource = {
+  ...GEN5_DIRECT_BASE,
+  locator: "별표/서식 → [별표 15] 표준약관(별표 식별번호 3216359) → 실손의료보험 특별약관1(중증 비급여 실손의료비) 제3조(보장종목별 보상내용) (3)3대비급여 제1항 <표1> 공제금액 및 보장한도, 2026. 5. 6. 공포·시행본 인쇄 p.263~264",
+};
+
+/** 같은 <표1>의 주) — 근골격계 10회 단위 재평가. */
+const GEN5_MSK_APPROVAL_NOTE: RegulatorySource = {
+  ...GEN5_DIRECT_BASE,
+  locator: "별표/서식 → [별표 15] 표준약관(별표 식별번호 3216359) → 특별약관1 제3조 (3)3대비급여 제1항 <표1> 주), 2026. 5. 6. 공포·시행본 인쇄 p.264",
+};
+
+/** 특약1 제3조(3)② — 항암제·항생제(항진균제 포함)·희귀의약품 주사료의 경로. */
+const GEN5_INJECTION_EXCEPTION: RegulatorySource = {
+  ...GEN5_DIRECT_BASE,
+  locator: "별표/서식 → [별표 15] 표준약관(별표 식별번호 3216359) → 특별약관1 제3조 (3)3대비급여 제2항, 2026. 5. 6. 공포·시행본 인쇄 p.265",
+};
+
+/** 특약1 제3조(3)④ — 1회 통원(입원)의 공제 적용 단위. */
+const GEN5_THIRD_DEDUCT_UNIT: RegulatorySource = {
+  ...GEN5_DIRECT_BASE,
+  locator: "별표/서식 → [별표 15] 표준약관(별표 식별번호 3216359) → 특별약관1 제3조 (3)3대비급여 제4항 제1호~제3호, 2026. 5. 6. 공포·시행본 인쇄 p.266",
+};
+
+/** 특약1 제5조①③ — 3대비급여 가입금액은 표1 한도로 하고, 통원 20만원은 (1)(2)만. */
+const GEN5_THIRD_LIMIT_BASIS: RegulatorySource = {
+  ...GEN5_DIRECT_BASE,
+  locator: "별표/서식 → [별표 15] 표준약관(별표 식별번호 3216359) → 특별약관1 제5조(보험가입금액 한도 등) 제1항 단서·제3항, 2026. 5. 6. 공포·시행본 인쇄 p.279~280",
+};
+
+/** 특약1 제3조(3)⑦·제5조④ — 금액은 "지급한 금액", 횟수는 "보상한 횟수"로 차감. */
+const GEN5_THIRD_CARRYOVER: RegulatorySource = {
+  ...GEN5_DIRECT_BASE,
+  locator: "별표/서식 → [별표 15] 표준약관(별표 식별번호 3216359) → 특별약관1 제3조 (3)3대비급여 제7항 및 <보상기간 예시>, 제5조 제4항, 2026. 5. 6. 공포·시행본 인쇄 p.265·p.267·p.280",
+};
+
+/** 특약2 제3조(3)① <표1>·③ — 비중증 비급여 자기공명영상진단. */
+const GEN5_NONCRITICAL_MRI_TABLE: RegulatorySource = {
+  ...GEN5_DIRECT_BASE,
+  locator: "별표/서식 → [별표 15] 표준약관(별표 식별번호 3216359) → 실손의료보험 특별약관2(비중증 비급여 실손의료비) 제3조 (3)비급여 자기공명영상진단 제1항 <표1>·제3항, 2026. 5. 6. 공포·시행본 인쇄 p.293~294",
+};
+
+/** 특약2 (1)①·(2)① — 배제 대상이 MRI뿐이라 비중증 근골격계·주사료는 일반 경로다. */
+const GEN5_NONCRITICAL_GENERAL_SCOPE: RegulatorySource = {
+  ...GEN5_DIRECT_BASE,
+  locator: "별표/서식 → [별표 15] 표준약관(별표 식별번호 3216359) → 특별약관2 제3조 (1)상해비급여 제1항·(2)질병비급여 제1항, 2026. 5. 6. 공포·시행본 인쇄 p.287·p.290",
 };
 
 const GEN5_NONCRITICAL_ANNUAL_TERMS: RegulatorySource = {
@@ -185,11 +258,7 @@ const FSC_SUPERVISION_REG_DISCOUNT: RegulatorySource = {
  *
  * 2026-09-03 확인: 세 주소 모두 200이며 [시행]·[공포] 표기가 아래와 일치했다.
  */
-const BYLAW15_VERSION_URL = {
-  "2026-05-06": "https://www.law.go.kr/LSW/admRulInfoP.do?admRulSeq=2200000108697",
-  "2026-07-15": "https://www.law.go.kr/LSW/admRulInfoP.do?admRulSeq=2200000108867",
-  "2026-09-10": "https://www.law.go.kr/LSW/admRulInfoP.do?admRulSeq=2200000108939",
-} as const;
+const BYLAW15_VERSION_URL = BYLAW15_VERSION_URL_FOR_RULES;
 
 const GEN5_PREMIUM_ADJUSTMENT_TERMS: readonly RegulatorySource[] = [
   {
@@ -532,6 +601,99 @@ export const REGULATORY_RULES = {
     "GEN2026-CRITICAL-ANNUAL-DEDUCTIBLE-CAP", 5_000_000, [GEN5_CRITICAL_LIMIT_TERMS],
     "제5조⑤ — 상급종합·종합병원 입원의 공제금액이 계약일 또는 매년 계약해당일부터 기산하여 연간 500만원을 초과하면 500만원까지만 공제",
   ),
+
+  // ── 별도 보장종목 (3)3대비급여 / 특약2 (3)비급여 MRI ──────────────
+  //   ⚠ 값이 아니라 **적용 축**부터 다르다. 일반 (1)(2)의 통원 20만원·연간 가입금액은
+  //     여기 적용되지 않는다(제5조①단서·③). 한도는 상해·질병을 합산한다(<표1>).
+  GEN2026_THIRD_DEDUCTIBLE_FIXED: confirmed5th(
+    "GEN2026-THIRD-DEDUCTIBLE-FIXED", 30_000, [GEN5_THIRD_TABLE],
+    "3대비급여 3종 공통 — <표1> 공제금액 '1회당 3만원과 보장대상의료비의 30% 중 큰 금액'의 정액 부분",
+  ),
+  GEN2026_THIRD_DEDUCTIBLE_RATE: confirmed5th(
+    "GEN2026-THIRD-DEDUCTIBLE-RATE", 0.30, [GEN5_THIRD_TABLE],
+    "3대비급여 3종 공통 — <표1> 공제금액의 정률 부분",
+  ),
+  GEN2026_MSK_ANNUAL_COVERAGE: confirmed5th(
+    "GEN2026-MSK-ANNUAL-COVERAGE", 3_500_000, [GEN5_THIRD_TABLE],
+    "근골격계 이학요법치료·체외충격파치료 — 계약일 또는 매년 계약해당일부터 1년 단위로 각 상해·질병 치료행위를 합산하여 350만원 이내에서 보상",
+  ),
+  GEN2026_MSK_ANNUAL_VISITS: confirmed5th(
+    "GEN2026-MSK-ANNUAL-VISITS", 50, [GEN5_THIRD_TABLE],
+    "근골격계 이학요법치료·체외충격파치료 — 같은 기간 50회까지 보상",
+  ),
+  GEN2026_MSK_INITIAL_APPROVED_VISITS: confirmed5th(
+    "GEN2026-MSK-INITIAL-APPROVED-VISITS", 10, [GEN5_MSK_APPROVAL_NOTE],
+    "<표1> 주) — 각 치료횟수를 합산하여 최초 10회는 조건 없이 보장한다. 계산기의 승인 회차 기본값 근거",
+  ),
+  GEN2026_MSK_APPROVAL_STEP: confirmed5th(
+    "GEN2026-MSK-APPROVAL-STEP", 10, [GEN5_MSK_APPROVAL_NOTE],
+    "<표1> 주) — 최초 10회 이후에는 증상의 개선·병변호전 등이 확인된 경우에 한하여 10회 단위로 연간 50회까지 보상. 개선 여부는 계산기가 판정하지 않는다",
+  ),
+  GEN2026_INJECTION_ANNUAL_COVERAGE: confirmed5th(
+    "GEN2026-INJECTION-ANNUAL-COVERAGE", 2_500_000, [GEN5_THIRD_TABLE],
+    "비급여 주사료 — 각 상해·질병 치료행위를 합산하여 250만원 이내에서 보상",
+  ),
+  GEN2026_INJECTION_ANNUAL_VISITS: confirmed5th(
+    "GEN2026-INJECTION-ANNUAL-VISITS", 50, [GEN5_THIRD_TABLE],
+    "비급여 주사료 — 같은 기간 50회까지 보상",
+  ),
+  GEN2026_CRITICAL_MRI_ANNUAL_COVERAGE: confirmed5th(
+    "GEN2026-CRITICAL-MRI-ANNUAL-COVERAGE", 3_000_000, [GEN5_THIRD_TABLE],
+    "중증 비급여 자기공명영상진단 — 각 상해·질병 치료행위를 합산하여 300만원 이내에서 보상. <표1>에 횟수 한도가 없다",
+  ),
+  GEN2026_NONCRITICAL_MRI_DEDUCTIBLE_FIXED: confirmed5th(
+    "GEN2026-NONCRITICAL-MRI-DEDUCTIBLE-FIXED", 50_000, [GEN5_NONCRITICAL_MRI_TABLE],
+    "비중증 비급여 자기공명영상진단 — <표1> '1회당 5만원과 보장대상의료비의 50% 중 큰 금액'의 정액 부분",
+  ),
+  GEN2026_NONCRITICAL_MRI_DEDUCTIBLE_RATE: confirmed5th(
+    "GEN2026-NONCRITICAL-MRI-DEDUCTIBLE-RATE", 0.50, [GEN5_NONCRITICAL_MRI_TABLE],
+    "비중증 비급여 자기공명영상진단 — <표1> 공제금액의 정률 부분",
+  ),
+  GEN2026_NONCRITICAL_MRI_ANNUAL_COVERAGE: confirmed5th(
+    "GEN2026-NONCRITICAL-MRI-ANNUAL-COVERAGE", 2_000_000, [GEN5_NONCRITICAL_MRI_TABLE],
+    "비중증 비급여 자기공명영상진단 — 각 상해·질병 치료행위를 합산하여 200만원 이내에서 보상. 횟수 한도 없음",
+  ),
+  // 값이 아니라 **구조**를 고정하는 규칙들. 잘못 되돌리면 계산 축이 통째로 바뀐다.
+  GEN2026_SPECIAL_ITEM_CAUSE_MERGED: confirmed5th(
+    "GEN2026-SPECIAL-ITEM-CAUSE-MERGED", true, [GEN5_THIRD_TABLE, GEN5_NONCRITICAL_MRI_TABLE],
+    "별도 보장종목의 한도는 '각 상해·질병 치료행위를 합산하여' 적용된다. 일반 (1)(2)와 달리 원인별로 나뉘지 않으므로 입력에서 cause를 받지 않는다",
+  ),
+  GEN2026_SPECIAL_ITEM_SEPARATE_FROM_GENERAL_LIMITS: confirmed5th(
+    "GEN2026-SPECIAL-ITEM-SEPARATE-FROM-GENERAL-LIMITS", true, [GEN5_THIRD_LIMIT_BASIS],
+    "제5조① 단서 — (3)3대비급여의 보험가입금액은 제3조(3)제1항의 연간 보장한도로 한다. 제5조③ — 통원 1회당 20만원은 (1)(2)에만 적용되고 (3)은 각 비급여의료비별 보장한도로 한다",
+  ),
+  GEN2026_THIRD_DEDUCT_UNIT: confirmed5th(
+    "GEN2026-THIRD-DEDUCT-UNIT",
+    { musculoskeletal_esw: "per_act", injection: "per_visit", mri: "per_act" } as const,
+    [GEN5_THIRD_DEDUCT_UNIT],
+    "제3조(3)④ — 근골격계는 2종류 이상·동일 2회 이상을 각 치료행위 1회로, 주사는 1회 통원(입원)의 2회 이상 주사치료도 1회로, MRI는 2개 이상 부위·동일 부위 2회를 각 진단행위 1회로 본다",
+  ),
+  GEN2026_INJECTION_GENERAL_ROUTE_DRUGS: confirmed5th(
+    "GEN2026-INJECTION-GENERAL-ROUTE-DRUGS",
+    ["anticancer", "antibiotic", "orphan_drug"] as const,
+    [GEN5_INJECTION_EXCEPTION],
+    "제3조(3)② — 항암제, 항생제(항진균제 포함), 희귀의약품을 위해 사용된 비급여 주사료는 (1)상해비급여 또는 (2)질병비급여에서 보상한다",
+  ),
+  GEN2026_NONCRITICAL_MSK_INJECTION_GENERAL_ROUTE: confirmed5th(
+    "GEN2026-NONCRITICAL-MSK-INJECTION-GENERAL-ROUTE", true, [GEN5_NONCRITICAL_GENERAL_SCOPE],
+    "특약2 (1)①·(2)①이 배제하는 것은 '비급여 자기공명영상진단'뿐이다. 비중증 근골격계·주사료는 일반 상해·질병 비급여에서 보상한다",
+  ),
+  GEN2026_SPECIAL_ITEM_CARRYOVER_BASIS: confirmed5th(
+    "GEN2026-SPECIAL-ITEM-CARRYOVER-BASIS",
+    { amount: "paid_insurance", count: "covered_acts" } as const,
+    [GEN5_THIRD_CARRYOVER],
+    "제3조(3)⑦·제5조④ — 연간 보장한도(금액)에서 '지급한 금액'을, 연간 보장한도(횟수)에서 '보상한 횟수'를 차감한다. <보상기간 예시>도 '지급된 보험금'과 '보상한 횟수'를 나눠 적는다",
+  ),
+  // ⚠ 지급 보험금이 0원인 치료행위가 '보상한 횟수'를 소진하는지는 원문에 근거가 없다.
+  //   <표1>·주)·④·⑦·제5조④와 <보상기간 예시> 어디에도 판단 문언이 없다.
+  //   추정하지 않는다. 두 해석의 결과가 갈리는 경우에만 계산을 중단한다.
+  GEN2026_SPECIAL_ITEM_COUNT_ON_ZERO_PAY: held(
+    "GEN2026-SPECIAL-ITEM-COUNT-ZEROPAY", "2026",
+    [GEN5_THIRD_TABLE, GEN5_MSK_APPROVAL_NOTE, GEN5_THIRD_CARRYOVER],
+    "확인된 것: 금액 축의 누적 대상은 '지급한 금액'이고 1회의 단위는 치료·진단행위(주사료는 1회 통원·입원)다. 확인되지 않은 것: 공제금액이 의료비 이상이어서 지급 보험금이 0원인 치료행위가 '보상한 횟수'를 소진하는지. 원문·예시·정의 어디에도 판단 근거가 없어 값을 만들지 않는다",
+    "2026-09-03",
+  ),
+
   // 5세대 약관이 '연간'을 스스로 정의한다. 역년이 아니다.
   GEN2026_ANNUAL_PERIOD_BASIS: confirmed5th(
     "GEN2026-ANNUAL-PERIOD-BASIS", "contract_anniversary",

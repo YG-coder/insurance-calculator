@@ -24,4 +24,10 @@ export const CAP_LABELS: Record<CapCode, string> = {
   GEN2026_NONCRITICAL_OUTPATIENT_PER_DAY: "비중증 통원 1일당 가입금액 한도",
   GEN2026_CRITICAL_ANNUAL_COVERAGE: "중증 비급여 연간 보험금 한도",
   GEN2026_NONCRITICAL_ANNUAL_COVERAGE: "비중증 비급여 연간 보험금 한도",
+  GEN2026_MSK_ANNUAL_COVERAGE: "근골격계 이학요법·체외충격파 연간 350만 원 한도",
+  GEN2026_MSK_ANNUAL_VISITS: "근골격계 이학요법·체외충격파 연간 50회 한도 초과",
+  GEN2026_INJECTION_ANNUAL_COVERAGE: "비급여 주사료 연간 250만 원 한도",
+  GEN2026_INJECTION_ANNUAL_VISITS: "비급여 주사료 연간 50회 한도 초과",
+  GEN2026_CRITICAL_MRI_ANNUAL_COVERAGE: "중증 비급여 MRI 연간 300만 원 한도",
+  GEN2026_NONCRITICAL_MRI_ANNUAL_COVERAGE: "비중증 비급여 MRI 연간 200만 원 한도",
 };

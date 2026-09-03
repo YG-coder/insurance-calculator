@@ -115,7 +115,15 @@ export type CapCode =
   | "GEN2026_NONCRITICAL_OUTPATIENT_PER_DAY"
   | "GEN2026_CRITICAL_OUTPATIENT_ANNUAL_VISITS"
   | "GEN2026_CRITICAL_ANNUAL_COVERAGE"
-  | "GEN2026_NONCRITICAL_ANNUAL_COVERAGE";
+  | "GEN2026_NONCRITICAL_ANNUAL_COVERAGE"
+  // 특별약관1 (3)3대비급여 / 특별약관2 (3)비급여 자기공명영상진단의 항목별 한도.
+  //   ⚠ 일반 (1)(2) 한도와 별개다. 상해·질병을 합산한다(<표1> "각 상해·질병 치료행위를 합산하여").
+  | "GEN2026_MSK_ANNUAL_COVERAGE"
+  | "GEN2026_MSK_ANNUAL_VISITS"
+  | "GEN2026_INJECTION_ANNUAL_COVERAGE"
+  | "GEN2026_INJECTION_ANNUAL_VISITS"
+  | "GEN2026_CRITICAL_MRI_ANNUAL_COVERAGE"
+  | "GEN2026_NONCRITICAL_MRI_ANNUAL_COVERAGE";
 
 export interface CalcResult {
   status: CalcStatus;
@@ -230,3 +238,200 @@ export interface Gen2026MultiNonBenefitInput extends Gen2026MultiCommonInput {
 export type Gen2026MultiClaimInput =
   | Gen2026MultiBenefitInput
   | Gen2026MultiNonBenefitInput;
+
+// ─────────────────────────────────────────────────────────────────────
+// 5세대 별도 보장종목 — 특별약관1 (3)3대비급여 / 특별약관2 (3)비급여 자기공명영상진단
+//
+// 근거: 별표15 2026.5.6 공포·시행본(admRulSeq 2200000108697, 별표 식별번호 3216359)
+//   특약1 제3조(3)① <표1> 공제금액 및 보장한도, 인쇄 p.263~264
+//   특약1 제3조(3)② 항암제·항생제(항진균제 포함)·희귀의약품 주사료의 예외, 인쇄 p.265
+//   특약1 제3조(3)④ 공제 적용 단위, 인쇄 p.266
+//   특약1 제5조①③⑤, 인쇄 p.279~280
+//   특약2 제3조(3)① <표1>, 인쇄 p.293 / 특약2 제3조(3)③, 인쇄 p.294
+//
+// ⚠ 한도가 상해·질병을 **합산**하므로 이 경로는 cause를 받지 않는다. 일반 (1)(2)는
+//   제5조①이 상해비급여·질병비급여 각각에 대해 가입금액을 따로 정하므로 cause가 필요하다.
+// ─────────────────────────────────────────────────────────────────────
+
+/** 특별약관 (3) 보장종목. */
+export type Gen2026SpecialItem = "musculoskeletal_esw" | "injection" | "mri";
+
+/**
+ * 비급여 주사료의 약제 용도. 특약1 제3조(3)②(인쇄 p.265)는 아래 셋을 (3)3대비급여가 아니라
+ * (1)상해비급여·(2)질병비급여에서 보상한다고 규정한다.
+ *   ⚠ 세 예외를 하나로 합치지 않는다. 사용자가 고른 실제 용도가 결과 안내에 남아야 한다.
+ */
+export type Gen2026InjectionPurpose = "general" | "anticancer" | "antibiotic" | "orphan_drug";
+
+/**
+ * 근골격계 이학요법·체외충격파의 보상 승인 회차.
+ * <표1> 주)(인쇄 p.264) "…각 치료횟수를 합산하여 최초 10회 보장하고, 이후 객관적이고 일반적으로
+ * 인정되는 검사결과 등을 토대로 증상의 개선, 병변호전 등이 …확인된 경우에 한하여 10회 단위로
+ * 연간 50회까지 보상합니다."
+ *   ⚠ 계산기는 증상 개선을 판정하지 않는다. 10회는 약관이 조건 없이 보장하는 구간이므로 기본값이며,
+ *     그 이상은 보험사에서 확인된 회차를 사용자가 입력한다.
+ */
+export type Gen2026MskApprovedThrough = 10 | 20 | 30 | 40 | 50;
+
+/**
+ * 특별약관 1행 = 약관상 **공제 적용 단위 1개**.
+ *   근골격계·MRI — 각 치료·진단행위마다 별도 행 (제3조(3)④1·④3, 인쇄 p.266)
+ *   주사료       — 1회 통원(또는 1회 입원)에서 받은 주사료 합산액을 한 행 (④2, 인쇄 p.266)
+ * 입력 행과 결과 행이 1:1로 대응한다.
+ */
+export interface Gen2026SpecialLine {
+  amount: number;
+  visit: Visit;
+}
+
+/**
+ * 중증 MRI 행. 입원이면 의료기관 종별이 **타입 수준에서 필수**다.
+ * 제5조⑤(인쇄 p.280)의 500만원 공제 상한이 상급종합·종합병원 입원에만 적용되므로,
+ * 종별을 모르면 기본값으로 계산하지 않고 차단해야 한다.
+ */
+export type Gen2026CriticalMriLine =
+  | { amount: number; visit: "outpatient" }
+  | { amount: number; visit: "inpatient"; tier: Tier };
+
+interface Gen2026SpecialBase {
+  route: "special_item";
+  coverage: "non_benefit";
+  /** ⑦·제5조④의 "지급한 금액" — 이 보장종목에서 이미 지급된 보험금. */
+  priorAnnualInsurancePaid?: number;
+  /** ⚠ 한도가 상해·질병 합산이라 이 경로에서는 원인 축을 받지 않는다. */
+  cause?: never;
+}
+
+export interface Gen2026CriticalMskInput extends Gen2026SpecialBase {
+  severity: "critical";
+  item: "musculoskeletal_esw";
+  lines: Gen2026SpecialLine[];
+  approvedThroughVisit?: Gen2026MskApprovedThrough; // 미지정 시 10
+  /** ⑦·제5조④의 "보상한 횟수". */
+  priorAnnualCoveredCount?: number;
+  injectionPurpose?: never;
+}
+
+export interface Gen2026CriticalInjectionInput extends Gen2026SpecialBase {
+  severity: "critical";
+  item: "injection";
+  /** 예외 3종은 (1)(2)에서 보상하므로 이 타입에 들어올 수 없다. */
+  injectionPurpose: "general";
+  lines: Gen2026SpecialLine[];
+  priorAnnualCoveredCount?: number;
+}
+
+export interface Gen2026CriticalMriInput extends Gen2026SpecialBase {
+  severity: "critical";
+  item: "mri";
+  lines: Gen2026CriticalMriLine[];
+  /** 제5조⑤ 500만원 pool의 연 누적 공제금액. 3대비급여 중 MRI만 대상이다. */
+  priorAnnualInpatientDeductible?: number;
+  injectionPurpose?: never;
+  // <표1>에 횟수 한도가 없다 → 횟수 필드 없음
+}
+
+export interface Gen2026NonCriticalMriInput extends Gen2026SpecialBase {
+  severity: "non_critical";
+  item: "mri";
+  lines: Gen2026SpecialLine[];
+  injectionPurpose?: never;
+  // 특약2 제5조에는 500만원 조항이 없고(인쇄 p.309~310), <표1>에 횟수 한도도 없다.
+}
+
+export type Gen2026SpecialItemInput =
+  | Gen2026CriticalMskInput
+  | Gen2026CriticalInjectionInput
+  | Gen2026CriticalMriInput
+  | Gen2026NonCriticalMriInput;
+
+// ── 일반 (1)(2) 경로로 되돌아가는 조합 ────────────────────────────────
+//   실제로 허용되는 조합만 표현한다. 중증 MRI·중증 근골격계·중증 일반 주사·비중증 MRI의
+//   일반 경로는 이 유니온에 존재하지 않으므로 컴파일 단계에서 막힌다.
+interface Gen2026RoutedGeneralBase {
+  route: "general";
+  coverage: "non_benefit";
+  /** 제5조① — 일반 (1)(2)의 가입금액·누적은 상해·질병 각 축에 대해 따로 정해진다. */
+  cause: Cause;
+  visit: Visit;
+  tier?: Tier;
+  amounts: number[];
+  priorAnnualInsurancePaid?: number;
+  annualCoverageLimit?: number;
+  outpatientCoverageLimit?: number;
+  priorAnnualOutpatientVisits?: number;
+  priorAnnualDeductible?: number;
+}
+
+/** 특약1 제3조(3)② — 항암제·항생제(항진균제 포함)·희귀의약품 주사료. */
+export interface Gen2026CriticalExceptionalInjectionInput extends Gen2026RoutedGeneralBase {
+  severity: "critical";
+  item: "injection";
+  injectionPurpose: "anticancer" | "antibiotic" | "orphan_drug";
+}
+
+/** 특약2 (1)①·(2)①이 배제하는 것은 MRI뿐이다(인쇄 p.287·p.290). */
+export interface Gen2026NonCriticalMskInput extends Gen2026RoutedGeneralBase {
+  severity: "non_critical";
+  item: "musculoskeletal_esw";
+  /** ⚠ 비중증에서는 약제 용도가 경로도 안내도 바꾸지 않는다. 쓰이지 않는 입력을 만들지 않는다. */
+  injectionPurpose?: never;
+}
+
+export interface Gen2026NonCriticalInjectionInput extends Gen2026RoutedGeneralBase {
+  severity: "non_critical";
+  item: "injection";
+  injectionPurpose?: never;
+}
+
+export type Gen2026RoutedGeneralInput =
+  | Gen2026CriticalExceptionalInjectionInput
+  | Gen2026NonCriticalMskInput
+  | Gen2026NonCriticalInjectionInput;
+
+export type Gen2026ItemClaimInput = Gen2026SpecialItemInput | Gen2026RoutedGeneralInput;
+
+// ── 결과 ──────────────────────────────────────────────────────────────
+
+/** 특별약관 행의 공제 내역. 최종 자기부담금과 약관상 공제금액을 분리해 보존한다. */
+export interface Gen2026DeductibleBreakdown {
+  /** min(진료비, max(정액 최소공제, 정률 기준액)) — 500만원 pool 반영 전 */
+  deductibleBeforeAnnualCap: number;
+  /** 제5조⑤ pool 반영 후 실제 공제액. pool 비대상이면 위 값과 같다. */
+  deductibleApplied: number;
+  /** 항목별 연간 금액 한도·횟수 한도 때문에 공제금액을 넘어 추가로 부담한 금액. */
+  excessOwnPay: number;
+  /** 이 행위 처리 후 누적된 pool 공제금액. pool 비대상 행은 null. */
+  poolUsedAfter: number | null;
+}
+
+export interface SpecialItemLineResult extends ClaimLineResult {
+  item: Gen2026SpecialItem;
+  /** 연간 몇 번째 치료·진단행위인지(prior 포함, 1-based). 횟수 한도가 없는 MRI는 null. */
+  actIndex: number | null;
+  deductible: Gen2026DeductibleBreakdown;
+}
+
+export interface Gen2026SpecialItemResult extends Omit<MultiClaimResult, "lines"> {
+  route: "special_item";
+  lines: SpecialItemLineResult[];
+}
+
+export interface Gen2026RoutedGeneralResult extends MultiClaimResult {
+  route: "general";
+}
+
+/**
+ * 입력 자체를 신뢰할 수 없어 계산하지 않은 결과.
+ *   ⚠ 차단 결과를 무조건 "special_item"으로 위장하면 UI가 요청과 무관한 경로로 좁힌다.
+ *     타입을 우회한 외부 값이 들어온 경우는 별도 판별값으로 돌려준다.
+ */
+export interface Gen2026RejectedResult extends Omit<MultiClaimResult, "lines"> {
+  route: "rejected";
+  lines: never[];
+}
+
+export type Gen2026ItemClaimResult =
+  | Gen2026SpecialItemResult
+  | Gen2026RoutedGeneralResult
+  | Gen2026RejectedResult;

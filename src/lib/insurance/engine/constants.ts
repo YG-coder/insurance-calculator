@@ -93,6 +93,35 @@ export const GEN2026 = {
       annualLimitMax: R.GEN2026_NONCRITICAL_ANNUAL_LIMIT_MAX.value,
     },
   },
+  // 별도 보장종목 — 특약1 (3)3대비급여 / 특약2 (3)비급여 자기공명영상진단.
+  //   ⚠ 일반 (1)(2)의 통원 가입금액·연간 보험가입금액은 여기 적용되지 않는다(제5조①단서·③).
+  //   ⚠ 한도는 상해·질병을 합산한다. cause 축이 없다.
+  specialItem: {
+    deductibleFixed: R.GEN2026_THIRD_DEDUCTIBLE_FIXED.value,
+    deductibleRate: R.GEN2026_THIRD_DEDUCTIBLE_RATE.value,
+    msk: {
+      annualCoverage: R.GEN2026_MSK_ANNUAL_COVERAGE.value,
+      annualVisits: R.GEN2026_MSK_ANNUAL_VISITS.value,
+      initialApprovedVisits: R.GEN2026_MSK_INITIAL_APPROVED_VISITS.value,
+      approvalStep: R.GEN2026_MSK_APPROVAL_STEP.value,
+    },
+    injection: {
+      annualCoverage: R.GEN2026_INJECTION_ANNUAL_COVERAGE.value,
+      annualVisits: R.GEN2026_INJECTION_ANNUAL_VISITS.value,
+    },
+    criticalMri: {
+      annualCoverage: R.GEN2026_CRITICAL_MRI_ANNUAL_COVERAGE.value,
+    },
+    nonCriticalMri: {
+      deductibleFixed: R.GEN2026_NONCRITICAL_MRI_DEDUCTIBLE_FIXED.value,
+      deductibleRate: R.GEN2026_NONCRITICAL_MRI_DEDUCTIBLE_RATE.value,
+      annualCoverage: R.GEN2026_NONCRITICAL_MRI_ANNUAL_COVERAGE.value,
+    },
+    /** 제3조(3)②가 (1)(2)로 보내는 약제. **여기가 유일한 원천이다** — 어디서도 다시 나열하지 않는다. */
+    injectionGeneralRouteDrugs: R.GEN2026_INJECTION_GENERAL_ROUTE_DRUGS.value,
+    /** 지급 0원 행위의 횟수 소진은 원문 미확정(HOLD). null이면 두 해석을 비교한다. */
+    countOnZeroPay: R.GEN2026_SPECIAL_ITEM_COUNT_ON_ZERO_PAY.value,
+  },
 } as const;
 
 // ─────────────────────────────────────────────

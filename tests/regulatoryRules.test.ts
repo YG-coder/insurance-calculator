@@ -254,12 +254,48 @@ const THIS_SURVEY_URLS = [
   "https://www.law.go.kr/LSW/admRulInfoP.do?admRulSeq=2200000108867",
   "https://www.law.go.kr/LSW/admRulInfoP.do?admRulSeq=2200000108939",
 ];
+/**
+ * 2026-09-03에 **2026.5.6 판본만** 직접 읽어 판본 직행 주소로 승격한 규칙들.
+ *   할인·할증 7건과 달리 세 판본을 대조하지 않았으므로, 이 규칙들에는
+ *   2026.5.6 주소만 허용하고 7.15·9.10 주소는 계속 금지한다.
+ */
+const VERIFIED_2026_05_06_DIRECT = new Set([
+  "GEN2026-THIRD-DEDUCTIBLE-FIXED", "GEN2026-THIRD-DEDUCTIBLE-RATE",
+  "GEN2026-MSK-ANNUAL-COVERAGE", "GEN2026-MSK-ANNUAL-VISITS",
+  "GEN2026-MSK-INITIAL-APPROVED-VISITS", "GEN2026-MSK-APPROVAL-STEP",
+  "GEN2026-INJECTION-ANNUAL-COVERAGE", "GEN2026-INJECTION-ANNUAL-VISITS",
+  "GEN2026-CRITICAL-MRI-ANNUAL-COVERAGE",
+  "GEN2026-NONCRITICAL-MRI-DEDUCTIBLE-FIXED", "GEN2026-NONCRITICAL-MRI-DEDUCTIBLE-RATE",
+  "GEN2026-NONCRITICAL-MRI-ANNUAL-COVERAGE",
+  "GEN2026-SPECIAL-ITEM-CAUSE-MERGED", "GEN2026-SPECIAL-ITEM-SEPARATE-FROM-GENERAL-LIMITS",
+  "GEN2026-THIRD-DEDUCT-UNIT", "GEN2026-INJECTION-GENERAL-ROUTE-DRUGS",
+  "GEN2026-NONCRITICAL-MSK-INJECTION-GENERAL-ROUTE", "GEN2026-SPECIAL-ITEM-CARRYOVER-BASIS",
+  "GEN2026-SPECIAL-ITEM-COUNT-ZEROPAY",
+]);
+const VERSION_5_6_URL = "https://www.law.go.kr/LSW/admRulInfoP.do?admRulSeq=2200000108697";
 const leaked = rules
   .filter((rule) => !VERIFIED_IN_THREE_VERSIONS.has(rule.ruleId))
   .flatMap((rule) => rule.sources
-    .filter((src) => THIS_SURVEY_URLS.includes(src.url))
+    .filter((src) => THIS_SURVEY_URLS.includes(src.url)
+      && !(src.url === VERSION_5_6_URL && VERIFIED_2026_05_06_DIRECT.has(rule.ruleId)))
     .map((src) => `${rule.ruleId} → ${src.url}`));
-check("이번 세 판본 주소가 대조 범위 밖으로 누출되지 않음", leaked.length === 0, leaked.join(" | "));
+check("판본 직행 주소가 대조 범위 밖으로 누출되지 않음", leaked.length === 0, leaked.join(" | "));
+
+// 직독 규칙은 실제로 판본 직행 주소와 별표 식별번호를 달고 있어야 한다.
+const directRules = rules.filter((rule) => VERIFIED_2026_05_06_DIRECT.has(rule.ruleId));
+check(`2026.5.6 직독 규칙 ${VERIFIED_2026_05_06_DIRECT.size}개가 모두 등록돼 있음`,
+  directRules.length === VERIFIED_2026_05_06_DIRECT.size,
+  `${directRules.length}개만 발견`);
+check("직독 규칙은 2026.5.6 판본 주소를 사용",
+  directRules.every((rule) => rule.sources.every((src) => src.url === VERSION_5_6_URL)),
+  directRules.flatMap((r) => r.sources.map((s) => `${r.ruleId} → ${s.url}`)).filter((x) => !x.endsWith(VERSION_5_6_URL)).join(" | "));
+check("직독 규칙 출처에 별표 식별번호 3216359가 있음",
+  directRules.every((rule) => rule.sources.every((src) => src.locator.includes("3216359"))));
+check("직독 규칙 출처에 인쇄 쪽수가 있음",
+  directRules.every((rule) => rule.sources.every((src) => /인쇄 p\.\d/.test(src.locator))));
+check("직독 규칙에 뒤 판본 주소가 섞이지 않음",
+  directRules.every((rule) => rule.sources.every((src) =>
+    !src.url.includes("2200000108867") && !src.url.includes("2200000108939"))));
 
 check("계산에 쓰이는 5세대 확정 규칙은 2026.5.6 연혁본 출처를 유지",
   rules.filter((rule) => rule.generation === "2026" && rule.status === "CONFIRMED"

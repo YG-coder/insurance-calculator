@@ -347,10 +347,14 @@ console.log("\n[커밋 D·E] 계산·화면 무변경 (기준 30dee21)");
   //   특히 HOLD·차단 계약(별도 보장종목 차단, 선택 게이트 3종)이 그대로인지 본다.
   {
     const g5 = readFileSync("src/components/calculators/HealthCalc5th.tsx", "utf8");
-    check("변경 의도(G-4): 진료비만 RawAmountInput으로 바뀌었다",
+    // ⚠ **낡은 계약을 교체했다.** G-4 시점에는 진료비만 `RawAmountInput`이었다.
+    //   G-11A가 통원 가입금액·누적 공제금액도 원문 보존 위젯으로 옮겼으므로,
+    //   이제는 **세 칸 모두** `RawAmountInput`이고 `AmountInput`은 이 화면에서 사라졌다.
+    check("변경 의도(G-4·G-11A): 세 금액 칸이 모두 RawAmountInput이다",
       /<RawAmountInput\n\s*id="med5-amount"/.test(g5)
-      && /<AmountInput\n\s*id="med5-outpatient-limit"/.test(g5)
-      && /<AmountInput\n\s*id="med5-prior-annual-deductible"/.test(g5));
+      && /<RawAmountInput\n\s*id="med5-outpatient-limit"/.test(g5)
+      && /<RawAmountInput\n\s*id="med5-prior-annual-deductible"/.test(g5)
+      && !/<AmountInput/.test(g5));
     check("변경 의도(G-4): 단건 전용 파서가 원문을 먼저 검증한다",
       /GEN2026_SINGLE_AMOUNT_FORMAT\.test\(v\)\) return null;[\s\S]{0,80}replace\(\/,\/g/.test(g5));
     check("변경 의도(G-4): 무효 원문에서 엔진을 호출하지 않는다",
@@ -361,8 +365,13 @@ console.log("\n[커밋 D·E] 계산·화면 무변경 (기준 30dee21)");
       && /const needsTier =\s*\n\s*coverage === "non_benefit" && nonBenefitItem === "general" && severity !== null\s*\n\s*&& visit === "inpatient" && nbInpatientTier === null;/.test(g5));
     check("무변경(G-4): 결과 표시의 0원 정책이 그대로",
       /result && result\.status === "OK" && num > 0/.test(g5));
-    check("무변경(G-4): 누적 공제금액 파싱이 그대로",
-      /const priorDeductibleNum = Number\(priorDeductible\.replace\(\/\[\^0-9\]\/g, ""\)\) \|\| 0;/.test(g5));
+    // ⚠ **낡은 계약을 교체했다.** G-11A가 두 금액 입력을 `gen2026SingleAmount`로 옮겼다.
+    //   HOLD 관점에서 중요한 것은 **빈 값의 뜻이 필드마다 다르게 유지된다**는 사실이다.
+    check("변경 의도(G-11A): 두 금액도 단건 파서를 쓰고 빈 값 계약이 필드마다 다르다",
+      /const outpatientLimitNum = !usesOutpatientLimit \|\| outpatientLimit === ""\s*\n\s*\? undefined : gen2026SingleAmount\(outpatientLimit\);/.test(g5)
+      && /const priorDeductibleNum = !usesPriorDeductible \? undefined\s*\n\s*: priorDeductible === "" \? 0 : gen2026SingleAmount\(priorDeductible\);/.test(g5)
+      && /const \[priorDeductible, setPriorDeductible\] = useState<string>\("0"\);/.test(g5)
+      && /const \[outpatientLimit, setOutpatientLimit\] = useState<string>\(""\);/.test(g5));
   }
   // ⚠ types.ts·HealthCalcMulti2026.tsx·specialItem2026.ts는 **의도적으로** 바뀐다
   //   (승인 구간용 새 입력축). 해시로 얼리지 않고 의도한 변경만 들어갔는지로 확인한다.

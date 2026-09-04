@@ -51,7 +51,9 @@ check("5세대 페이지: 단건 미반영 범위를 연간 항목으로 한정"
       src.includes("치료유형을 먼저") && src.includes("선택 전에는 계산하지 않습니다"));
   }
   // 단건은 계산 자체를 삼항으로 막는다.
-  check("5세대 단건 UI: 치료유형 선택 전에는 계산하지 않음", /needsItem \|\| needsSeverity[\s\S]{0,40}\? null/.test(gen5));
+  // ⚠ 조건이 늘어도 깨지지 않게 **필요한 배제 조건이 게이트에 있는지**만 본다
+  //   (G-11A가 같은 게이트에 두 금액의 무효 차단 `limits === null`을 덧붙였다).
+  check("5세대 단건 UI: 치료유형 선택 전에는 계산하지 않음", /needsItem \|\| needsSeverity[\s\S]{0,80}\? null/.test(gen5));
   check("5세대 단건 UI: 치료유형이 엔진 입력으로 전달됨", /nonBenefitItem:\s*nonBenefitItem/.test(gen5));
   // ⚠ 다회는 2026-09-03 커밋 2에서 경로가 셋(일반 / 별도 보장종목 / 일반 경로 전환)으로 갈렸다.
   //    "삼항으로 null" 한 가지 형태를 강요하지 않고, **선택 전에는 어떤 엔진도 호출되지 않는지**를 본다.

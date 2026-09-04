@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import ResultCard from "@/components/ResultCard";
-import AmountInput from "@/components/AmountInput";
 import RawAmountInput from "@/components/RawAmountInput";
 import NoticeBox from "@/components/NoticeBox";
 import { calc2026, GEN2026_NON_BENEFIT_ITEM_LABEL } from "@/lib/insurance/engine/generation2026";
@@ -24,12 +23,19 @@ const won = (n: number) =>
  *   **형식 검증이 끝난 뒤에만** 쉼표를 지운다.
  * ⚠ 다회 계산기의 `gen2026Amount`·`roomChargeAmount`나 4세대 파서를 재사용하지 않는다.
  *   형식 규칙이 같아도 세대·화면·안내가 다르고, 다회의 파서·게이트는 이번에 건드리지 않는다.
- * ⚠ 같은 화면의 **통원 가입금액·누적 공제금액**은 진료비가 아니다. 종전 `AmountInput`과
- *   종전 파싱을 그대로 둔다(가입금액은 0원을 미입력으로 보는 별도 정책이 있다).
+ * ⚠ 같은 화면의 **통원 가입금액·누적 공제금액도 이 파서를 쓴다(G-11A).** 형식 규칙은 같지만
+ *   **빈 값의 뜻이 서로 다르다** — 통원 가입금액은 `undefined`(미적용), 누적 공제금액은 `0`.
+ *   빈 문자열은 파서가 아니라 **호출부**에서 나눈다. 두 필드의 그 계약은 기존 그대로 유지한
+ *   것이며, 빈 값을 그렇게 보는 것이 안전하다고 확정한 것이 아니다.
+ * ⚠ 통원 가입금액의 **0 = 미입력** 판정은 화면이 아니라 **엔진 정책**이다
+ *   (`generation2026.ts`의 `outpatientLimit()`이 `<= 0`을 미입력으로 본다). 숫자 `0`을 그대로
+ *   넘기고 그 판정을 바꾸지 않는다.
  *
  * 유효: 쉼표 없는 0 이상의 정수(`0`, `300000`) 또는 정확한 천 단위 구분
  *   (`300,000`, `1,234,567`). **명시적으로 입력한 `0`도 파서에서는 유효한 숫자**다 —
  *   0원에서 결과를 내지 않는 것은 이 화면의 **종전 정책**이며 이번에 바꾸지 않는다.
+ * ⚠ **자릿수를 제한하지 않는다.** `1000000000000000`(안전 정수인 16자리)은 그대로 받고,
+ *   `9007199254740993`만 안전 정수 범위를 벗어나므로 차단한다.
  * 무효(null): 빈 값·공백, 부호(`-`/`+`), 문자, `NaN`·`Infinity`, 소수(`1.5`·`1.`·`.5`),
  *   지수 표기(`1e3`), 잘못된 쉼표(`1,0`·`1,00,000`·`,300`·`300,`), 안전 정수 초과.
  */
@@ -75,8 +81,6 @@ export default function HealthCalc5th() {
   const parsed = gen2026SingleAmount(amount);
   const amountInvalid = parsed === null;
   const num = parsed ?? 0;
-  // ⚠ 누적 공제금액은 진료비가 아니다. 종전 파싱을 그대로 둔다(이번 범위 밖).
-  const priorDeductibleNum = Number(priorDeductible.replace(/[^0-9]/g, "")) || 0;
 
   // 비급여는 ①치료유형 ②중증/비중증을 모두 고른 뒤에만 계산한다(엔진 호출 전 UI 가드).
   //   치료유형이 "일반 비급여"가 아니면 질환 구분과 무관하게 엔진이 차단한다.
@@ -90,6 +94,53 @@ export default function HealthCalc5th() {
   const needsTier =
     coverage === "non_benefit" && nonBenefitItem === "general" && severity !== null
     && visit === "inpatient" && nbInpatientTier === null;
+
+  // ── 두 금액 입력의 활성 조건 (G-11A) ────────────────────────────────
+  /**
+   * ⚠ **엔진 소비 조건을 새로 만들지 않고 그대로 옮겼다.**
+   *   - `perVisitCoverageLimit`: `generation2026.ts`가 이 값을 읽는 곳은 **통원 두 분기뿐**이다
+   *     (중증 = 1회당 `outpatientPerVisitLimitMax`, 비중증 = 1일당 `outpatientPerDayLimitMax`).
+   *     입원 분기는 읽지 않는다.
+   *   - `priorAnnualDeductible`: 500만원 상한은
+   *     `severity === "critical" && visit === "inpatient" && tier === "hospital"`에서만 적용된다.
+   *     `hospital`은 버튼 라벨대로 **상급종합·종합병원**이다.
+   * ⚠ `nonBenefitItem === "general"`을 함께 본다. 화면의 두 입력이 이미 그 조건 안에서만
+   *   보이고, 별도 보장종목(3대비급여·MRI·상급병실료)은 엔진이 계산 전에 차단하므로
+   *   결과가 달라지지 않는다. 종전에는 이 조건이 전달식에 없어, 일반 비급여에서 고른
+   *   질환 구분·종별이 남은 채 치료유형만 바꾸면 **쓰이지도 않을 값이 계속 실려 갔다.**
+   *   노출·검증·전달을 하나의 조건으로 모은다.
+   */
+  const usesOutpatientLimit =
+    coverage === "non_benefit" && nonBenefitItem === "general" && visit === "outpatient";
+  const usesPriorDeductible =
+    coverage === "non_benefit" && nonBenefitItem === "general"
+    && severity === "critical" && visit === "inpatient" && nbInpatientTier === "hospital";
+  /**
+   * ⚠ **활성일 때만 검증한다.** 조건이 거짓이면 `undefined`다 — 숨은 원문은 상태에 남지만
+   *   파서에 닿지 않고 엔진에도 가지 않는다. 조건이 돌아오면 무효값 안내도 다시 나타난다.
+   * ⚠ **빈 값의 뜻이 서로 다르다.** 통원 가입금액은 `undefined`(미적용, 초기값이 `""`),
+   *   누적 공제금액은 `0`(초기값이 `"0"`이고 종전 `Number("") || 0`도 0이었다).
+   *   기존 계약을 그대로 유지한 것이며, 그렇게 보는 것이 안전하다고 확정한 것이 아니다.
+   * ⚠ 종전에는 `outpatientLimit.trim() !== ""`로 공백만도 미입력으로 넘겼다. 이제 공백만은
+   *   **무효**다 — `trim()`으로 정리해 통과시키면 화면 원문과 계산에 쓰인 값이 어긋난다.
+   * ⚠ 통원 가입금액의 상한(20만원)과 `0 = 미입력` 판정은 **엔진**이 한다. 화면에서 깎지 않는다.
+   */
+  const outpatientLimitNum = !usesOutpatientLimit || outpatientLimit === ""
+    ? undefined : gen2026SingleAmount(outpatientLimit);
+  const priorDeductibleNum = !usesPriorDeductible ? undefined
+    : priorDeductible === "" ? 0 : gen2026SingleAmount(priorDeductible);
+  const outpatientLimitInvalid = outpatientLimitNum === null;
+  const priorDeductibleInvalid = priorDeductibleNum === null;
+  /**
+   * ⚠ 무효값을 0이나 `undefined`로 바꿔 계산하지 않는다. `null`을 **배제**해야만 이 객체가
+   *   만들어지고, 그 과정에서 두 값이 `number | undefined`로 좁혀진다.
+   *   ⚠ 이 화면에 남아 있는 `nonBenefitItem as Gen2026NonBenefitItem` 단언은 **이번 대상이
+   *     아니다.** 여기서 말하는 것은 **새로 만든 금액 파싱 결과에 단언을 추가하지 않는다**는
+   *     범위다. 종전 단언의 정리는 별도 과제로 남긴다.
+   */
+  const limits = outpatientLimitNum === null || priorDeductibleNum === null
+    ? null
+    : { perVisit: outpatientLimitNum, deductible: priorDeductibleNum };
 
   // calc2026을 직접 호출한다 — 비급여에서 치료유형 누락이 컴파일 에러가 되는 경로다.
   //   ⚠ 무효한 원문에서는 **엔진을 호출하지 않는다.** 종전에는 급여에서 렌더마다 무조건
@@ -108,7 +159,7 @@ export default function HealthCalc5th() {
               ? Math.min(100, Math.max(0, Number(nhisRate))) / 100
               : undefined,
         })
-      : needsItem || needsSeverity || needsTier
+      : needsItem || needsSeverity || needsTier || limits === null
         ? null
         : calc2026({
             amount: num,
@@ -118,14 +169,8 @@ export default function HealthCalc5th() {
             tier: visit === "inpatient" ? nbInpatientTier ?? undefined : undefined,
             severity: severity ?? undefined,
             nonBenefitItem: nonBenefitItem as Gen2026NonBenefitItem,
-            priorAnnualDeductible:
-              severity === "critical" && visit === "inpatient" && nbInpatientTier === "hospital"
-                ? priorDeductibleNum
-                : undefined,
-            perVisitCoverageLimit:
-              visit === "outpatient" && outpatientLimit.trim() !== ""
-                ? Number(outpatientLimit.replace(/[^0-9]/g, "")) || 0
-                : undefined,
+            priorAnnualDeductible: limits.deductible,
+            perVisitCoverageLimit: limits.perVisit,
           });
 
   return (
@@ -249,11 +294,12 @@ export default function HealthCalc5th() {
             <label className="label-base" htmlFor="med5-outpatient-limit">
               통원 가입금액 (선택)
             </label>
-            <AmountInput
+            <RawAmountInput
               id="med5-outpatient-limit"
               value={outpatientLimit}
               onChange={setOutpatientLimit}
               placeholder="예: 200,000 — 모르면 비워두세요"
+              ariaLabel="통원 가입금액"
             />
             <p className="mt-2 text-xs text-slate-500">
               약관은 통원 가입금액을 <b>20만 원 이내에서 계약 시 정한 금액</b>으로 규정합니다
@@ -297,11 +343,12 @@ export default function HealthCalc5th() {
                 <label className="label-base" htmlFor="med5-prior-annual-deductible">
                   계약해당일 기준 1년간 이미 누적된 중증 비급여 입원 공제금액 (원)
                 </label>
-                <AmountInput
+                <RawAmountInput
                   id="med5-prior-annual-deductible"
                   value={priorDeductible}
                   onChange={setPriorDeductible}
                   placeholder="없으면 0"
+                  ariaLabel="계약해당일 기준 1년간 이미 누적된 중증 비급여 입원 공제금액"
                 />
                 <p className="mt-2 text-xs text-slate-500">
                   공제금액 상한 500만 원은 <b>계약일 또는 매년 계약해당일부터 1년</b> 단위로 누적됩니다
@@ -360,6 +407,27 @@ export default function HealthCalc5th() {
               상한 500만 원이 상급종합·종합병원 입원에만 적용되고(특별약관1 제5조 제5항), 비중증은
               1회당 300만 원 한도가 병·의원급에만 적용됩니다(특별약관2 제3조 (1)제1항·(2)제1항).
               입원 의료기관을 선택해 주세요. 선택 전에는 계산하지 않습니다.
+            </NoticeBox>
+          )}
+
+          {/* ⚠ 병원비가 무효인 동안에는 새 안내를 만들지 않는 종전 정책(G-4)을 그대로 따른다.
+                 여러 입력이 동시에 무효이면 각각 안내한다. */}
+          {!amountInvalid && outpatientLimitInvalid && (
+            <NoticeBox variant="warning">
+              <b>통원 가입금액</b>을 올바르게 입력해 주세요. <b>0 이상의 정수</b>만 받습니다 —
+              <b> 200000</b> 또는 <b>200,000</b> 형식입니다. 이 한도를 적용하지 않으려면
+              <b> 완전히 비워</b> 두세요. 공백만 입력한 값은 빈 값으로 보지 않습니다.
+              음수·소수·문자·지수 표기·잘못된 쉼표는 계산기가 임의로 고치지 않습니다.
+            </NoticeBox>
+          )}
+
+          {!amountInvalid && priorDeductibleInvalid && (
+            <NoticeBox variant="warning">
+              <b>이미 누적된 공제금액</b>을 올바르게 입력해 주세요. <b>0 이상의 정수</b>만
+              받습니다 — <b>3000000</b> 또는 <b>3,000,000</b> 형식입니다. 누적된 공제금액이
+              없으면 <b>0</b>을 입력하세요(완전히 비운 값도 0으로 봅니다). 공백만 입력한 값은
+              빈 값으로 보지 않습니다. 음수·소수·문자·지수 표기·잘못된 쉼표는 계산기가 임의로
+              고치지 않습니다. 500만 원을 넘는 값도 그대로 받습니다 — 상한 처리는 약관 산식이 합니다.
             </NoticeBox>
           )}
 

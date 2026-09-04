@@ -151,9 +151,11 @@ console.log("\n[가드] 소스에 종별 조건이 실제로 연결돼 있다");
   check("단건: 두 종별 버튼 중 어느 것도 초기 선택되지 않음",
     /btn\(nbInpatientTier === "clinic"\)/.test(ui[0]) && /btn\(nbInpatientTier === "hospital"\)/.test(ui[0]));
   // 계산 게이트 연결 — 변수 존재만 보면 게이트에서 빠져도 통과한다.
+  // ⚠ G-11A가 같은 게이트에 두 금액 입력의 무효 차단(`limits === null`)을 **덧붙였다.**
+  //   `needsTier`가 게이트에서 빠지지 않았는지를 계속 확인한다.
   check("단건: needsTier가 계산 게이트에 연결",
     /const needsTier =[\s\S]{0,220}nbInpatientTier === null;/.test(ui[0])
-    && /needsItem \|\| needsSeverity \|\| needsTier \? null/.test(ui[0]));
+    && /needsItem \|\| needsSeverity \|\| needsTier \|\| limits === null\s+\? null/.test(ui[0]));
   check("다회: needsTier가 일반 비급여 게이트에 연결",
     /nonBenefitItem === "general" && severity !== "" && cause !== "" && !needsTier/.test(ui[1]));
   check("다회: 일반 전환 게이트도 종별 미선택을 배제",

@@ -129,19 +129,26 @@ for (const { g, C, names, id, base } of GENS) {
 }
 check("4세대에는 진료비 외 AmountInput이 없다", !/AmountInput/.test(stripComments(ui4).replace(/RawAmountInput/g, "")));
 {
-  // 5세대의 가입금액·공제금액은 진료비가 아니다. 위젯도 파싱도 그대로 둔다.
+  // ⚠ **낡은 계약을 교체했다.** G-4 시점에는 5세대의 가입금액·공제금액을 `AmountInput`으로
+  //   그대로 두었다. G-11A가 그 둘도 원문 보존 위젯으로 옮겼으므로 이제 세 칸 모두
+  //   `RawAmountInput`이고 이 화면에 `AmountInput`은 남아 있지 않다. 두 칸의 형식·경계·차단은
+  //   `gen2026SingleDeductible.test.ts`가 본다. 여기서는 **진료비 계약이 그대로**인지만 본다.
   const h = setup(HealthCalc5th as unknown as Comp, names5,
     { nonBenefitItem: "general", severity: "critical", visit: "inpatient", nbInpatientTier: "hospital" });
   const w = screenOf(h);
-  check("5세대: 누적 공제금액은 AmountInput 그대로",
-    w.amountWidgets.some((n) => n.props.id === "med5-prior-annual-deductible")
-    && !w.raws.some((n) => n.props.id === "med5-prior-annual-deductible"));
+  check("5세대: 누적 공제금액도 RawAmountInput이다",
+    w.raws.some((n) => n.props.id === "med5-prior-annual-deductible")
+    && !w.amountWidgets.some((n) => n.props.id === "med5-prior-annual-deductible"));
   const o = setup(HealthCalc5th as unknown as Comp, names5,
     { nonBenefitItem: "general", severity: "critical", visit: "outpatient" });
-  check("5세대: 통원 가입금액은 AmountInput 그대로",
-    screenOf(o).amountWidgets.some((n) => n.props.id === "med5-outpatient-limit"));
-  check("5세대: 진료비만 RawAmountInput이다",
-    screenOf(o).raws.every((n) => n.props.id === "med5-amount"));
+  check("5세대: 통원 가입금액도 RawAmountInput이다",
+    screenOf(o).raws.some((n) => n.props.id === "med5-outpatient-limit")
+    && !screenOf(o).amountWidgets.some((n) => n.props.id === "med5-outpatient-limit"));
+  check("5세대: 이 화면에 AmountInput이 남아 있지 않다",
+    screenOf(o).amountWidgets.length === 0 && screenOf(h).amountWidgets.length === 0);
+  check("5세대: 진료비는 여전히 RawAmountInput이고 단건 파서를 쓴다",
+    screenOf(o).raws.some((n) => n.props.id === "med5-amount")
+    && /const parsed = gen2026SingleAmount\(amount\);/.test(ui5));
 }
 
 // ── 화면 전이 ────────────────────────────────────────────────────────

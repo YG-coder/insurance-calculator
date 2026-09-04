@@ -432,7 +432,12 @@ console.log("\n[가드] 축·문구·출처의 금지형");
   check("UI가 라우팅을 엔진 함수로 판정", ui.includes("routeOfGen2026Item("));
   check("UI가 route로 좁혀 특별 결과를 읽음", ui.includes('itemResult.route === "special_item"'));
   check("UI에 as 단언으로 특별 결과를 읽는 코드가 없음", !/as Gen2026SpecialItemResult/.test(ui));
-  check("UI가 특별약관에서 연간 가입금액을 숨김", /showGeneralForm && severity !== "" && <label[^§]{0,80}연간 보험가입금액/.test(ui));
+  // G-8에서 노출 조건이 `severity !== ""`에서 `generalAxis !== null`(질환 구분·원인이
+  //   모두 정해진 상태)로 좁아졌다. 특별약관에서 숨긴다는 계약은 그대로다 —
+  //   `showGeneralForm`이 false이므로 렌더되지 않는다.
+  check("UI가 특별약관에서 연간 가입금액을 숨김",
+    /showGeneralForm && generalAxis !== null && <label[^§]{0,120}연간 보험가입금액/.test(ui)
+    && /const generalAxis: Gen2026GeneralAxis \| null =\s*\n?\s*severity !== "" && cause !== ""/.test(ui));
   check("UI 승인 회차 기본값 10", ui.includes("GEN2026_MSK_APPROVED_THROUGH_VALUES[0]") && GEN2026_MSK_APPROVED_THROUGH_VALUES[0] === 10);
   check("UI 행별 치료 형태 기본 미선택", ui.includes('visit: "", tier: ""'));
   check("UI 약제 용도 기본 미선택", ui.includes('useState<Gen2026InjectionPurpose | "">("")'));

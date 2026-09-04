@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import ResultCard from "@/components/ResultCard";
-import AmountInput from "@/components/AmountInput";
 import RawAmountInput from "@/components/RawAmountInput";
 import NoticeBox from "@/components/NoticeBox";
 import { calculateMany } from "@/lib/insurance/engine/multiClaim";
@@ -56,6 +55,44 @@ const stdAmount = (v: string): number | null => {
  * 유효: 0 이상의 안전 정수(`0`, `180`, 한도 초과값 포함).
  * 무효(null = 미입력·잘못된 입력): 빈 값·공백·부호·소수·문자·지수 표기·쉼표·안전 정수 초과.
  */
+/**
+ * 2·3세대 다회의 **금액 입력** 문자열 파서 — 회(건)당 보험가입금액과 기존 입원
+ * 자기부담금 두 곳에 쓴다. **원문을 변형 전에 형식으로 판정한다.**
+ *
+ * ⚠ 공용 `onlyNum()`을 쓰면 안 된다. 숫자가 아닌 문자를 **지우고** 실패를 0으로 바꾼다.
+ *   `-1`·`+1`→**1**, `1.5`→**15**, `1e3`→**13**, `20만`→**20**, `1,0`→**10**이 되고
+ *   `abc`·`NaN`·`Infinity`는 빈 값과 함께 **미입력**으로 합쳐진다.
+ * ⚠ 위젯도 함께 바꿔야 한다. `AmountInput`은 이 파서에 닿기 전에 문자를 지우고
+ *   **15자리로 자른다**. 절단은 무효값 문제가 아니라 **정상 입력의 무단 변형**이다 —
+ *   `1000000000000000`(안전 정수인 16자리)이 `100000000000000`으로 바뀌어 자릿수가
+ *   하나 줄고, 화면에도 바뀐 값이 그대로 표시돼 사용자가 변형 사실을 알 수 없다.
+ * ⚠ **자릿수 제한과 안전 정수 검증은 다르다.** 이 파서는 자릿수를 제한하지 않는다.
+ *   `1000000000000000`·`9007199254740991`은 안전 정수이므로 **원문과 값을 그대로 받고**,
+ *   `9007199254740993`만 안전 정수 범위를 벗어나므로 차단한다.
+ * ⚠ 잘못된 입력의 결과 방향은 **해석 가능한 경우에만** 말할 수 있다.
+ *   - `1,0`을 `1,000`의 오타로 의도했다면 10원이 되어 **적게** 반영된다.
+ *   - `-1`·`abc`·`1e3` 같은 값은 사용자가 의도한 유효값을 알 수 없다. 이때 말할 수 있는
+ *     것은 **계산기가 원문을 임의의 다른 숫자로 바꾸거나 미입력으로 지웠다**는 사실뿐이다.
+ *   그래서 방향을 추정하지 않고 차단한다.
+ * ⚠ 쉼표를 먼저 지우면 안 된다. `1,0`이 `10`이 되어 잘못된 입력이 유효값이 된다.
+ *   **형식 검증이 끝난 뒤에만** 쉼표를 지운다.
+ * ⚠ `trim()`으로 정리해 통과시키지 않는다. 화면에 남은 원문과 계산에 쓰인 값이 달라진다.
+ * ⚠ 진료비 파서(`stdAmount`)·4세대 금액 파서(`gen2021Money`)와 형식 규칙이 같아도
+ *   재사용하지 않는다. 세대·라벨·안내·무효 시 차단 범위가 다르다.
+ *
+ * 유효: 쉼표 없는 0 이상의 안전 정수(`0`, `00`, `300000`, `1000000000000000`) 또는
+ *   정확한 천 단위 구분(`300,000`). **명시적 `0`·`00`은 유효값**이며 그 뒤 처리는
+ *   각 입력의 종전 정책을 따른다.
+ * 무효(null): 공백만·앞뒤 공백·부호·문자·소수·지수 표기·잘못된 쉼표·안전 정수 초과.
+ *   빈 문자열 `""`은 파서가 아니라 **호출부**에서 미입력으로 처리한다(둘 다 `undefined`).
+ */
+const STD_MONEY_FORMAT = /^(?:[0-9]+|[1-9][0-9]{0,2}(?:,[0-9]{3})+)$/;
+const stdMoney = (v: string): number | null => {
+  if (!STD_MONEY_FORMAT.test(v)) return null;
+  const n = Number(v.replace(/,/g, ""));
+  return Number.isSafeInteger(n) && n >= 0 ? n : null;
+};
+
 const STD_COUNT_FORMAT = /^[0-9]+$/;
 const stdCount = (v: string): number | null => {
   if (!STD_COUNT_FORMAT.test(v)) return null;
@@ -117,18 +154,42 @@ export default function HealthCalcStandardized() {
   //     횟수를 1회 소진해 **다른 행의 보상 여부**까지 바꾸므로, 행 단위로 넘어갈 수 없다.
   //   ⚠ 부분합을 결과로 내보내지 않는다. 유효한 행만 더한 값은 실제 총 진료비가 아니다.
   const needsAmounts = rows.some((r) => stdAmount(r.amount) === null);
-  const gated = needsVisits || needsPrescriptions || needsAmounts;
+  // 금액 두 축은 **현재 계산에 쓰이는 것만** 검증하고 전달한다.
+  //   ⚠ 회(건)당 가입금액은 통원 행이 있을 때만, 기존 입원 자기부담금은 입원 행이 있을
+  //     때만 쓰인다(엔진 multiClaim.ts의 행별 소비 조건과 같은 규칙). 종전에는 행 구성과
+  //     무관하게 **무조건 전달**돼, 통원에서 넣은 가입금액이 입원만 남은 뒤에도 엔진에
+  //     실려 "입력하지 않으면 적용하지 않습니다" 안내를 사라지게 했다.
+  //   ⚠ 숨겨진 원문 상태는 지우지 않는다. 행 구성을 되돌리면 그대로 복원된다.
+  //   ⚠ 빈 문자열만 미입력이다. 공백만 있는 입력은 무효다.
+  const perVisitNum = !hasOutpatient || perVisitLimit === "" ? undefined : stdMoney(perVisitLimit);
+  const priorPaidNum = !hasInpatient || priorPaid === "" ? undefined : stdMoney(priorPaid);
+  const perVisitInvalid = perVisitNum === null;
+  const priorPaidInvalid = priorPaidNum === null;
+  const gated = needsVisits || needsPrescriptions || needsAmounts || perVisitInvalid || priorPaidInvalid;
+  // 회(건)당 가입금액에 명시적 0을 넣으면 엔진은 한도를 적용하지 않는다(`perVisitLimit()`의
+  //   `<= 0`). 그런데 엔진의 "입력하지 않으면 적용하지 않습니다" 안내는 `undefined`일 때만
+  //   나오므로, 0을 넣은 사용자는 **적용 여부에 대한 안내를 하나도 못 본다.**
+  //   ⚠ 엔진은 고치지 않는다. 0을 무효로 만들지도, 숫자 0을 undefined로 바꿔 엔진 안내를
+  //     유도하지도 않는다 — 화면에서 따로 알린다. 통원 행이 없으면 이 한도 자체가 쓰이지
+  //     않으므로 붙이지 않는다.
+  const perVisitZero = perVisitNum !== undefined && perVisitNum !== null && perVisitNum <= 0;
 
   // ⚠ 게이트가 걸린 동안에는 엔진을 호출하지 않는다. 호출하면 엔진의 차단 안내가 화면으로
   //   새어 나와 내부 필드명이 노출되고 경고가 겹친다.
   //   ⚠ 화면에서 숨겨진 카운터는 넘기지 않는다 — 쓰이지 않는 축이 실리면 엔진이 막는다.
-  const result = gated ? null : calculateMany(generation, {
+  //   ⚠ 무효값을 0이나 undefined로 바꿔 계산하지 않는다. null을 **배제**해야만 이 객체가
+  //     만들어지고, 그 과정에서 두 값이 `number | undefined`로 좁혀진다. 타입 단언으로
+  //     null을 숫자인 척 넘기면 게이트를 우회한 값이 그대로 엔진에 들어간다.
+  const money = gated || perVisitNum === null || priorPaidNum === null ? null : {
+    perVisit: perVisitNum, priorPaid: priorPaidNum,
+  };
+  const result = money === null ? null : calculateMany(generation, {
     plan: plan ?? undefined,
     lines,
-    priorAnnualPaid: priorPaid.trim() === "" ? undefined : onlyNum(priorPaid),
+    priorAnnualPaid: money.priorPaid,
     priorAnnualOutpatientVisits: usesVisits ? stdCount(priorVisits) ?? undefined : undefined,
     priorAnnualPrescriptions: usesPrescriptions ? stdCount(priorPrescriptions) ?? undefined : undefined,
-    perVisitCoverageLimit: perVisitLimit.trim() === "" ? undefined : onlyNum(perVisitLimit),
+    perVisitCoverageLimit: money.perVisit,
   });
 
   // 빠른 채우기 금액은 모든 행의 진료비를 덮어쓴다. 같은 규칙으로 판정한다.
@@ -329,11 +390,18 @@ export default function HealthCalcStandardized() {
               <label className="label-base" htmlFor="std-per-visit-limit">
                 회(건)당 보험가입금액 (선택)
               </label>
-              <AmountInput
+              {/* ⚠ 맨 위젯이 아니라 원문 보존 위젯을 쓴다. `AmountInput`은 문자를 지우고
+                     15자리로 자른 뒤 콤마를 붙여 표시하므로, 사용자가 넣은 값과 계산에 쓰인
+                     값이 어긋나도 화면만 봐서는 알 수 없다. 콤마 자동 표시가 사라지는 것은
+                     이번에 승인한 표시 변경이다 — 콤마는 직접 넣을 수 있고 파서가 형식을
+                     검증한다. 공용 위젯 파일(RawAmountInput.tsx·AmountInput.tsx)은 고치지 않는다.
+                     ⚠ ariaLabel을 주지 않는다. 위의 <label htmlFor>가 접근성 이름을 이미
+                     제공하므로, 여기서 aria-label을 붙이면 그 라벨을 덮어쓴다. */}
+              <RawAmountInput
                 id="std-per-visit-limit"
                 value={perVisitLimit}
                 onChange={setPerVisitLimit}
-                placeholder="예: 300,000 — 모르면 비워두세요"
+                placeholder="예: 300000 — 모르면 비워두세요"
               />
               <p className="mt-2 text-xs text-slate-500">
                 외래·처방조제비는 회(건)당 합산 30만 원 이내에서 <b>계약 시 정한 금액</b>이 한도가 됩니다.
@@ -348,7 +416,7 @@ export default function HealthCalcStandardized() {
             <label className="label-base" htmlFor="std-prior-paid">
               계약해당일 기준 1년간 이미 부담한 입원 자기부담금 (선택)
             </label>
-            <AmountInput
+            <RawAmountInput
               id="std-prior-paid"
               value={priorPaid}
               onChange={setPriorPaid}
@@ -392,6 +460,28 @@ export default function HealthCalcStandardized() {
               잘못된 쉼표는 계산기가 임의로 고치지 않으며, 빈 값을 0원으로 보지도 않습니다. 0원으로 보면 그 행이
               연간 횟수를 1회 소진해 <b>다른 행의 보상 여부</b>까지 바뀝니다. 그래서 한 행만 어긋나도 계산하지
               않습니다.
+            </NoticeBox>
+          )}
+          {/* ⚠ 두 금액이 동시에 무효이면 두 안내를 모두 띄운다. 하나만 고쳐서는 계산이
+                 재개되지 않는데 안내가 하나뿐이면 왜 막히는지 알 수 없다.
+                 ⚠ 활성 입력만 안내한다 — 통원 행이 없으면 회(건)당 가입금액은 검증 대상이
+                 아니므로 그 원문이 무효여도 안내하지 않는다(입원도 같다). */}
+          {perVisitInvalid && (
+            <NoticeBox variant="warning">
+              <b>회(건)당 보험가입금액</b>을 올바르게 입력해 주세요. <b>0 이상의 정수</b>만 받습니다 —{" "}
+              <b>300000</b> 또는 <b>300,000</b> 형식입니다. 이 한도를 적용하지 않으려면{" "}
+              <b>완전히 비워</b> 두세요. 공백만 입력한 값은 빈 값으로 보지 않습니다. 음수·소수·문자·
+              지수 표기·잘못된 쉼표는 계산기가 임의로 고치지 않습니다. 입력한 값을 다른 숫자로 바꾸거나
+              미입력으로 지우면 실제 계약 한도와 다른 금액이 나오므로, 어느 쪽으로도 추정하지 않습니다.
+            </NoticeBox>
+          )}
+          {priorPaidInvalid && (
+            <NoticeBox variant="warning">
+              계약해당일 기준 1년간 <b>이미 부담한 입원 자기부담금</b>을 올바르게 입력해 주세요.{" "}
+              <b>0 이상의 정수</b>만 받습니다 — <b>300000</b> 또는 <b>300,000</b> 형식입니다. 이미 부담한
+              금액이 없으면 <b>비워 두거나 0</b>을 입력하세요. 공백만 입력한 값은 빈 값으로 보지 않습니다.
+              음수·소수·문자·지수 표기·잘못된 쉼표는 계산기가 임의로 고치지 않습니다. 이 값은 연간 200만 원
+              자기부담 상한에서 <b>이미 소진한 금액</b>이라, 다른 숫자로 바뀌면 남은 상한이 실제와 달라집니다.
             </NoticeBox>
           )}
           {/* ⚠ 차단 사유를 plan 미선택으로 단정하지 않는다. 엔진이 준 안내를 그대로 보여준다. */}
@@ -452,6 +542,15 @@ export default function HealthCalcStandardized() {
                 </NoticeBox>
               )}
               {result.notes.length > 0 && <NoticeBox variant="info">{result.notes.join(" ")}</NoticeBox>}
+              {/* ⚠ 엔진의 "입력하지 않으면 적용하지 않습니다" 안내는 값이 undefined일 때만
+                     나온다. 명시적 0은 엔진에서 한도 미적용이지만 그 안내가 뜨지 않아,
+                     화면에서 따로 알린다. 엔진·0의 계산 정책은 그대로다. */}
+              {perVisitZero && (
+                <NoticeBox variant="info">
+                  <b>회(건)당 보험가입금액</b>에 <b>0</b>을 입력해 현재 계산에는 해당 한도를 적용하지
+                  않았습니다. 실제 가입금액은 증권에서 확인해 주세요.
+                </NoticeBox>
+              )}
               {result.lines[0]?.notes.length > 0 && (
                 <NoticeBox variant="info">{result.lines[0].notes.join(" ")}</NoticeBox>
               )}

@@ -110,12 +110,17 @@ check("AmountInput은 여전히 15자리로 자른다",
   typeInto(AmountInput as never, { id: "t", value: "" }, "9007199254740993") === "900719925474099");
 check("AmountInput 소스가 바뀌지 않았다(정제·절단 유지)",
   /replace\(\/\[\^0-9\]\/g, ""\)\.slice\(0, MAX_AMOUNT_DIGITS\)/.test(amountWidget));
-check("2·3세대의 진료비가 아닌 금액 입력은 AmountInput을 계속 쓴다",
-  /id="std-per-visit-limit"/.test(ui) && /id="std-prior-paid"/.test(ui)
-  && (ui.match(/<AmountInput/g) ?? []).length === 2);
-check("진료비 두 자리만 RawAmountInput을 쓴다",
-  (ui.match(/<RawAmountInput/g) ?? []).length === 2
-  && /id=\{`std-amount-\$\{row\.id\}`\}/.test(ui) && /id="std-quick-amount"/.test(ui));
+// ⚠ 이 두 검사는 G-1 당시 "금액 두 축은 아직 AmountInput"을 고정했다. G-7이 그 축을
+//   RawAmountInput으로 옮겼으므로, 이제 이 화면에는 AmountInput이 남아 있지 않다.
+//   금액 축 자체의 계약은 tests/gen2009MoneyInput.test.ts가 검사한다.
+check("2·3세대는 네 금액 입력 모두 RawAmountInput을 쓴다",
+  (ui.match(/<AmountInput/g) ?? []).length === 0
+  && !/import AmountInput/.test(ui)
+  && (ui.match(/<RawAmountInput/g) ?? []).length === 4
+  && /id=\{`std-amount-\$\{row\.id\}`\}/.test(ui) && /id="std-quick-amount"/.test(ui)
+  && /id="std-per-visit-limit"/.test(ui) && /id="std-prior-paid"/.test(ui));
+check("공용 AmountInput 파일 자체는 그대로다(다른 화면이 계속 쓴다)",
+  /replace\(\/\[\^0-9\]\/g, ""\)\.slice\(0, MAX_AMOUNT_DIGITS\)/.test(amountWidget));
 
 // ── 화면 전이 ────────────────────────────────────────────────────────
 console.log("\n[화면] 실제 입력 → 상태 → 결과");
@@ -155,8 +160,11 @@ check("안내가 몇 번째 행인지 밝힌다",
   screenOf(withRows(["300000", "abc", "300000"])).warns.some((w) => w.text.includes("2") && w.text.includes("진료비")));
 check("안내가 0원 입력 방법을 알려준다",
   screenOf(withRows(["300000", ""])).warns.some((w) => w.text.includes("0") && w.text.includes("입력하세요")));
+// G-7이 금액 두 축을 게이트에 합류시켜 `gated`가 `money`를 거쳐 엔진 인자를 만든다.
+//   차단 계약 자체는 그대로다 — 게이트가 걸리면 엔진 호출식에 도달하지 않는다.
 check("차단 중에는 엔진을 호출하지 않는다(부분합 계약을 만들지 않는다)",
-  /const result = gated \? null : calculateMany\(/.test(ui));
+  /const money = gated \|\| perVisitNum === null \|\| priorPaidNum === null \? null : \{/.test(ui)
+  && /const result = money === null \? null : calculateMany\(/.test(ui));
 // ⚠ 게이트가 있으니 `?? 0`이 닿지 않는다 — 지금은 동작이 같다. 그래도 금지한다:
 //   나중에 게이트를 손대면 무효 행이 조용히 0원으로 되살아나 이 커밋의 결함이 되돌아온다.
 check("무효 행을 0원으로 대체하는 경로를 두지 않는다",
@@ -211,9 +219,18 @@ console.log("\n[범위] 다른 세대·엔진은 건드리지 않았다");
     /normalizeAmount\(line\.amount\)/.test(multi));
   check("2·3세대 횟수 파서는 그대로다",
     /const STD_COUNT_FORMAT = \/\^\[0-9\]\+\$\/;/.test(ui));
-  check("누적 지급보험금·회당 한도는 여전히 onlyNum()을 쓴다(범위 밖)",
-    /priorAnnualPaid: priorPaid\.trim\(\) === "" \? undefined : onlyNum\(priorPaid\)/.test(ui)
-    && /perVisitCoverageLimit: perVisitLimit\.trim\(\) === "" \? undefined : onlyNum\(perVisitLimit\)/.test(ui));
+  // ⚠ 이 검사는 G-1 당시 "금액 두 축은 아직 onlyNum()"을 고정했다. G-7이 그 축을
+  //   `stdMoney`로 옮겼으므로, 여기서는 **진료비 파서가 그 축에 번지지 않았는지**만 본다.
+  //   ⚠ `priorAnnualPaid`는 지급보험금이 아니라 **기존 입원 자기부담금**이다(화면 라벨과
+  //     generationStandardized.ts의 200만원 상한 소진 산식이 그렇다). 이름으로 4세대의
+  //     `priorAnnualInsurancePaid`와 같은 것으로 읽으면 방향이 반대가 된다.
+  check("금액 두 축은 진료비 파서를 재사용하지 않는다",
+    /priorAnnualPaid: money\.priorPaid,/.test(ui)
+    && /perVisitCoverageLimit: money\.perVisit,/.test(ui)
+    && !/stdAmount\(priorPaid\)/.test(ui) && !/stdAmount\(perVisitLimit\)/.test(ui)
+    && !/onlyNum\(priorPaid\)/.test(ui) && !/onlyNum\(perVisitLimit\)/.test(ui));
+  check("빠른 채우기 횟수는 여전히 onlyNum()을 쓴다(범위 밖)",
+    /Math\.max\(1, onlyNum\(quickCount\) \|\| 1\)/.test(ui));
 }
 
 console.log(`\n[2·3세대 진료비 입력 검증] ✅ ${pass} / ❌ ${fail}`);

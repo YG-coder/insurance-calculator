@@ -58,14 +58,16 @@ check("5세대 페이지: 단건 미반영 범위를 연간 항목으로 한정"
   //    각 계산 진입 조건에 미선택 배제가 붙어 있어야 한다.
   // ⚠ 조건문 전체를 통째로 비교하면 조건이 하나 늘 때마다 깨진다. **필요한 배제 조건이
   //    계산 진입 게이트에 실제로 들어 있는지**를 조각으로 확인한다.
-  const specialGate = (gen5Multi.match(/if \(coverage === "non_benefit"[^)]*\)[^)]*\)[^{]*\{/) ?? [""])[0];
+  // ⚠ 게이트 앞에 조건이 더 붙을 수 있다(G-9의 `money !== null`). 조건문 전체를 통째로
+  //   비교하지 않고, `itemResult` 진입 if 블록의 **머리 부분**을 잡아 조각으로 확인한다.
+  const specialGate = (gen5Multi.match(/if \([^{]*coverage === "non_benefit"[^{]*\{/) ?? [""])[0];
   check("5세대 다회 UI: 별도 보장종목 계산 게이트에 치료유형 배제",
     specialGate.includes("specialItem !== null"), specialGate);
   check("5세대 다회 UI: 별도 보장종목 계산 게이트에 질환 구분 배제",
     specialGate.includes('severity !== ""'), specialGate);
   check("5세대 다회 UI: 별도 보장종목 계산 게이트에 행 미완성 배제",
     specialGate.includes("!rowsIncomplete"), specialGate);
-  const plainGate = (gen5Multi.match(/: nonBenefitItem === "general"[\s\S]{0,120}\? calculateMany2026/) ?? [""])[0];
+  const plainGate = (gen5Multi.match(/: [^?]*nonBenefitItem === "general"[\s\S]{0,140}\? calculateMany2026/) ?? [""])[0];
   check("5세대 다회 UI: 일반 비급여 계산 게이트에 치료유형 배제",
     plainGate.includes('nonBenefitItem === "general"'), plainGate);
   check("5세대 다회 UI: 일반 비급여 계산 게이트에 질환 구분 배제",

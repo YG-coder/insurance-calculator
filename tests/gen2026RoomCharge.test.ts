@@ -274,9 +274,11 @@ console.log("\n[가드] 소스·문구");
   check("UI 상급병실료 폼이 질환 구분과 원인을 차례로 기다림",
     /const showRoomChargeCause = isRoomCharge && severity !== "";/.test(ui)
     && /const showRoomChargeForm = showRoomChargeCause && cause !== "";/.test(ui));
+  // ⚠ G-9가 이 경로의 누적 금액(지급보험금·연간 가입금액) 게이트를 추가했다.
+  //   상급병실료 자체의 게이트(`rcIncomplete`)와 파서는 그대로다.
   check("UI 입력 게이트가 계산에 연결",
     /rcIncomplete = showRoomChargeForm && rcRows\.some\(\(r\) => roomChargeAmount\(r\.amount\) === null \|\| positiveDays\(r\.days\) === null\)/.test(ui)
-    && /if \(showRoomChargeForm && !rcIncomplete\)/.test(ui));
+    && /if \(money !== null && showRoomChargeForm && !rcIncomplete\)/.test(ui));
   check("UI가 상급병실료에서 치료 형태를 숨김", /!showSpecialForm && !isRoomCharge && <label[^§]{0,40}치료 형태/.test(ui));
   check("UI가 상급병실료에서 원인을 노출", /\(showGeneralForm \|\| showRoomChargeCause\) && <label[^§]{0,60}>원인/.test(ui));
   for (const [what, phrase] of [

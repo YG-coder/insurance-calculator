@@ -243,7 +243,12 @@ console.log("\n[간섭] 숨겨진 다른 경로의 무효값이 현재 경로를
   }
   const roomOk = screenOf(setup({ ...ROOM, amounts: junkAmounts, rows: junkRows }));
   check("상급병실료: 숨은 amounts·rows 무효값과 무관하게 계산된다", roomOk.calculated);
-  check("상급병실료 화면에는 RawAmountInput이 없다(위젯 무변경)", roomOk.raws.length === 0);
+  // ⚠ 이 검사는 G-3 당시 "상급병실료 화면에는 **진료비** RawAmountInput이 없다"를 고정했다.
+  //   G-9가 그 화면의 누적 금액 두 입력을 RawAmountInput으로 옮겼으므로, 이제는
+  //   **진료비 위젯만 없는지**를 본다(차액 총액·입원일수는 여전히 맨 input이고 무변경).
+  check("상급병실료 화면에는 진료비 RawAmountInput이 없다(위젯 무변경)",
+    roomOk.raws.every((n) => !String(n.props.id).startsWith("gen2026-amount-")
+      && !String(n.props.id).startsWith("gen2026-row-amount-")));
   check("게이트가 활성 배열에만 걸린다(소스)",
     /const usesAmounts = coverage === "benefit" \|\| showGeneralForm;/.test(ui)
     && /const badRowAmounts = showSpecialForm/.test(ui));
@@ -412,7 +417,8 @@ console.log("\n[전환] 급여로 바꾸면 화면·검증·계산이 모두 amo
     const h = setup({ ...over, amounts: ["abc", "-1"], nhisRate: "20" });
     const before = screenOf(h);
     check(`${what}: 전환 전에는 비급여 폼이 보인다`,
-      back === "" ? before.raws.length === 0 && hasLabel(h, "1번째 입원의 상급병실료")
+      back === "" ? !ids(h).some((id) => id.startsWith("gen2026-amount-") || id.startsWith("gen2026-row-amount-"))
+          && hasLabel(h, "1번째 입원의 상급병실료")
         : ids(h).includes(back));
     check(`${what}: 전환 전에는 숨은 amounts 무효값이 계산을 막지 않는다`, before.calculated);
 
@@ -441,7 +447,8 @@ console.log("\n[전환] 급여로 바꾸면 화면·검증·계산이 모두 amo
     pick(h, "급여 구분", "non_benefit");
     const backScr = screenOf(h);
     check(`${what} → 비급여 복귀: 원래 입력 폼이 돌아온다`,
-      back === "" ? backScr.raws.length === 0 && hasLabel(h, "1번째 입원의 상급병실료")
+      back === "" ? !ids(h).some((id) => id.startsWith("gen2026-amount-") || id.startsWith("gen2026-row-amount-"))
+          && hasLabel(h, "1번째 입원의 상급병실료")
         : ids(h).includes(back));
     check(`${what} → 비급여 복귀: 원래 경로가 다시 계산된다`, backScr.calculated);
     check(`${what} → 비급여 복귀: 결과가 전환 전과 같다`,
@@ -494,10 +501,18 @@ console.log("\n[무회귀] 기존 정책은 그대로다");
   check("상급병실료 일수 0 → 차단 유지",
     !screenOf(setup({ ...ROOM, rcRows: [{ amount: "600000", days: "0" }] })).calculated);
 
-  check("누적 보험금·공제금액·가입금액은 여전히 num()을 쓴다(범위 밖)",
-    /priorAnnualInsurancePaid: num\(priorInsurance\)/.test(ui)
-    && /annualCoverageLimit: annualLimit !== "" \? num\(annualLimit\) : undefined/.test(ui)
-    && /priorAnnualDeductible: severity === "critical" && visit === "inpatient" && nbInpatientTier === "hospital" \? num\(priorDeductible\) : undefined/.test(ui));
+  // ⚠ 이 검사는 G-3 당시 "누적 금액은 아직 num()"을 고정했다. G-9가 **세 축만**
+  //   `gen2026Money`로 옮겼으므로, 여기서는 ①진료비 파서가 그 축에 번지지 않았는지
+  //   ②**공제금액 두 입력은 여전히 num()인지**를 본다.
+  //   ⚠ `nbInpatientTier === "hospital"`은 **상급종합·종합병원**을 뜻한다(선택창 라벨 참조).
+  check("금액 세 축은 진료비 파서를 재사용하지 않는다",
+    /priorAnnualInsurancePaid: money\.prior,/.test(ui)
+    && /annualCoverageLimit: money\.annual,/.test(ui)
+    && /outpatientCoverageLimit: money\.out,/.test(ui)
+    && !/gen2026Amount\(priorInsurance\)/.test(ui) && !/gen2026Amount\(annualLimit\)/.test(ui));
+  check("공제금액 두 입력은 여전히 num()을 쓴다(이번 범위 밖)",
+    /priorAnnualDeductible: severity === "critical" && visit === "inpatient" && nbInpatientTier === "hospital" \? num\(priorDeductible\) : undefined/.test(ui)
+    && /priorAnnualInpatientDeductible: num\(priorPool\)/.test(ui));
   check("일반 전환 라우팅은 그대로다",
     /routeOfGen2026Item\(severity, specialItem, injectionPurpose === "" \? undefined : injectionPurpose\)/.test(ui));
   check("일반 전환 경로에서도 진료비 게이트를 우회할 수 없다",

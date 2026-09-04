@@ -30,6 +30,7 @@
 //   별개 문제다. 어느 쪽도 이 커밋에서 확정하지 않는다(설계 문서의 후속 조사 항목 참조).
 import { readFileSync } from "node:fs";
 import HealthCalcMulti2026 from "../src/components/calculators/HealthCalcMulti2026";
+import RawAmountInput from "../src/components/RawAmountInput";
 import { mount, stateNamesFrom, RenderedNode } from "./_uiRender";
 
 let pass = 0, fail = 0;
@@ -69,15 +70,35 @@ const pick = (h: H, p: string, v: string) => {
   if (s.props.disabled === true) throw new Error(`선택창이 비활성입니다(우회하지 않는다): ${p}`);
   (s.props.onChange as (e: unknown) => void)({ target: { value: v } });
 };
+/**
+ * 라벨 아래의 실제 `<input>`을 찾는다.
+ * ⚠ G-9에서 세 금액 칸이 `RawAmountInput`으로 바뀌었다. 렌더러는 함수 컴포넌트를 호출하지
+ *   않으므로, 여기서 **공용 위젯을 실제로 호출해** 그 안의 `<input>`까지 내려간다 —
+ *   위젯을 건너뛰고 props의 onChange를 부르면 위젯이 값을 정제해도 검사가 통과한다.
+ */
+const realInput = (children: unknown): { props: Record<string, unknown> } | null => {
+  const raw = findIn(children, "#raw");   // 자리표시자 — 아래에서 태그로 직접 찾는다
+  void raw;
+  const direct = findIn(children, "input");
+  if (direct !== null) return direct;
+  const find = (el: unknown): { props: Record<string, unknown> } | null => {
+    if (el === null || el === undefined || typeof el !== "object") return null;
+    if (Array.isArray(el)) { for (const c of el) { const r = find(c); if (r !== null) return r; } return null; }
+    const e = el as { type?: unknown; props?: Record<string, unknown> };
+    if (e.type === RawAmountInput) return findIn((RawAmountInput as unknown as (q: never) => unknown)(e.props as never), "input");
+    return find(e.props?.children);
+  };
+  return find(children);
+};
 const typeInto = (h: H, p: string, v: string) => {
   const l = labelOf(h, p);
-  const i = l === undefined ? null : findIn(l.props.children, "input");
+  const i = l === undefined ? null : realInput(l.props.children);
   if (i === null) throw new Error(`입력을 찾지 못했습니다: ${p}`);
   (i.props.onChange as (e: unknown) => void)({ target: { value: v } });
 };
 const shown = (h: H, p: string) => {
   const l = labelOf(h, p);
-  const i = l === undefined ? null : findIn(l.props.children, "input");
+  const i = l === undefined ? null : realInput(l.props.children);
   return i === null ? null : String(i.props.value);
 };
 const has = (h: H, p: string) => labelOf(h, p) !== undefined;
@@ -519,10 +540,14 @@ console.log("\n[소스] 축 키는 기존 라우팅 결과에서만 만든다");
     && !/String\(severity\)/.test(code) && !/`item_\$\{/.test(code));
   check("엔진 라우팅과 다른 항목 판정 로직이 없다",
     (code.match(/routeOfGen2026Item\(/g) ?? []).length === 1);
-  check("전달 형태 그대로(파서 num 무변경)",
-    (code.match(/priorAnnualInsurancePaid: num\(priorInsurance\)/g) ?? []).length === 7
-    && (code.match(/annualCoverageLimit: annualLimit !== "" \? num\(annualLimit\) : undefined/g) ?? []).length === 3
-    && (code.match(/outpatientCoverageLimit: visit === "outpatient" && outpatientLimit !== "" \? num\(outpatientLimit\) : undefined/g) ?? []).length === 2);
+  // ⚠ G-9가 세 축의 파서를 `num()`에서 `gen2026Money`로 옮겼다. 축 분리(G-8) 계약은
+  //   그대로여야 하므로, 여기서는 **활성 축의 값이 그대로 전달되는지**와 전달 지점 수만 본다.
+  check("활성 축 값이 그대로 전달된다(전달 지점 수 유지)",
+    (code.match(/priorAnnualInsurancePaid: money\.prior,/g) ?? []).length === 7
+    && (code.match(/annualCoverageLimit: money\.annual,/g) ?? []).length === 3
+    && (code.match(/outpatientCoverageLimit: money\.out,/g) ?? []).length === 2
+    && /const priorInsuranceNum = priorInsurance === "" \? 0 : gen2026Money\(priorInsurance\);/.test(code)
+    && /const priorInsurance = paidAxis === null \? "0" : priorInsuranceByAxis\[paidAxis\];/.test(code));
   check("공제금액 두 상태는 그대로다",
     /const \[priorDeductible, setPriorDeductible\] = useState\("0"\);/.test(code)
     && /const \[priorPool, setPriorPool\] = useState\("0"\);/.test(code)

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import NoticeBox from "@/components/NoticeBox";
+import RawAmountInput from "@/components/RawAmountInput";
 import ResultCard from "@/components/ResultCard";
 import { calculateMany2026 } from "@/lib/insurance/engine/multiClaim2026";
 import {
@@ -87,6 +88,44 @@ const roomChargeAmount = (v: string): number | null => {
   return Number.isSafeInteger(n) && n >= 0 ? n : null;
 };
 
+/**
+ * 5세대 **진료비** 전용 파서. 일반 비급여·급여 행(`amounts`)과 특별약관 행(`rows`)이 쓴다.
+ *
+ * ⚠ 공용 `num()`을 쓰면 안 된다. `num()`은 숫자·점이 아닌 문자를 **지우고** 실패를 0으로
+ *   바꾸므로 파서에 닿기 전에 값이 **다른 유효값으로 둔갑**한다 —
+ *   `-1`→**1**(부호를 지워 양수), `1.5`→**1.5**(원 단위인데 소수를 통과시킨다),
+ *   `1e3`→**13**, `1,0`→**10**, `abc`·빈 값·`Infinity`→**0**.
+ *   위젯이 원문을 화면에 남기므로 **화면에 보이는 값과 계산에 쓰는 값이 달라진다.**
+ *
+ * ⚠ 5세대에서 **진료비 0원 행은 횟수·일수를 소진하지 않는다** — 중증 통원 회수와 비중증
+ *   통원 일수는 `amount > 0`일 때만(multiClaim2026.ts), 특별약관 횟수는 `amount > 0`일 때만
+ *   (specialItem2026.ts `counts`), 근골격계 승인 회차는 양수 금액 행만 센다(같은 파일
+ *   `normalizeAmount(l.amount) > 0`). **2·3·4세대의 0원 행 설명을 여기에 옮기지 말 것.**
+ *   별개 논점인 **진료비는 양수인데 지급보험금이 0원인 건**은, 직접 확인한 범위에서 횟수 소진
+ *   기준을 확정하지 못해 **HOLD**로 유지한다. 두 해석의 비교 결과가 다를 때만 묶음을 차단하고,
+ *   같으면 기존 계약대로 계산한다(설계 문서 §5.4.2·§5.4.4). 이번 입력 검증과 무관하다.
+ *   그러므로 이 게이트의 근거는 횟수 소진이 아니라 **입력 계약** 자체다 — 계산기는 빈 값이나
+ *   잘못된 입력을 임의로 다른 금액으로 바꾸지 않는다.
+ * ⚠ 입력 위젯도 함께 바꿔야 한다. 파서만 엄격하게 하면 늦다(RawAmountInput 참조).
+ * ⚠ 쉼표를 먼저 지우면 안 된다. `1,0`이 `10`이 되어 잘못된 입력이 유효값이 된다.
+ *   **형식 검증이 끝난 뒤에만** 쉼표를 지운다.
+ * ⚠ `roomChargeAmount`를 재사용하지 않는다. 형식 규칙이 같아도 근거 조문·라벨·안내가
+ *   다르고, 상급병실료 차액은 금액과 입원일수를 함께 판정하는 별도 계약이다.
+ * ⚠ 2·3·4세대 파서를 재사용하지 않는다. 같은 이유다.
+ *
+ * 유효: 쉼표 없는 0 이상의 정수(`0`, `300000`) 또는 정확한 천 단위 구분
+ *   (`300,000`, `1,234,567`). **명시적으로 입력한 `0`은 유효값**이다.
+ * 무효(null = 미입력·잘못된 입력): 빈 값·공백, 부호(`-`/`+`), 문자, `NaN`·`Infinity`,
+ *   소수(`1.5`·`1.`·`.5`), 지수 표기(`1e3`), 잘못된 쉼표(`1,0`·`1,00,000`·`,300`·`300,`),
+ *   안전 정수 범위(2^53−1) 초과.
+ */
+const GEN2026_AMOUNT_FORMAT = /^(?:[0-9]+|[1-9][0-9]{0,2}(?:,[0-9]{3})+)$/;
+const gen2026Amount = (v: string): number | null => {
+  if (!GEN2026_AMOUNT_FORMAT.test(v)) return null;
+  const n = Number(v.replace(/,/g, ""));
+  return Number.isSafeInteger(n) && n >= 0 ? n : null;
+};
+
 export default function HealthCalcMulti2026() {
   const [amounts, setAmounts] = useState(["300000", "300000"]);
   // "" = 미선택. 일반 (1)(2)는 제5조①이 상해·질병 각 축으로 가입금액과 누적을 나누므로,
@@ -136,10 +175,16 @@ export default function HealthCalcMulti2026() {
   const [priorPool, setPriorPool] = useState("0");
   const [submitted, setSubmitted] = useState(false);
 
-  const isSpecialItem = nonBenefitItem === "musculoskeletal_esw" || nonBenefitItem === "injection" || nonBenefitItem === "mri";
+  // ⚠ 치료유형은 비급여에서만 고른다. 급여로 바꾸면 선택창은 사라지지만 `nonBenefitItem`
+  //   상태는 남는다. 여기에 급여 조건을 걸지 않으면 **급여인데 특별약관·상급병실료 입력 폼이
+  //   렌더되는데 급여 계산은 `amounts`를 쓴다** — 화면에 보이는 금액을 고쳐도 계산에 쓰이지
+  //   않고, 숨겨진 `amounts`로 계산된다. 치료 형태 선택창도 상급병실료 조건에 가려 사라진다.
+  //   화면·검증·계산이 같은 배열을 보도록 급여 여부를 여기서 한 번에 반영한다.
+  const isSpecialItem = coverage === "non_benefit"
+    && (nonBenefitItem === "musculoskeletal_esw" || nonBenefitItem === "injection" || nonBenefitItem === "mri");
   const specialItem = isSpecialItem ? (nonBenefitItem as Gen2026SpecialItem) : null;
   const needsItem = coverage === "non_benefit" && nonBenefitItem === "";
-  const isRoomCharge = nonBenefitItem === "room_charge";
+  const isRoomCharge = coverage === "non_benefit" && nonBenefitItem === "room_charge";
   // 상급병실료도 질환 구분이 필요하다 — 산식은 같지만 연간 가입금액 축(중증 5천만·비중증 1천만)이 다르다.
   const needsSeverity = coverage === "non_benefit" && nonBenefitItem !== "" && severity === "";
 
@@ -182,23 +227,54 @@ export default function HealthCalcMulti2026() {
   const needsRowTier = showSpecialForm && severity === "critical" && specialItem === "mri";
   const rowsIncomplete = showSpecialForm && rows.some((r) => r.visit === "" || (needsRowTier && r.visit === "inpatient" && r.tier === ""));
 
-  const specialLines: Gen2026SpecialLine[] = rows.map((r) => ({ amount: num(r.amount), visit: r.visit as Visit }));
+  // ── 진료비 원문 검증 — **경로별로 분리한다** ──────────────────────────
+  //   화면의 입력 행은 세 배열로 나뉘어 있고, 렌더 분기가 활성 배열과 정확히 일치한다
+  //     (showRoomChargeForm → rcRows / showSpecialForm → rows / 그 외 → amounts).
+  //   ⚠ 그래서 게이트도 **그 조합에서 실제로 계산에 들어가는 배열에만** 건다.
+  //     한 배열에 게이트를 몰아 걸면 화면에 보이지도 않는 다른 경로의 남은 무효값 때문에
+  //     현재 경로가 계산되지 않는다. 경로를 바꾸면 이전 경로의 입력은 상태에 남아 있다.
+  //   ⚠ 상급병실료(rcRows)는 이미 `roomChargeAmount`로 엄격 검증하고 `rcIncomplete`가 막는다.
+  //     이번 변경 대상이 아니며 파서·게이트·계산을 그대로 둔다.
+  /** 급여 / 일반 비급여 / 일반 경로로 전환된 조합이 쓰는 `amounts` 배열이 활성인가. */
+  const usesAmounts = coverage === "benefit" || showGeneralForm;
+  /** 무효 행의 **1-기반 번호**. 안내에서 문제 행을 지목하는 데 쓴다. */
+  const badAmountRows = usesAmounts
+    ? amounts.map((a, i) => (gen2026Amount(a) === null ? i + 1 : null)).filter((n): n is number => n !== null)
+    : [];
+  const amountsIncomplete = badAmountRows.length > 0;
+  /** 특별약관 행(`rows`)의 진료비. `showSpecialForm`일 때만 계산에 들어간다. */
+  const badRowAmounts = showSpecialForm
+    ? rows.map((r, i) => (gen2026Amount(r.amount) === null ? i + 1 : null)).filter((n): n is number => n !== null)
+    : [];
+  const rowAmountsIncomplete = badRowAmounts.length > 0;
+  /**
+   * 복제 원본은 **실제 첫 행 금액**이다. 무효면 버튼을 비활성화하고 핸들러에서도 막는다.
+   *   ⚠ 명시적 `0`은 유효값이므로 복제할 수 있다.
+   *   ⚠ 대체될 다른 행이 무효여도 복제는 막지 않는다 — 어차피 원본으로 덮인다.
+   */
+  const copySourceInvalid = gen2026Amount(amounts[0] ?? "") === null;
+
+  // ⚠ 무효 행은 위 게이트가 엔진 호출 자체를 막는다. 0원으로 대체하거나 행을 지우지 않는다.
+  //   0원으로 바꾸면 사용자가 입력하지 않은 금액을 계산기가 만들어 내는 것이고, 결과표에
+  //   실제로 청구하지 않은 0원 행이 남는다.
+  const specialLines: Gen2026SpecialLine[] = rows.map((r) => ({ amount: gen2026Amount(r.amount) as number, visit: r.visit as Visit }));
   const mriLines: Gen2026CriticalMriLine[] = rows.map((r) => r.visit === "inpatient"
-    ? { amount: num(r.amount), visit: "inpatient", tier: r.tier as Tier }
-    : { amount: num(r.amount), visit: "outpatient" });
+    ? { amount: gen2026Amount(r.amount) as number, visit: "inpatient", tier: r.tier as Tier }
+    : { amount: gen2026Amount(r.amount) as number, visit: "outpatient" });
 
   // ── 별도 보장종목 / 일반 경로 전환 ──────────────────────────────────
   //   판별 유니온이라 잘못된 조합은 여기서 컴파일되지 않는다.
   let itemResult: Gen2026ItemClaimResult | null = null;
   if (coverage === "non_benefit" && specialItem !== null && severity !== "" && !rowsIncomplete
+      && !rowAmountsIncomplete
       && !needsPriorActs
       && !(route === "general" && (cause === "" || (visit === "inpatient" && nbInpatientTier === "")
-        || needsOutDays || needsOutVisits))) {
+        || needsOutDays || needsOutVisits || amountsIncomplete))) {
     const generalCommon = {
       route: "general" as const, coverage: "non_benefit" as const, cause: cause as Cause, visit,
       // ⚠ 빈 값을 Tier로 단언하지 않는다. 아래 게이트가 미선택을 이미 배제한다.
       tier: visit === "inpatient" ? nbInpatientTier || undefined : undefined,
-      amounts: amounts.map(num),
+      amounts: amounts.map((a) => gen2026Amount(a) as number),
       priorAnnualInsurancePaid: num(priorInsurance),
       annualCoverageLimit: annualLimit !== "" ? num(annualLimit) : undefined,
       outpatientCoverageLimit: visit === "outpatient" && outpatientLimit !== "" ? num(outpatientLimit) : undefined,
@@ -275,18 +351,23 @@ export default function HealthCalcMulti2026() {
   }
 
   // ── 급여 / 일반 비급여 ──────────────────────────────────────────────
-  const plainResult = coverage === "benefit"
+  //   ⚠ 진료비가 하나라도 무효면 이 묶음의 엔진 호출을 막는다. 유효 행만 모아 부분합을
+  //     만들지 않는다 — 부분합은 사용자가 입력한 총 진료비가 아니고, 무효 행이 어떤 금액이었는지
+  //     계산기가 알 수 없기 때문이다. (5세대에서 진료비 0원 행은 횟수·일수를 소진하지 않는다.)
+  const plainResult = amountsIncomplete
+    ? null
+    : coverage === "benefit"
     ? calculateMany2026({
         cause: benefitCause, coverage: "benefit", visit, tier: benefitTier,
         nhisCoinsuranceRate: visit === "outpatient" && nhisRate !== "" ? Math.min(100, num(nhisRate)) / 100 : undefined,
-        amounts: amounts.map(num),
+        amounts: amounts.map((a) => gen2026Amount(a) as number),
       })
     : nonBenefitItem === "general" && severity !== "" && cause !== "" && !needsTier
       && !needsOutDays && !needsOutVisits
       ? calculateMany2026({
           cause, coverage: "non_benefit", visit, severity, nonBenefitItem: "general",
           tier: visit === "inpatient" ? nbInpatientTier || undefined : undefined,
-          amounts: amounts.map(num),
+          amounts: amounts.map((a) => gen2026Amount(a) as number),
           priorAnnualInsurancePaid: num(priorInsurance),
           priorAnnualDeductible: severity === "critical" && visit === "inpatient" && nbInpatientTier === "hospital" ? num(priorDeductible) : undefined,
           outpatientCoverageLimit: visit === "outpatient" && outpatientLimit !== "" ? num(outpatientLimit) : undefined,
@@ -364,7 +445,11 @@ export default function HealthCalcMulti2026() {
       : showSpecialForm
       ? <>
         <div className="mt-5 space-y-3">{rows.map((row, i) => <div className="grid grid-cols-2 items-end gap-2 sm:grid-cols-4" key={i}>
-          <label className="text-sm font-semibold">{i + 1}번째 {specialItem === "injection" ? "1회 주사료 합산액" : "행위 진료비"}<input className="input-base mt-1" inputMode="numeric" value={row.amount} onChange={(e) => setRow(i, { amount: e.target.value })} /></label>
+          <label className="text-sm font-semibold">{i + 1}번째 {specialItem === "injection" ? "1회 주사료 합산액" : "행위 진료비"}
+            <div className="mt-1"><RawAmountInput id={`gen2026-row-amount-${i}`} value={row.amount}
+              onChange={(v) => setRow(i, { amount: v })} placeholder="예: 300,000"
+              ariaLabel={`${i + 1}번째 ${specialItem === "injection" ? "1회 주사료 합산액" : "행위 진료비"}`} /></div>
+          </label>
           <label className="text-sm font-semibold">치료 형태<select className="input-base mt-1" value={row.visit} onChange={(e) => setRow(i, { visit: e.target.value as Visit | "" })}><option value="">선택</option><option value="outpatient">통원</option><option value="inpatient">입원</option></select></label>
           {needsRowTier && row.visit === "inpatient"
             ? <label className="text-sm font-semibold">의료기관<select className="input-base mt-1" value={row.tier} onChange={(e) => setRow(i, { tier: e.target.value as Tier | "" })}><option value="">선택</option><option value="clinic">병·의원급</option><option value="hospital">상급종합·종합병원</option></select></label>
@@ -374,8 +459,20 @@ export default function HealthCalcMulti2026() {
         <div className="mt-3 flex flex-wrap gap-2"><button className={smallButton} onClick={() => setRows((old) => [...old, emptyRow()])}>행 추가</button></div>
       </>
       : <>
-        <div className="mt-5 space-y-3">{amounts.map((amount, i) => <div className="flex items-end gap-2" key={i}><label className="flex-1 text-sm font-semibold">{i + 1}건 진료비<input className="input-base mt-1" inputMode="numeric" value={amount} onChange={(e) => setAmounts((old) => old.map((v, j) => j === i ? e.target.value : v))} /></label><button className={smallButton} disabled={amounts.length === 1} onClick={() => setAmounts((old) => old.filter((_, j) => j !== i))}>삭제</button></div>)}</div>
-        <div className="mt-3 flex flex-wrap gap-2"><button className={smallButton} onClick={() => setAmounts((old) => [...old, ""])}>행 추가</button><input className="input-base w-20" value={copyCount} onChange={(e) => setCopyCount(e.target.value)} aria-label="복사할 횟수" /><button className={smallButton} onClick={() => setAmounts(Array.from({ length: Math.max(1, Math.min(100, Math.floor(num(copyCount)))) }, () => amounts[0] ?? ""))}>첫 금액 × N회</button></div>
+        <div className="mt-5 space-y-3">{amounts.map((amount, i) => <div className="flex items-end gap-2" key={i}>
+          <label className="flex-1 text-sm font-semibold">{i + 1}건 진료비
+            <div className="mt-1"><RawAmountInput id={`gen2026-amount-${i}`} value={amount}
+              onChange={(v) => setAmounts((old) => old.map((prev, j) => j === i ? v : prev))}
+              placeholder="예: 300,000" ariaLabel={`${i + 1}건 진료비`} /></div>
+          </label>
+          <button className={smallButton} disabled={amounts.length === 1} onClick={() => setAmounts((old) => old.filter((_, j) => j !== i))}>삭제</button>
+        </div>)}</div>
+        <div className="mt-3 flex flex-wrap gap-2"><button className={smallButton} onClick={() => setAmounts((old) => [...old, ""])}>행 추가</button><input className="input-base w-20" value={copyCount} onChange={(e) => setCopyCount(e.target.value)} aria-label="복사할 횟수" /><button className={smallButton} disabled={copySourceInvalid} onClick={() => {
+          // ⚠ 버튼 비활성만으로는 부족하다. 핸들러에서도 원본을 다시 검증한다.
+          if (copySourceInvalid) return;
+          setAmounts(Array.from({ length: Math.max(1, Math.min(100, Math.floor(num(copyCount)))) }, () => amounts[0] ?? ""));
+        }}>첫 금액 × N회</button></div>
+        {copySourceInvalid && <p className="mt-2 text-xs text-slate-500">1건 진료비를 올바르게 입력하면 복제할 수 있습니다. 실제로 0원이면 <b>0</b>을 입력하세요.</p>}
       </>}
 
     {/* ── 누적 입력 ── */}
@@ -398,6 +495,8 @@ export default function HealthCalcMulti2026() {
     {submitted && needsSeverity && <div className="mt-5"><NoticeBox variant="warning">비급여는 <b>중증 / 비중증</b>에 따라 자기부담률과 한도가 다릅니다. 질환 구분을 선택해 주세요. 선택 전에는 계산하지 않습니다.</NoticeBox></div>}
     {submitted && needsPurpose && <div className="mt-5"><NoticeBox variant="warning">비급여 주사료는 <b>약제 용도</b>에 따라 보상하는 보장종목이 달라집니다(특별약관1 제3조(3)제2항). 약제 용도를 선택해 주세요. 선택 전에는 계산하지 않습니다.</NoticeBox></div>}
     {submitted && rcIncomplete && <div className="mt-5"><NoticeBox variant="warning">각 입원의 <b>차액 총액</b>과 <b>총 입원일수</b>를 올바르게 입력해 주세요. 차액 총액은 <b>0 이상의 숫자</b>, 총 입원일수는 <b>1 이상의 정수</b>여야 합니다. 음수·문자가 섞인 값은 계산기가 임의로 고치지 않고, 약관에 일수 산정 방법이 정해져 있지 않아 일수도 추정하지 않습니다. 올바르게 입력하기 전에는 계산하지 않습니다.</NoticeBox></div>}
+    {submitted && amountsIncomplete && <div className="mt-5"><NoticeBox variant="warning">{badAmountRows.join("·")}번째 행의 <b>진료비</b>를 올바르게 입력해 주세요. <b>0 이상의 정수</b>만 받습니다 — <b>300000</b> 또는 <b>300,000</b> 형식입니다. 진료비가 실제로 0원이면 <b>0</b>을 입력하세요. 빈 값이나 잘못된 입력(음수·소수·문자·지수 표기·잘못된 쉼표)을 계산기가 <b>임의로 다른 금액으로 바꾸지 않으며</b>, 빈 값을 0원으로 보지도 않습니다. <b>모든 행에 올바른 진료비를 입력해야 계산할 수 있습니다.</b> 유효한 행만 모아 부분합을 내지도 않습니다.</NoticeBox></div>}
+    {submitted && rowAmountsIncomplete && <div className="mt-5"><NoticeBox variant="warning">{badRowAmounts.join("·")}번째 행의 <b>{specialItem === "injection" ? "1회 주사료 합산액" : "행위 진료비"}</b>을(를) 올바르게 입력해 주세요. <b>0 이상의 정수</b>만 받습니다 — <b>300000</b> 또는 <b>300,000</b> 형식입니다. 실제로 0원이면 <b>0</b>을 입력하세요. 빈 값이나 잘못된 입력(음수·소수·문자·지수 표기·잘못된 쉼표)을 계산기가 <b>임의로 다른 금액으로 바꾸지 않으며</b>, 빈 값을 0원으로 보지도 않습니다. <b>모든 행에 올바른 진료비를 입력해야 계산할 수 있습니다.</b> 유효한 행만 모아 부분합을 내지도 않습니다.</NoticeBox></div>}
     {submitted && needsTier && <div className="mt-5"><NoticeBox variant="warning">비급여 <b>입원</b>은 <b>의료기관 종별</b>에 따라 보험금이 달라집니다. 중증은 공제금액 상한 500만 원이 상급종합·종합병원 입원에만 적용되고(특별약관1 제5조 제5항), 비중증은 1회당 300만 원 한도가 병·의원급에만 적용됩니다(특별약관2 제3조 (1)제1항·(2)제1항). <b>입원 의료기관</b>을 선택해 주세요. 선택 전에는 계산하지 않습니다.</NoticeBox></div>}
     {submitted && needsPriorActs && <div className="mt-5"><NoticeBox variant="warning">근골격계 이학요법·체외충격파는 최초 10회 이후 증상의 개선·병변호전이 확인된 경우에 한하여 10회 단위로 보상합니다(특별약관1 제3조(3)제1항 &lt;표1&gt; 주)). 승인 회차는 약관상 <b>&lsquo;각 치료횟수&rsquo;</b>로 세므로, 계약해당일 기준 1년간 <b>이미 받은 치료행위 수</b>를 입력해 주세요. 받은 치료가 없으면 <b>0</b>을 입력하시면 됩니다. <b>보상한 횟수</b>는 보험금이 지급된 횟수라 대신 쓰지 않으며, 입력 전에는 계산하지 않습니다.</NoticeBox></div>}
     {submitted && needsOutDays && <div className="mt-5"><NoticeBox variant="warning">계약해당일 기준 1년간 <b>이미 사용한 통원일수</b>를 입력해 주세요. 이전 통원이 없으면 <b>0</b>을 입력하세요. 비중증 통원은 연 {GEN2026.nonBenefit.nonCritical.outpatientAnnualDays}일이 한도라 이 값이 있어야 계산할 수 있고, 계산기가 0으로 추정하지 않습니다. 0 이상의 정수만 받으며 음수·소수는 계산하지 않습니다.</NoticeBox></div>}

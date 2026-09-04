@@ -237,8 +237,10 @@ console.log("\n[범위] 다른 세대·엔진·공용 위젯은 건드리지 않
   const settle = readFileSync("src/lib/insurance/common/settle.ts", "utf8");
   const eng = readFileSync("src/lib/insurance/engine/multiClaim2021.ts", "utf8");
   check("2·3세대는 G-1 계약 그대로다", /const stdAmount = \(v: string\): number \| null =>/.test(std));
-  check("5세대 다회는 여전히 num()으로 진료비를 읽는다(범위 밖)",
-    /const num = \(v: string\) => Number\(v\.replace\(\/\[\^0-9.\]\/g, ""\)\) \|\| 0;/.test(g5));
+  // 5세대 진료비는 G-3에서 별도 파서로 옮겼다. 4세대 파서를 재사용하지 않는지만 본다.
+  check("5세대 다회는 4세대 파서를 재사용하지 않는다",
+    /const gen2026Amount = \(v: string\): number \| null =>/.test(g5)
+    && !/gen2021Amount/.test(g5));
   check("공용 AmountInput은 그대로다",
     /replace\(\/\[\^0-9\]\/g, ""\)\.slice\(0, MAX_AMOUNT_DIGITS\)/.test(amountWidget));
   check("RawAmountInput은 그대로다(정제·절단 없음)",

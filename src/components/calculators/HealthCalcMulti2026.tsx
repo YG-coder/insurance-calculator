@@ -345,6 +345,25 @@ export default function HealthCalcMulti2026() {
   // 중증 MRI 입원 행은 의료기관 종별이 조건부 필수다(제5조⑤ pool 판정).
   const needsRowTier = showSpecialForm && severity === "critical" && specialItem === "mri";
   const rowsIncomplete = showSpecialForm && rows.some((r) => r.visit === "" || (needsRowTier && r.visit === "inpatient" && r.tier === ""));
+  /**
+   * 중증 MRI **누적 공제금액 입력의 전용 조건**. 500만원 pool이 실제로 소진되는 행이
+   * 하나라도 있을 때만 참이다.
+   *
+   * ⚠ `needsRowTier`를 재사용하면 안 된다. 그 조건은 **행별 의료기관 종별 선택창**과
+   *   `rowsIncomplete`(미선택 차단)에도 쓰이므로, 여기 맞춰 좁히면 종별을 고를 수단이
+   *   사라지고 미선택 게이트까지 무너진다. 두 조건은 목적이 다르므로 따로 둔다.
+   * ⚠ 소비 조건은 엔진에 이미 있다 — `specialItem2026.ts`의
+   *   `spec.poolEligible && line.visit === "inpatient" && line.tier === "hospital"`.
+   *   여기서는 **그 조건을 새로 만들지 않고 노출·전달을 거기에 맞출 뿐**이다.
+   *   `hospital`은 선택창 라벨대로 **상급종합·종합병원**을 뜻한다.
+   * ⚠ `visit`과 `tier`를 **함께** 본다. 통원 행에 이전 선택으로 `tier: "hospital"`이
+   *   남아 있어도 pool 대상이 아니다(엔진도 `visit === "inpatient"`를 함께 본다).
+   * ⚠ `some`이다. 대상 행이 **하나라도** 있으면 노출·전달한다 — `every`로 바꾸면
+   *   혼합 구성에서 실제로 소진되는 행이 있는데도 입력이 사라진다.
+   * ⚠ 이 조건이 거짓이어도 상태는 그대로 둔다. 행 구성이 돌아오면 원문이 복원된다.
+   */
+  const usesPriorPool = showSpecialForm && severity === "critical" && specialItem === "mri"
+    && rows.some((r) => r.visit === "inpatient" && r.tier === "hospital");
 
   // ── 활성 보장축 ─────────────────────────────────────────────────────
   //   ⚠ 키는 **이미 계산된 라우팅 결과**에서만 만든다. 새 항목 판정 로직을 두지 않는다.
@@ -380,8 +399,14 @@ export default function HealthCalcMulti2026() {
   };
 
   // ── 누적 금액 검증 — **경로가 실제로 쓰는 것만** ─────────────────────
-  //   ⚠ 급여는 세 금액을 하나도 쓰지 않는다. 그때 `paidAxis`·`generalAxis`가 null이라
-  //     아래 파생이 각각 "0"·""을 보게 되고, 숨은 축의 무효값은 읽히지 않는다.
+  //   ⚠ 급여는 세 금액을 하나도 쓰지 않는다. 다만 **그 이유를 정확히 적는다** —
+  //     `paidAxis`는 세 폼이 모두 `coverage === "non_benefit"` 안에 있어 급여에서 null이
+  //     되지만, `generalAxis`는 `severity`·`cause`로만 만들어지고 두 상태는 급여로 바꿔도
+  //     초기화되지 않으므로 **남아 있을 수 있다.** 그때 파생 `annualLimit`·
+  //     `outpatientLimit`은 ""이 아니라 그 축의 값을 읽는다.
+  //     간섭을 막는 것은 축이 null이라는 사실이 아니라 아래 `usesAnnualLimit`·
+  //     `usesOutpatientLimit`의 **활성 조건**이다 — 급여에서는 둘 다 거짓이라 검증도
+  //     전달도 하지 않는다. 상태가 남아 있다는 사실과 그 값이 쓰인다는 것은 다르다.
   //   ⚠ 빈 문자열의 뜻이 **필드마다 다르다.** 지급보험금은 0(종전 `num("")`과 같다),
   //     가입금액 두 종류는 undefined(미적용). 한쪽 규칙을 다른 쪽에 옮기지 않는다.
   //   ⚠ 명시적 0·00은 유효값이고 숫자 0을 그대로 전달한다. 엔진의 종전 처리를 바꾸지 않고,
@@ -483,7 +508,11 @@ export default function HealthCalcMulti2026() {
         itemResult = calculateGen2026Item({
           route: "special_item", coverage: "non_benefit", severity: "critical",
           item: "mri", lines: mriLines,
-          priorAnnualInpatientDeductible: num(priorPool),
+          // ⚠ 소진 대상 행이 없으면 넘기지 않는다. 엔진의 `nonNegInt(undefined)`는 0이라
+          //   pool 시작값이 같고, 진입점 검증도 이 필드를 미사용 축으로 거부하지 않는다
+          //   (통원 카운터와 다르다). 그래서 결과가 달라지지 않는다.
+          //   ⚠ 파서·초기값·빈 값 처리는 그대로다 — 이번 변경은 **노출·전달 조건**뿐이다.
+          priorAnnualInpatientDeductible: usesPriorPool ? num(priorPool) : undefined,
           priorAnnualInsurancePaid: money.prior,
         });
       } else if (injectionPurpose === "general") {
@@ -684,7 +713,9 @@ export default function HealthCalcMulti2026() {
         onChange={setPriorInsurance} ariaLabel={`계약해당일 기준 1년간 이 보장종목의 기존 지급보험금 (${itemAxis === null ? "" : GEN2026_ITEM_AXIS_LABEL[itemAxis]})`} /></div><span className="mt-2 block text-xs font-normal text-slate-500">이 보장종목의 연간 보장한도에 이미 지급된 보험금만 넣어 주세요. 약관은 <b>각 비급여의료비별 보장한도</b>로 정하고(제5조①단서·③) <b>상해·질병을 합산</b>하므로(&lt;표1&gt;), 원인을 나누지 않고 이 항목 하나로 누적합니다. 일반 (1)(2)의 입원·통원·상급병실료 지급액은 여기에 넣지 않습니다.</span></label>
       {(specialItem === "musculoskeletal_esw" || specialItem === "injection") && <label className="text-sm font-semibold">계약해당일 기준 1년간 이미 <b>보상한 횟수</b> (연 50회 한도용)<input className="input-base mt-1" type="number" min="0" value={priorCount} onChange={(e) => setPriorCount(e.target.value)} /></label>}
       {specialItem === "musculoskeletal_esw" && <label className="text-sm font-semibold">계약해당일 기준 1년간 이미 받은 <b>치료행위 수</b> (보상 승인 회차용)<input className="input-base mt-1" inputMode="numeric" value={priorActs} onChange={(e) => setPriorActs(e.target.value)} placeholder="받은 치료가 없으면 0" /><span className="mt-2 block text-xs font-normal text-slate-500">약관은 보상 승인 회차를 <b>&lsquo;각 치료횟수&rsquo;</b>로 셉니다(&lt;표1&gt; 주)). 위의 <b>보상한 횟수</b>는 보험금이 지급된 횟수라, 공제금액에 못 미쳐 <b>0원이 지급된 치료</b>가 있으면 두 값이 달라집니다. 보험사에서 확인한 값을 입력해 주세요.</span></label>}
-      {needsRowTier && <label className="text-sm font-semibold">계약해당일 기준 1년간 이미 누적된 공제금액 (500만 원 상한)<input className="input-base mt-1" inputMode="numeric" value={priorPool} onChange={(e) => setPriorPool(e.target.value)} /></label>}
+      {/* ⚠ `needsRowTier`가 아니라 `usesPriorPool`을 쓴다. 종별 선택창과 미선택 차단은
+             `needsRowTier` 그대로이고, 이 입력만 실제 소진 대상 행이 있을 때 노출한다. */}
+      {usesPriorPool && <label className="text-sm font-semibold">계약해당일 기준 1년간 이미 누적된 공제금액 (500만 원 상한)<input className="input-base mt-1" inputMode="numeric" value={priorPool} onChange={(e) => setPriorPool(e.target.value)} /></label>}
       <p className="text-xs text-slate-500 sm:col-span-2">보험계약이 종료된 뒤에도 <b>계속 중인 치료</b>는 연간 보장한도(금액)에서 <b>지급한 금액</b>을, 연간 보장한도(횟수)에서 <b>보상한 횟수</b>를 뺀 잔여분을 한도로 보상합니다(특별약관1 제3조(3)제7항·제5조 제4항 — 이월 계산 전용이며, 보험기간 중 연간 한도의 소진 기준을 정하는 조항이 아닙니다). 일반 비급여의 통원 가입금액(20만 원)과 연간 보험가입금액은 이 보장종목에 적용되지 않습니다.</p>
     </div>}
 

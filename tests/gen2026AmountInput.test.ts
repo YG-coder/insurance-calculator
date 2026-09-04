@@ -510,9 +510,12 @@ console.log("\n[무회귀] 기존 정책은 그대로다");
     && /annualCoverageLimit: money\.annual,/.test(ui)
     && /outpatientCoverageLimit: money\.out,/.test(ui)
     && !/gen2026Amount\(priorInsurance\)/.test(ui) && !/gen2026Amount\(annualLimit\)/.test(ui));
-  check("공제금액 두 입력은 여전히 num()을 쓴다(이번 범위 밖)",
+  // ⚠ G-10 항목 B가 MRI pool의 **노출·전달 조건**만 소비 조건에 맞췄다. 파서는 그대로
+  //   `num()`이고, 엄격 검증(항목 A)은 아직 하지 않았다.
+  check("공제금액 두 입력은 여전히 num()을 쓴다(엄격 검증은 아직 안 함)",
     /priorAnnualDeductible: severity === "critical" && visit === "inpatient" && nbInpatientTier === "hospital" \? num\(priorDeductible\) : undefined/.test(ui)
-    && /priorAnnualInpatientDeductible: num\(priorPool\)/.test(ui));
+    && /priorAnnualInpatientDeductible: usesPriorPool \? num\(priorPool\) : undefined/.test(ui)
+    && !/gen2026Money\(priorPool\)/.test(ui) && !/gen2026Money\(priorDeductible\)/.test(ui));
   check("일반 전환 라우팅은 그대로다",
     /routeOfGen2026Item\(severity, specialItem, injectionPurpose === "" \? undefined : injectionPurpose\)/.test(ui));
   check("일반 전환 경로에서도 진료비 게이트를 우회할 수 없다",

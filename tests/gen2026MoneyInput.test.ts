@@ -377,9 +377,12 @@ console.log("\n[소스] 파서·게이트·전달 형태");
   check("세 축은 더 이상 num()을 쓰지 않는다",
     !/num\(priorInsurance\)/.test(code) && !/num\(annualLimit\)/.test(code) && !/num\(outpatientLimit\)/.test(code));
   // ── 이번 범위 밖 ──
-  check("공제금액 두 입력은 파서·전달 모두 그대로다(이번 대상 아님)",
+  // ⚠ G-10 항목 B가 MRI pool의 **노출·전달 조건**만 소비 조건에 맞췄다(`usesPriorPool`).
+  //   파서는 여전히 `num()`이고 엄격 검증(항목 A)은 아직 하지 않았다.
+  check("공제금액 두 입력은 파서가 그대로다(엄격 검증은 아직 안 함)",
     /priorAnnualDeductible: severity === "critical" && visit === "inpatient" && nbInpatientTier === "hospital" \? num\(priorDeductible\) : undefined/.test(code)
-    && /priorAnnualInpatientDeductible: num\(priorPool\)/.test(code)
+    && /priorAnnualInpatientDeductible: usesPriorPool \? num\(priorPool\) : undefined/.test(code)
+    && !/gen2026Money\(priorPool\)/.test(code) && !/gen2026Money\(priorDeductible\)/.test(code)
     && /const \[priorDeductible, setPriorDeductible\] = useState\("0"\);/.test(code)
     && /const \[priorPool, setPriorPool\] = useState\("0"\);/.test(code));
   check("공제금액 두 칸은 맨 <input> 그대로다",

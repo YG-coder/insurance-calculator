@@ -552,7 +552,9 @@ console.log("\n[소스] 축 키는 기존 라우팅 결과에서만 만든다");
     /const \[priorDeductible, setPriorDeductible\] = useState\("0"\);/.test(code)
     && /const \[priorPool, setPriorPool\] = useState\("0"\);/.test(code)
     && (code.match(/priorAnnualDeductible: severity === "critical" && visit === "inpatient" && nbInpatientTier === "hospital" \? num\(priorDeductible\) : undefined/g) ?? []).length === 2
-    && /priorAnnualInpatientDeductible: num\(priorPool\)/.test(code));
+    // ⚠ G-10 항목 B가 MRI pool의 **전달 조건**만 소비 조건에 맞췄다(`usesPriorPool`).
+    //   상태·초기값·파서는 그대로다.
+    && /priorAnnualInpatientDeductible: usesPriorPool \? num\(priorPool\) : undefined/.test(code));
   check("계산 결과를 과거 지급액에 되쓰지 않는다",
     !/setPriorInsuranceByAxis\([^)]*result/.test(code)
     && !/setPriorInsurance\([^)]*result/.test(code)

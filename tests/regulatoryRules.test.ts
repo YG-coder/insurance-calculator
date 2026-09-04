@@ -43,7 +43,15 @@ check("4세대 3대비급여 최소공제 3만원 추적", GEN2021.rider.minDedu
 check("4세대 도수치료 횟수 추적", GEN2021.rider.manual_therapy.annualVisits === REGULATORY_RULES.GEN2021_MANUAL_THERAPY_ANNUAL_VISITS.value);
 const gen4RiderRules = rules.filter((rule) => rule.generation === "2021" && rule.sources[0]?.locator.includes("인쇄 p.251"));
 check("4세대 3대비급여 규칙 7건은 재대조일 기록", gen4RiderRules.length === 7 && gen4RiderRules.every((rule) => rule.verifiedAt === "2026-09-03"));
-check("그 밖의 4세대 규칙은 최초 직독일 유지", rules.filter((rule) => rule.generation === "2021" && !gen4RiderRules.includes(rule)).every((rule) => rule.verifiedAt === "2026-09-02"));
+// F-3c에서 <표1> 주)(인쇄 p.252)의 승인 구간 3건을 2026-09-04 직독으로 추가했다.
+//   ⚠ 같은 표의 본문(p.251)과 주)(p.252)는 다른 규칙이라 확인일도 따로 기록한다.
+const gen4MskRules = rules.filter((rule) => rule.generation === "2021" && rule.sources[0]?.locator.includes("<표1> 주)"));
+check("4세대 승인 구간 규칙 3건은 2026-09-04 직독",
+  gen4MskRules.length === 3 && gen4MskRules.every((rule) => rule.verifiedAt === "2026-09-04"));
+check("승인 구간 규칙은 별표 식별번호와 재현 URL을 함께 기록",
+  gen4MskRules.every((rule) => rule.sources.every((s) =>
+    s.locator.includes("2372861") && s.url.includes("admRulBylHstInfoR.do"))));
+check("그 밖의 4세대 규칙은 최초 직독일 유지", rules.filter((rule) => rule.generation === "2021" && !gen4RiderRules.includes(rule) && !gen4MskRules.includes(rule)).every((rule) => rule.verifiedAt === "2026-09-02"));
 check("4세대 급여·비급여 출처 위치 분리", REGULATORY_RULES.GEN2021_BENEFIT_INPATIENT_RATE.sources[0].locator !== REGULATORY_RULES.GEN2021_NON_BENEFIT_INPATIENT_RATE.sources[0].locator);
 check("4세대 3대비급여 금액·횟수 출처 위치 통일", REGULATORY_RULES.GEN2021_MANUAL_THERAPY_ANNUAL_LIMIT.sources[0].locator === REGULATORY_RULES.GEN2021_MANUAL_THERAPY_ANNUAL_VISITS.sources[0].locator);
 check("4세대 3대비급여 출처는 인쇄 p.251로 특정", REGULATORY_RULES.GEN2021_RIDER_MIN_DEDUCTIBLE.sources[0].locator.includes("인쇄 p.251"));

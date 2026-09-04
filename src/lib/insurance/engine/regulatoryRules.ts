@@ -1,7 +1,11 @@
 import { regulated, RegulatorySource } from "./regulatory";
 
+// 발령일 2021. 7. 1. = 시행일 2021. 7. 1.(일부개정).
+//   2026-09-04 국가법령정보센터 현행행정규칙 "보험업감독업무시행세칙" → 연혁 목록 39번
+//   "[시행 2021. 7. 1.] [금융감독원세칙, 2021. 7. 1., 일부개정]"에서 직접 확인했다.
+//   ⚠ 두 날짜가 같다는 것을 확인한 것이지, 발령일을 시행일로 가정한 것이 아니다.
 const GEN4_SOURCE_BASE = {
-  document: "보험업감독업무시행세칙 [별표 15] 표준약관 — 2021. 7. 1. 연혁본",
+  document: "보험업감독업무시행세칙 [별표 15] 표준약관 — 2021. 7. 1. 발령·시행본",
   issuer: "금융감독원",
   publishedOrEffective: "2021-07-01",
   url: "https://www.law.go.kr/admRulLsInfoP.do?admRulSeq=2200000079045",
@@ -20,6 +24,17 @@ const GEN4_NON_BENEFIT_TERMS: RegulatorySource = {
 const GEN4_RIDER_TERMS: RegulatorySource = {
   ...GEN4_SOURCE_BASE,
   locator: "3대비급여 특별약관 제3조(보장종목별 보상내용) 제1항 <공제금액 및 보장한도> 표, 인쇄 p.251",
+};
+
+/**
+ * 같은 <표1>의 주) — 도수 계열 승인 구간. **연 50회 한도와는 다른 규칙**이다.
+ *   2026-09-04 재직독. 접근 경로는 세션마다 달라지는 팝업 키를 쓰지 않는 형태로 적는다.
+ *   ⚠ 이 주)의 대상은 도수치료·체외충격파치료·증식치료 3종뿐이다. 주사료·MRI는 대상이 아니다.
+ */
+const GEN4_MSK_APPROVAL_NOTE: RegulatorySource = {
+  ...GEN4_SOURCE_BASE,
+  url: "https://www.law.go.kr/LSW/admRulBylHstInfoR.do?bylSeq=2372861&bylNo=0015&bylBrNo=00&bylClsCd=200201&admRulId=2041116",
+  locator: "별표/서식 → [별표 15] 표준약관(별표 식별번호 2372861, 2021. 7. 1. 발령·시행본) → 실손의료보험 특별약관(비급여 실손의료비) 제3조 (3)3대비급여 제1항 <표1> 주), 인쇄 p.252",
 };
 
 
@@ -412,6 +427,15 @@ const confirmed0903 = <T>(
 ) => confirmed(ruleId, "2021", value, sources, note, "2026-09-03");
 
 
+/** 2026-09-04 별표15 2021.7.1 발령·시행본 인쇄 p.252 <표1> 주)를 직독한 4세대 승인 구간 규칙. */
+const confirmed0904 = <T>(
+  ruleId: string,
+  value: T,
+  sources: readonly RegulatorySource[],
+  note?: string,
+) => confirmed(ruleId, "2021", value, sources, note, "2026-09-04");
+
+
 /** 2026-09-03 별표15 2026.5.6 연혁본(5세대 표준약관) 직독으로 확인한 규칙. */
 const confirmed5th = <T>(
   ruleId: string,
@@ -638,6 +662,28 @@ export const REGULATORY_RULES = {
   ),
   GEN2021_INJECTION_ANNUAL_VISITS: confirmed0903(
     "GEN2021-INJECTION-ANNUAL-VISITS", 50, [GEN4_RIDER_TERMS],
+  ),
+
+  // ── 4세대 도수 계열 승인 구간 (2026-09-04 <표1> 주) 직독) ──────────────
+  //   ⚠ 이 세 규칙은 **연 50회 한도와 다른 규칙**이다. 50회는 <표1> 본문의 보장한도이고,
+  //     승인 구간은 그 주)가 따로 정하는 지급 조건이다. 두 규칙을 하나로 합치지 않는다.
+  //   ⚠ 5세대(GEN2026-MSK-*)에서 값을 가져온 것이 아니다. 4세대 원문 주)를 직접 읽어
+  //     각각 확정했다. 값이 같은 것은 두 판본의 문언이 같기 때문이다.
+  GEN2021_MSK_INITIAL_APPROVED_VISITS: confirmed0904(
+    "GEN2021-MSK-INITIAL-APPROVED-VISITS", 10, [GEN4_MSK_APPROVAL_NOTE],
+    "<표1> 주) — '각 치료횟수를 합산하여 최초 10회 보장'. 약관이 승인 조건 없이 보장하는 구간이다. ⚠ 계산기가 이 값을 기본값으로 쓰는 것은 '보험사가 10회를 승인했다'는 뜻이 아니라 **최초 기본 보장 구간**이라는 뜻이다. 면책사항 등 다른 보장 조건까지 충족한다는 의미도 아니다",
+  ),
+  GEN2021_MSK_APPROVAL_STEP: confirmed0904(
+    "GEN2021-MSK-APPROVAL-STEP", 10, [GEN4_MSK_APPROVAL_NOTE],
+    "<표1> 주) — 최초 10회 이후에는 '증상의 개선, 병변 호전 등이 확인된 경우에 한하여 10회 단위로 연간 50회까지 보상'. 증상 개선 여부는 계산기가 판정하지 않는다",
+  ),
+  // ⚠ 승인 구간의 카운터 **단위**만 확정한다. 주)가 "각 **치료횟수**를 합산하여"라고 쓴다.
+  //   ⚠ 연간 50회 한도의 지급 0원 처리는 이 규칙으로 확정되지 않는다. 4세대 엔진의 현행
+  //     행 산정 정책(모든 행이 1회를 소진)을 그대로 따르며, 승인 검사에서만 다른 기준으로
+  //     세지 않는다 — 두 기준이 어긋나면 같은 청구가 축마다 다른 회차가 된다.
+  GEN2021_MSK_APPROVAL_COUNT_BASIS: confirmed0904(
+    "GEN2021-MSK-APPROVAL-COUNT-BASIS", "treatment_acts", [GEN4_MSK_APPROVAL_NOTE],
+    "<표1> 주)가 '각 치료횟수를 합산하여 최초 10회 보장'이라고 규정한다. 승인 구간의 카운터 단위는 지급 보험금이 아니라 치료행위다. 4세대 계산기는 연 50회 한도에도 같은 치료행위 축(priorAnnualRiderVisits)을 쓰므로 축을 새로 만들지 않는다. ⚠ 연 50회 한도의 지급 0원 처리가 뒤에 지급액 기준으로 바뀌면 그때 두 축을 분리해야 한다",
   ),
 
   GEN2026_BENEFIT_INPATIENT_RATE: confirmed(

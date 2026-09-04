@@ -33,6 +33,16 @@ export const GEN2021 = {
     manual_therapy: { annualLimit: R.GEN2021_MANUAL_THERAPY_ANNUAL_LIMIT.value, annualVisits: R.GEN2021_MANUAL_THERAPY_ANNUAL_VISITS.value },
     injection: { annualLimit: R.GEN2021_INJECTION_ANNUAL_LIMIT.value, annualVisits: R.GEN2021_INJECTION_ANNUAL_VISITS.value },
     mri: { annualLimit: R.GEN2021_MRI_ANNUAL_LIMIT.value, annualVisits: null },
+    /**
+     * 도수치료·체외충격파치료·증식치료 **전용** 승인 구간(<표1> 주), 인쇄 p.252).
+     *   ⚠ 주사료·MRI는 이 주)의 대상이 아니다. RIDER_CAPS에 섞지 않으려고 별도 키에 둔다.
+     *   ⚠ 연 50회 한도(annualVisits)와 다른 규칙이다. 한도는 <표1> 본문, 승인은 그 주).
+     */
+    mskApproval: {
+      /** 약관이 조건 없이 보장하는 최초 구간. '보험사가 승인한 회차'가 아니다. */
+      initialApproved: R.GEN2021_MSK_INITIAL_APPROVED_VISITS.value,
+      step: R.GEN2021_MSK_APPROVAL_STEP.value,
+    },
   },
 } as const;
 

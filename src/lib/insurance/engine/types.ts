@@ -242,6 +242,7 @@ export interface Gen2021MultiGeneralNonBenefitOutpatientInput extends Gen2021Mul
   visit: "outpatient";
   priorAnnualOutpatientVisits?: number;
   priorAnnualRiderVisits?: never;
+  approvedThroughVisit?: never;
 }
 
 /** 급여 — 연간 횟수 한도가 없다(약관의 '90회'는 계약 종료 후 계속 통원 규정이다). */
@@ -250,6 +251,7 @@ export interface Gen2021MultiGeneralBenefitInput extends Gen2021MultiCommonInput
   coverage: "benefit";
   priorAnnualOutpatientVisits?: never;
   priorAnnualRiderVisits?: never;
+  approvedThroughVisit?: never;
 }
 
 /** 비급여 입원 — 통원 횟수 한도가 적용되지 않는다. */
@@ -259,15 +261,46 @@ export interface Gen2021MultiGeneralNonBenefitInpatientInput extends Gen2021Mult
   visit: "inpatient";
   priorAnnualOutpatientVisits?: never;
   priorAnnualRiderVisits?: never;
+  approvedThroughVisit?: never;
 }
 
-/** 도수치료·체외충격파·증식치료 / 비급여 주사료 — 각각 연 50회 한도. */
-export interface Gen2021MultiRiderCountedInput extends Gen2021MultiCommonInput {
-  rider: "manual_therapy" | "injection";
+/**
+ * 4세대 도수 계열 보상 승인 회차(<표1> 주), 인쇄 p.252 — 10회 단위).
+ *   ⚠ 미입력은 "모른다"가 아니라 약관이 **조건 없이 보장하는 최초 구간**을 뜻한다.
+ *     그래서 다른 축과 달리 미입력을 차단하지 않고 기본값 10을 쓴다.
+ *   ⚠ 기본값 10은 '보험사가 10회를 승인했다'는 뜻이 아니고, 면책사항 등 다른 보장 조건까지
+ *     충족한다는 뜻도 아니다.
+ *   ⚠ 5세대 Gen2026MskApprovedThrough와 같은 값이지만 별개 타입이다. 세대별 원문에서
+ *     각각 확정했고, 한쪽이 바뀌어도 다른 쪽이 따라가면 안 된다.
+ */
+export type Gen2021MskApprovedThrough = 10 | 20 | 30 | 40 | 50;
+
+/** 도수치료·체외충격파·증식치료 — 연 50회 한도 + <표1> 주)의 승인 구간. */
+export interface Gen2021MultiRiderManualInput extends Gen2021MultiCommonInput {
+  rider: "manual_therapy";
   coverage: Coverage;
   priorAnnualRiderVisits?: number;
+  approvedThroughVisit?: Gen2021MskApprovedThrough;
   priorAnnualOutpatientVisits?: never;
 }
+
+/**
+ * 비급여 주사료 — 연 50회 한도만 있다.
+ *   ⚠ <표1> 주)의 승인 구간은 도수·체외충격파·증식치료 3종 전용이라 주사료에는 없다.
+ *     승인 축이 실려 오면 쓰이지 않는 입력이므로 막는다.
+ */
+export interface Gen2021MultiRiderInjectionInput extends Gen2021MultiCommonInput {
+  rider: "injection";
+  coverage: Coverage;
+  priorAnnualRiderVisits?: number;
+  approvedThroughVisit?: never;
+  priorAnnualOutpatientVisits?: never;
+}
+
+/** 두 특약이 공유하는 '연 50회 횟수 축을 쓰는 입력' 집합. */
+export type Gen2021MultiRiderCountedInput =
+  | Gen2021MultiRiderManualInput
+  | Gen2021MultiRiderInjectionInput;
 
 /** MRI·MRA — 금액 한도만 있고 **횟수 한도가 없다**. 횟수 축을 요구하지도 받지도 않는다. */
 export interface Gen2021MultiRiderMriInput extends Gen2021MultiCommonInput {
@@ -275,6 +308,7 @@ export interface Gen2021MultiRiderMriInput extends Gen2021MultiCommonInput {
   coverage: Coverage;
   priorAnnualOutpatientVisits?: never;
   priorAnnualRiderVisits?: never;
+  approvedThroughVisit?: never;
 }
 
 export type Gen2021MultiClaimInput =

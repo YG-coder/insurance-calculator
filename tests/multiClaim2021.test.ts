@@ -60,9 +60,12 @@ function check(name: string, ok: boolean, detail = "") {
     amounts: [50_000], priorAnnualRiderVisits: 0 });
   check("3대비급여 5만원은 최소공제 3만원 적용", deductibleBoundary.totalOwnPay === 30_000 && deductibleBoundary.totalInsurancePay === 20_000);
 
+  // ⚠ 도수 축에는 <표1> 주)의 보상 승인 회차가 함께 걸린다(F-3c). 여기서 보려는 것은
+  //   **연 50회 한도 경계**이므로 승인 회차를 50으로 고정해 그 영향을 제거한다.
+  //   승인 회차를 넣지 않으면 50회째가 기본 보장 구간(10회) 밖이라 묶음이 차단된다.
   const manual = calculateMany2021({
     cause: "disease", coverage: "non_benefit", visit: "outpatient", rider: "manual_therapy",
-    amounts: [100_000, 100_000], priorAnnualRiderVisits: 49,
+    amounts: [100_000, 100_000], priorAnnualRiderVisits: 49, approvedThroughVisit: 50,
   });
   check("도수 50번째 보상", manual.lines[0].insurancePay === 70_000);
   check("도수 51번째 제외", !manual.lines[1].covered && manual.lines[1].insurancePay === 0);

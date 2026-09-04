@@ -45,9 +45,13 @@ const gen = (amounts: number[], v: unknown, extra: Extra = {}) => calculateMany2
   ...(v === "OMIT" ? {} : { priorAnnualOutpatientVisits: v }), ...extra,
 } as unknown as Gen2021MultiClaimInput);
 /** 3대비급여 특약(연 50회). */
+// ⚠ 도수 축에는 <표1> 주)의 보상 승인 회차가 함께 걸린다(F-3c). 이 파일이 검사하는 것은
+//   **연 50회 한도의 입력 검증**이므로, 승인 축은 최대값을 고정해 그 영향을 제거한다.
+//   승인 구간 자체의 경계는 gen2021MskApproval.test.ts가 따로 고정한다.
 const rid = (r: "manual_therapy" | "injection") => (amounts: number[], v: unknown, extra: Extra = {}) =>
   calculateMany2021({
     cause: "disease", coverage: "non_benefit", visit: "outpatient", rider: r, amounts,
+    ...(r === "manual_therapy" ? { approvedThroughVisit: MANUAL_LIMIT } : {}),
     ...(v === "OMIT" ? {} : { priorAnnualRiderVisits: v }), ...extra,
   } as unknown as Gen2021MultiClaimInput);
 
@@ -222,11 +226,21 @@ console.log("\n[타입] 판별 유니온");
   check("일반 비급여 통원만 일반 축을 연다",
     outB !== null && outB.includes("priorAnnualOutpatientVisits?: number;")
     && outB.includes("priorAnnualRiderVisits?: never;"));
-  const ridB = iface("Gen2021MultiRiderCountedInput");
-  check("도수·주사만 특약 축을 연다",
-    ridB !== null && ridB.includes("priorAnnualRiderVisits?: number;")
-    && ridB.includes("priorAnnualOutpatientVisits?: never;")
-    && ridB.includes('rider: "manual_therapy" | "injection";'));
+  // F-3c에서 도수·주사를 별개 인터페이스로 분리했다(승인 축이 도수에만 있다).
+  //   Gen2021MultiRiderCountedInput은 둘의 합집합 별칭으로 남는다.
+  const manB = iface("Gen2021MultiRiderManualInput");
+  const injB = iface("Gen2021MultiRiderInjectionInput");
+  check("도수만 특약 축 + 승인 축을 연다",
+    manB !== null && manB.includes("priorAnnualRiderVisits?: number;")
+    && manB.includes("priorAnnualOutpatientVisits?: never;")
+    && manB.includes('rider: "manual_therapy";'));
+  check("주사료는 특약 축만 열고 승인 축은 봉인",
+    injB !== null && injB.includes("priorAnnualRiderVisits?: number;")
+    && injB.includes("priorAnnualOutpatientVisits?: never;")
+    && injB.includes("approvedThroughVisit?: never;")
+    && injB.includes('rider: "injection";'));
+  check("두 특약 인터페이스가 합집합 별칭으로 묶인다",
+    /export type Gen2021MultiRiderCountedInput =\s*\|\s*Gen2021MultiRiderManualInput\s*\|\s*Gen2021MultiRiderInjectionInput;/.test(types));
   const common = /interface Gen2021MultiCommonInput \{([\s\S]*?)\n\}/.exec(types)?.[1] ?? "";
   check("공통 베이스에는 두 축이 없다",
     !common.includes("priorAnnualOutpatientVisits") && !common.includes("priorAnnualRiderVisits"));

@@ -2,7 +2,7 @@ import { normalizeAmount, settle } from "../common/settle";
 import { GEN2021 } from "./constants";
 import { calc2021 } from "./generation2021";
 import {
-  CalcResult, CapCode, ClaimLineResult, Gen2021MultiClaimInput,
+  CalcResult, CapCode, ClaimLineResult, Gen2021MskApprovedThrough, Gen2021MultiClaimInput,
   Gen2021Rider, MultiClaimResult,
 } from "./types";
 
@@ -24,6 +24,18 @@ const badCount = (v: unknown): boolean =>
   !(typeof v === "number" && Number.isSafeInteger(v) && v >= 0);
 const readCount = (o: object, key: string): unknown =>
   (o as Record<string, unknown>)[key];
+
+/**
+ * <표1> 주)의 승인 회차 후보. 값은 두 규칙에서 파생한다 — 여기에 다시 나열하지 않는다.
+ *   최초 10회(mskApproval.initialApproved)부터 연 50회(annualVisits)까지 10회(step) 단위.
+ */
+export const GEN2021_MSK_APPROVED_THROUGH_VALUES: readonly Gen2021MskApprovedThrough[] =
+  Array.from(
+    { length: Math.floor(
+      (GEN2021.rider.manual_therapy.annualVisits - GEN2021.rider.mskApproval.initialApproved)
+      / GEN2021.rider.mskApproval.step) + 1 },
+    (_, i) => GEN2021.rider.mskApproval.initialApproved + i * GEN2021.rider.mskApproval.step,
+  ) as readonly Gen2021MskApprovedThrough[];
 
 const RIDER_CAPS: Record<Exclude<Gen2021Rider, "none">, {
   annualLimit: number;
@@ -97,6 +109,31 @@ export function calculateMany2021(input: Gen2021MultiClaimInput): MultiClaimResu
       `받은 값: ${JSON.stringify(riderVisitsRaw)}`,
     ]);
   }
+  // ── 보상 승인 회차 축 (도수 계열 전용) ────────────────────────────────
+  //   <표1> 주)는 도수치료·체외충격파치료·증식치료 3종만 대상으로 한다.
+  //   ⚠ 주사료·MRI·일반 보장에는 승인 구간이 없다. 실려 오면 쓰이지 않는 입력이므로 막는다.
+  const approvedRaw = readCount(input, "approvedThroughVisit");
+  if (rider !== "manual_therapy" && approvedRaw !== undefined) {
+    return blocked([
+      "보상 승인 회차(approvedThroughVisit)는 도수치료·체외충격파치료·증식치료의 승인 구간에만 쓰입니다.",
+      rider === "injection"
+        ? "비급여 주사료에는 약관상 승인 구간이 없고 연간 횟수·금액 한도만 있습니다. 쓰이지 않는 입력을 조용히 버리면 승인을 반영했다고 오해할 수 있어 계산하지 않았습니다."
+        : rider === "mri"
+          ? "비급여 MRI·MRA에는 약관상 승인 구간이 없고, 연간 횟수 한도도 없습니다. 쓰이지 않는 입력을 조용히 버리면 승인을 반영했다고 오해할 수 있어 계산하지 않았습니다."
+          : "일반 급여·비급여 보장에는 약관상 승인 구간이 없습니다. 쓰이지 않는 입력을 조용히 버리면 승인을 반영했다고 오해할 수 있어 계산하지 않았습니다.",
+      `받은 값: ${JSON.stringify(approvedRaw)}`,
+    ]);
+  }
+  // ⚠ 미입력은 차단하지 않는다. 다른 축과 달리 "모른다"가 아니라 약관이 조건 없이
+  //   보장하는 **최초 기본 보장 구간**을 뜻하기 때문이다(<표1> 주) 인쇄 p.252).
+  if (approvedRaw !== undefined
+    && !(GEN2021_MSK_APPROVED_THROUGH_VALUES as readonly unknown[]).includes(approvedRaw)) {
+    return blocked([
+      `보상 승인 회차는 ${GEN2021_MSK_APPROVED_THROUGH_VALUES.join("·")}회 중 하나여야 합니다(<표1> 주) — ${GEN2021.rider.mskApproval.step}회 단위).`,
+      `받은 값: ${JSON.stringify(approvedRaw)}`,
+    ]);
+  }
+
   // 미입력은 0으로 추정하지 않는다 — 과거 사용량을 모르면 한도를 반영할 수 없다.
   //   ⚠ 미입력(undefined)과 확인 결과 0은 다른 상태다. 0은 유효값이다.
   if (usesGeneralVisits) {
@@ -137,6 +174,46 @@ export function calculateMany2021(input: Gen2021MultiClaimInput): MultiClaimResu
   const selectedLimit = input.annualCoverageLimit === undefined || nonNegInt(input.annualCoverageLimit) <= 0
     ? undefined
     : Math.min(nonNegInt(input.annualCoverageLimit), GEN2021.annualLimitMaximum);
+
+  // ── preflight: 도수 계열 보상 승인 회차 ─────────────────────────────────
+  //   승인 범위가 부족한 것은 "보상 거절 확정"이 아니라 **확인 불가**다. 행을 제외하지
+  //   않고 묶음을 막는다.
+  //
+  //   ⚠ 승인 검사 대상은 **이번 묶음에서 연 50회 한도 안에 들어가는 행**뿐이다.
+  //     한도를 넘긴 행은 이미 연간 한도로 확정 제외되므로 추가 승인이 필요한 상태가
+  //     아니다. 대상을 나누지 않으면 과거 49회+2건이나 과거 50회+1건까지 차단돼,
+  //     "한도 초과 제외"라는 확정 결과가 "확인 불가"로 뒤바뀐다.
+  //
+  //   ⚠ 과거 횟수(visits)를 50으로 절삭하지 않는다. 아래 capacity는 이 검사 전용
+  //     지역 계산이고, 루프의 카운터는 입력값 그대로를 쓴다.
+  //
+  //   ⚠ 행 산정은 루프와 **같은 정책**이다 — 진료비 0원 행도 1회로 센다. 승인 검사에서만
+  //     양수 행을 세면 같은 청구가 축마다 다른 회차가 되어 두 기준이 어긋난다.
+  //     (연 50회 한도의 지급 0원 처리 자체는 이번 범위가 아니며 바꾸지 않는다.)
+  if (rider === "manual_therapy") {
+    const approved = (approvedRaw as Gen2021MskApprovedThrough | undefined)
+      ?? GEN2021.rider.mskApproval.initialApproved;
+    const capacity = Math.max(RIDER_CAPS.manual_therapy.annualVisits! - visits, 0);
+    const countedThisBatch = Math.min(amounts.length, capacity);
+    // 한도 안에 들어가는 행이 없으면(과거분이 이미 한도 이상이거나 청구 행이 없으면)
+    //   승인 여부가 결과를 바꾸지 못한다. 새 차단을 만들지 않는다.
+    if (countedThisBatch > 0 && visits + countedThisBatch > approved) {
+      return blocked([
+        `도수치료·체외충격파치료·증식치료는 각 치료횟수를 합산해 최초 ${GEN2021.rider.mskApproval.initialApproved}회를 보장하고, 이후에는 증상의 개선·병변 호전 등이 확인된 경우에 한하여 ${GEN2021.rider.mskApproval.step}회 단위로 연간 ${RIDER_CAPS.manual_therapy.annualVisits}회까지 보상합니다(실손의료보험 특별약관 제3조 (3)3대비급여 제1항 <표1> 주)).`,
+        `이번 청구에서 연간 횟수 한도 안에 들어가는 치료는 ${visits + countedThisBatch}회째까지인데, 적용된 보상 승인 회차는 ${approved}회까지입니다.`,
+        // ⚠ 미선택을 "승인된 것으로 보았다"고 쓰지 않는다. 바로 뒤에서 "보험사가 승인한
+        //   회차가 아니다"라고 말하므로 같은 안내 안에서 서로 부딪힌다. 미선택은 약관이
+        //   조건 없이 보장하는 구간을 **적용**한 것이지 승인을 의제한 것이 아니다.
+        ...(approvedRaw === undefined
+          ? [`승인 회차를 입력하지 않아 최초 ${GEN2021.rider.mskApproval.initialApproved}회 기본 보장 구간까지만 적용했습니다.`]
+          : []),
+        // ⚠ 판정 한계는 미선택·명시 선택 **양쪽**에 붙는다. 한쪽에만 붙이면 계산기가
+        //   증상 개선을 판정했다고 오해할 여지가 그 경로에만 남는다.
+        "계산기는 증상의 개선·병변 호전 여부를 판정하지 않습니다.",
+        "보험사에서 확인된 승인 회차를 입력하시거나, 승인된 범위의 치료만 입력해 주세요.",
+      ]);
+    }
+  }
 
   amounts.forEach((amount, index) => {
     if (rider === "none" && input.coverage === "non_benefit" && input.visit === "outpatient") {
@@ -207,6 +284,14 @@ export function calculateMany2021(input: Gen2021MultiClaimInput): MultiClaimResu
   }
   const excludedCount = results.filter((r) => !r.covered).length;
   if (excludedCount) notes.push(`${excludedCount}건이 연간 횟수 한도를 넘어 보상 대상에서 제외되었습니다.`);
+  // 승인 구간을 반영했다는 사실 자체를 고지한다. 종전에는 특약 경로가 안내를 하나도
+  //   내보내지 않아, 11회째 이후 금액이 승인 없이도 확정된 것처럼 보였다.
+  if (rider === "manual_therapy") {
+    notes.push(`도수치료·체외충격파치료·증식치료는 각 치료횟수를 합산해 최초 ${GEN2021.rider.mskApproval.initialApproved}회를 보장하고, 이후에는 증상의 개선·병변 호전 등이 확인된 경우에 한하여 ${GEN2021.rider.mskApproval.step}회 단위로 보상합니다(<표1> 주)). 계산기는 증상 개선 여부를 판정하지 않고, 적용된 승인 회차 범위 안에서만 계산합니다.`);
+    if (approvedRaw === undefined) {
+      notes.push(`보상 승인 회차를 입력하지 않아 약관이 조건 없이 보장하는 최초 ${GEN2021.rider.mskApproval.initialApproved}회까지를 적용했습니다. 이는 보험사가 승인한 회차가 아니라 기본 보장 구간이며, 면책사항 등 다른 보장 조건까지 충족한다는 뜻은 아닙니다.`);
+    }
+  }
 
   return {
     status: "OK", generation: "2021", lines: results,

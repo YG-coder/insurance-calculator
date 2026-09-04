@@ -3,11 +3,14 @@
 import { useState } from "react";
 import NoticeBox from "@/components/NoticeBox";
 import ResultCard from "@/components/ResultCard";
-import { calculateMany2021 } from "@/lib/insurance/engine/multiClaim2021";
 import {
-  Cause, Coverage, Gen2021MultiGeneralBenefitInput, Gen2021MultiGeneralNonBenefitInpatientInput,
-  Gen2021MultiGeneralNonBenefitOutpatientInput, Gen2021MultiRiderCountedInput,
-  Gen2021MultiRiderMriInput, Gen2021Rider, Tier, Visit,
+  calculateMany2021, GEN2021_MSK_APPROVED_THROUGH_VALUES,
+} from "@/lib/insurance/engine/multiClaim2021";
+import {
+  Cause, Coverage, Gen2021MskApprovedThrough, Gen2021MultiGeneralBenefitInput,
+  Gen2021MultiGeneralNonBenefitInpatientInput,
+  Gen2021MultiGeneralNonBenefitOutpatientInput, Gen2021MultiRiderInjectionInput,
+  Gen2021MultiRiderManualInput, Gen2021MultiRiderMriInput, Gen2021Rider, Tier, Visit,
 } from "@/lib/insurance/engine/types";
 import { CAP_LABELS } from "@/lib/insurance/engine/capLabels";
 import { GEN2021 } from "@/lib/insurance/engine/constants";
@@ -48,6 +51,9 @@ export default function HealthCalcMulti2021() {
   //   ⚠ 빈 값으로 시작한다. 기본값 "0"은 사용자가 확인하지 않은 "기존 사용 없음"을
   //     화면이 대신 만들어 내는 것이라 한도가 통째로 사라진다. 0은 직접 입력해야 한다.
   const [priorOutVisits, setPriorOutVisits] = useState("");
+  // ⚠ 미선택("")은 "모른다"가 아니라 약관이 조건 없이 보장하는 **최초 기본 보장 구간**을
+  //   뜻한다. 그래서 다른 축과 달리 미선택을 차단하지 않는다(엔진과 같은 규칙).
+  const [approvedThrough, setApprovedThrough] = useState<"" | Gen2021MskApprovedThrough>("");
   const [priorManualVisits, setPriorManualVisits] = useState("");
   const [priorInjectionVisits, setPriorInjectionVisits] = useState("");
   const [copyCount, setCopyCount] = useState("3");
@@ -70,11 +76,20 @@ export default function HealthCalcMulti2021() {
     cause, visit, tier, amounts: amounts.map(digits),
     priorAnnualRiderPaid: isRider ? digits(priorPaid) : undefined,
   };
-  const result = usesRiderVisits
+  const result = rider === "manual_therapy"
     ? calculateMany2021({
-        ...common, rider: rider as "manual_therapy" | "injection", coverage,
+        ...common, rider: "manual_therapy", coverage,
         priorAnnualRiderVisits: gen2021Count(riderVisitsText) ?? undefined,
-      } satisfies Gen2021MultiRiderCountedInput)
+        // ⚠ 미선택이면 필드를 싣지 않는다. 화면이 10을 만들어 보내면 "보험사가 승인한
+        //   10회"와 "기본 보장 구간"이 결과에서 구분되지 않는다.
+        approvedThroughVisit: approvedThrough === "" ? undefined : approvedThrough,
+      } satisfies Gen2021MultiRiderManualInput)
+    : rider === "injection"
+    ? calculateMany2021({
+        ...common, rider: "injection", coverage,
+        priorAnnualRiderVisits: gen2021Count(riderVisitsText) ?? undefined,
+        // ⚠ 승인 축은 주사료에 없다. 화면에서 숨겨진 값을 넘기지 않는다.
+      } satisfies Gen2021MultiRiderInjectionInput)
     : rider === "mri"
       ? calculateMany2021({ ...common, rider: "mri", coverage } satisfies Gen2021MultiRiderMriInput)
       : coverage === "benefit"
@@ -177,6 +192,14 @@ export default function HealthCalcMulti2021() {
             value={priorManualVisits} onChange={(e) => setPriorManualVisits(e.target.value)} />
           <span className="mt-1 block text-xs font-normal text-slate-500">도수치료·체외충격파치료·증식치료는 <b>각 치료횟수를 합산해 연 {GEN2021.rider.manual_therapy.annualVisits}회</b>가 한도입니다. 비급여 주사료와는 별개 한도입니다.</span>
         </label>}
+        {rider === "manual_therapy" && <label className="text-sm font-semibold">보상 승인 회차 (보험사에서 확인한 경우)
+          <select className="input-base mt-1" value={approvedThrough}
+            onChange={(e) => setApprovedThrough(e.target.value === "" ? "" : Number(e.target.value) as Gen2021MskApprovedThrough)}>
+            <option value="">선택 안 함 — 최초 {GEN2021.rider.mskApproval.initialApproved}회 기본 보장 구간까지만 적용</option>
+            {GEN2021_MSK_APPROVED_THROUGH_VALUES.map((v) => <option key={v} value={v}>{v}회까지 승인 확인됨</option>)}
+          </select>
+          <span className="mt-1 block text-xs font-normal text-slate-500">선택하지 않으면 약관이 <b>조건 없이 보장하는 최초 {GEN2021.rider.mskApproval.initialApproved}회</b>까지만 적용합니다. 이는 보험사가 승인한 회차가 아니라 <b>기본 보장 구간</b>이며, 면책사항 등 다른 보장 조건까지 충족한다는 뜻은 아닙니다.</span>
+        </label>}
         {rider === "injection" && <label className="text-sm font-semibold">계약해당일 기준 1년간 이미 받은 비급여 주사 횟수
           <input className="input-base mt-1" inputMode="numeric" placeholder="받은 치료가 없으면 0"
             value={priorInjectionVisits} onChange={(e) => setPriorInjectionVisits(e.target.value)} />
@@ -184,6 +207,7 @@ export default function HealthCalcMulti2021() {
         </label>}
       </div>
 
+      {rider === "manual_therapy" && <div className="mt-4"><NoticeBox variant="info">도수치료·체외충격파치료·증식치료는 각 치료횟수를 합산해 <b>최초 {GEN2021.rider.mskApproval.initialApproved}회</b>를 보장하고, 이후에는 증상의 개선·병변 호전 등이 확인된 경우에 한하여 <b>{GEN2021.rider.mskApproval.step}회 단위</b>로 연간 {GEN2021.rider.manual_therapy.annualVisits}회까지 보상합니다(실손의료보험 특별약관 제3조 (3)3대비급여 제1항 &lt;표1&gt; 주)). 이 계산기는 증상 개선 여부를 판정하지 않습니다.</NoticeBox></div>}
       {rider === "mri" && <div className="mt-4"><NoticeBox variant="info">비급여 MRI·MRA는 약관상 <b>금액 한도만</b> 있고 연간 횟수 한도가 없습니다. 그래서 이미 받은 횟수를 묻지 않습니다.</NoticeBox></div>}
 
       <button type="button" className="btn-primary mt-6" onClick={() => setSubmitted(true)}>여러 건 계산하기</button>
@@ -191,7 +215,13 @@ export default function HealthCalcMulti2021() {
       {submitted && needsOutVisits && <div className="mt-5"><NoticeBox variant="warning">계약해당일 기준 1년간 <b>이미 사용한 비급여 통원 횟수</b>를 입력해 주세요. 이전 통원이 없으면 <b>0</b>을 입력하세요. 비급여 통원은 연 {GEN2021.nonBenefitOutpatientAnnualVisits}회가 한도라 이 값이 있어야 계산할 수 있고, 계산기가 0으로 추정하지 않습니다. 0 이상의 정수만 받으며 음수·소수는 계산하지 않습니다.</NoticeBox></div>}
       {submitted && needsRiderVisits && <div className="mt-5"><NoticeBox variant="warning">계약해당일 기준 1년간 <b>이미 받은 치료 횟수</b>를 입력해 주세요. 받은 치료가 없으면 <b>0</b>을 입력하세요. 이 특약은 연 {rider === "manual_therapy" ? GEN2021.rider.manual_therapy.annualVisits : GEN2021.rider.injection.annualVisits}회가 한도라 이 값이 있어야 계산할 수 있고, 계산기가 0으로 추정하지 않습니다. 0 이상의 정수만 받으며 음수·소수는 계산하지 않습니다.</NoticeBox></div>}
 
-      {submitted && !gated && result.totalAmount > 0 && <div className="mt-7">
+      {/* ⚠ 엔진이 막았으면 후보 금액을 그리지 않는다. 종전 조건은 totalAmount만 봐서
+             차단 결과의 null 합계가 "0원"으로 렌더될 수 있었다. */}
+      {submitted && !gated && result.status === "PENDING_UNVERIFIED" && <div className="mt-5">
+        {result.notes.map((note) => <div className="mt-3 first:mt-0" key={note}><NoticeBox variant="warning">{note}</NoticeBox></div>)}
+      </div>}
+
+      {submitted && !gated && result.status === "OK" && result.totalAmount > 0 && <div className="mt-7">
         <ResultCard title="다회 청구 합계 (4세대 · 참고용)" items={[
           { label: "총 진료비", value: won(result.totalAmount) },
           { label: "총 본인부담금", value: won(result.totalOwnPay ?? 0), highlight: true },

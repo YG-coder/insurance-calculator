@@ -316,15 +316,20 @@ console.log("\n[숨은 값] 쓰이지 않는 입력은 검증도 전달도 하�
   check("통원 복귀: 안내 복원", !screenOf(h).calculated && screenOf(h).warnsLimit);
 }
 {
-  // 숨은 **유효**값이 엔진에 전달되지 않는다 — 엔진 안내로 확인한다.
+  // 숨은 **유효**값이 엔진에 전달되지 않는다.
+  // ⚠ **낡은 계약을 교체했다.** G-7 시점에는 "입원 전환 뒤에도 '입력하지 않으면 미적용'
+  //   안내가 유지된다"를 미전달의 증거로 삼았다. G-12가 그 안내를 **통원 행이 있을 때만**
+  //   붙이도록 고쳤으므로, 입원만 남은 화면에서는 안내 자체가 없는 것이 맞다.
+  //   미전달은 아래 [소스] 절의 전달 조건 검사가 확인하고, 여기서는 **처음부터 입원만인
+  //   경우와 안내·계산이 같은지**(무회귀)를 본다.
   const h = make("외래만");
   typeInto(h, LIMIT, "100000");
   check("통원: 한도 적용 안내", screenOf(h).engineAppliedNote && !screenOf(h).engineNoLimitNote);
   setVisit(h, 0, "inpatient");
   const hidden = screenOf(h);
   const fresh = screenOf(make("입원만", "300000"));
-  check("입원 전환: 숨은 값이 전달되지 않아 '입력하지 않으면 미적용' 안내가 유지된다",
-    hidden.engineNoLimitNote, hidden.infoText.slice(0, 140));
+  check("입원 전환: 두 한도 안내가 모두 사라진다(그 입력이 화면에 없다)",
+    !hidden.engineNoLimitNote && !hidden.engineAppliedNote, hidden.infoText.slice(0, 140));
   check("입원 전환: 처음부터 빈 값인 경우와 안내가 같다",
     hidden.engineNoLimitNote === fresh.engineNoLimitNote && hidden.engineAppliedNote === fresh.engineAppliedNote);
   check("입원 전환: 계산값도 같다", hidden.own === fresh.own && hidden.pay === fresh.pay,
@@ -406,10 +411,14 @@ console.log("\n[소스] 파서·게이트·전달 형태");
     && !/trim\(|replace\(/.test(stripComments(readFileSync("src/components/RawAmountInput.tsx", "utf8"))));
   const eng = readFileSync("src/lib/insurance/engine/generationStandardized.ts", "utf8");
   const multi = readFileSync("src/lib/insurance/engine/multiClaim.ts", "utf8");
-  check("엔진은 그대로다(200만 상한·회당 한도·미적용 안내)",
+  // ⚠ **낡은 계약을 교체했다.** G-12가 `multiClaim.ts`의 **안내 생성 조건**에 통원 행 여부를
+  //   더했다. 계산·상한·한도 산식은 그대로이므로 그 셋은 계속 고정하고, 안내 조건만 새 형태로 본다.
+  check("엔진 계산은 그대로다(200만 상한·회당 한도)",
     /const prior = Math\.max\(0, input\.priorAnnualPaid \?\? 0\);/.test(eng)
-    && /if \(value === undefined \|\| !Number\.isFinite\(value\) \|\| value <= 0\) return undefined;/.test(eng)
-    && /if \(input\.perVisitCoverageLimit === undefined\) \{/.test(multi));
+    && /if \(value === undefined \|\| !Number\.isFinite\(value\) \|\| value <= 0\) return undefined;/.test(eng));
+  check("엔진 미적용 안내는 통원 행이 있을 때만 붙는다(G-12)",
+    /if \(hasOutpatient && input\.perVisitCoverageLimit === undefined\) \{/.test(multi)
+    && !/if \(input\.perVisitCoverageLimit === undefined\) \{/.test(multi));
   check("4·5세대 금액 파서를 재사용하지 않는다",
     !/gen2021Money/.test(code) && !/GEN2021_MONEY_FORMAT/.test(code));
 }

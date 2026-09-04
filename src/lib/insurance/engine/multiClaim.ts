@@ -100,6 +100,15 @@ export function calculateMany(
   const isPharmacyLine = (l: ClaimLine) => l.visit === "outpatient" && (l.facility ?? "clinic") === "pharmacy";
   const usesVisits = lines.some((l) => l.visit === "outpatient" && !isPharmacyLine(l));
   const usesPrescriptions = lines.some(isPharmacyLine);
+  /**
+   * 통원 행이 하나라도 있는가. **안내(notes)를 만들 조건으로만 쓴다** — 계산·한도·횟수에는
+   * 관여하지 않는다.
+   *
+   * ⚠ 위 두 축과 다르다. `usesVisits`·`usesPrescriptions`는 **외래와 약국을 나눈** 축이고,
+   *   이것은 둘을 합친 "통원 행이 있는가"다. 회(건)당 가입금액은 약국 처방조제 행에도
+   *   적용되므로(아래 `line.visit === "outpatient"`) 나눈 축으로는 판정할 수 없다.
+   */
+  const hasOutpatient = lines.some((line) => line.visit === "outpatient");
 
   const blocked = (notes: string[]): MultiClaimResult => ({
     status: "PENDING_UNVERIFIED", generation, lines: [],
@@ -212,11 +221,20 @@ export function calculateMany(
   if (excluded > 0) {
     notes.push(`${excluded}건이 연간 횟수 한도를 넘겨 보상 대상에서 제외되었습니다.`);
   }
-  const outpatientCount = results.filter((r) => r.covered).length;
-  if (outpatientCount > 0) {
+  // ⚠ 종전에는 `results.filter((r) => r.covered).length > 0`으로 판정했다. 이름은
+  //   `outpatientCount`였지만 실제로는 **보상된 모든 행**을 세므로 입원도 포함됐고,
+  //   입원만 있는 묶음에서도 "하루에 2회 이상 **통원**한 경우" 안내가 나왔다.
+  // ⚠ `covered`로 판단해서도 안 된다. 연간 횟수 한도를 넘겨 통원 행이 **전부 보상 제외**돼도
+  //   "같은 날 통원은 한 행으로 합쳐 입력하라"는 안내는 여전히 필요하다 — 그 안내는 보상
+  //   여부가 아니라 **입력 방법**에 관한 것이다.
+  if (hasOutpatient) {
     notes.push("각 행은 약관상 1회의 청구 단위입니다. 하루에 2회 이상 통원한 경우 약관이 1회로 보고 가장 높은 공제금액을 적용하므로, 한 행으로 합쳐 입력해 주세요.");
   }
-  if (input.perVisitCoverageLimit === undefined) {
+  // ⚠ 회(건)당 가입금액은 **통원 행에만** 적용된다(아래 행 루프의
+  //   `line.visit === "outpatient" ? input.perVisitCoverageLimit : undefined`).
+  //   그래서 통원 행이 없으면 이 안내를 붙이지 않는다 — 종전에는 미입력이기만 하면 붙어,
+  //   입원만 있는 묶음에서 **화면에 있지도 않은 입력**을 증권에서 확인해 넣으라고 안내했다.
+  if (hasOutpatient && input.perVisitCoverageLimit === undefined) {
     notes.push("회(건)당 가입금액은 계약마다 다른 값이라 입력하지 않으면 적용하지 않습니다. 증권에서 확인해 입력하면 보험금 지급 한도로 반영됩니다.");
   }
 

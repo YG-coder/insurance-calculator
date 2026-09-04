@@ -192,6 +192,16 @@ export default function HealthCalcStandardized() {
     perVisitCoverageLimit: money.perVisit,
   });
 
+  /**
+   * 행별 안내를 모아 **같은 문구만** 중복 제거한다(G-12).
+   *   ⚠ `result.lines[0]`만 보여주면 혼합 묶음에서 첫 행 종류의 안내만 나온다.
+   *   ⚠ 문구로 종류를 판별하거나 걸러내지 않는다. 엔진이 만든 안내를 그대로 쓴다.
+   *   ⚠ `Set`은 삽입 순서를 지키므로 행 순서 → 행 안의 순서가 그대로 유지된다.
+   */
+  const lineNotes = result === null || result.status !== "OK"
+    ? []
+    : [...new Set(result.lines.flatMap((line) => line.notes))];
+
   // 빠른 채우기 금액은 모든 행의 진료비를 덮어쓴다. 같은 규칙으로 판정한다.
   const quickAmountInvalid = stdAmount(quickAmount) === null;
   const quickFill = () => {
@@ -551,8 +561,14 @@ export default function HealthCalcStandardized() {
                   않았습니다. 실제 가입금액은 증권에서 확인해 주세요.
                 </NoticeBox>
               )}
-              {result.lines[0]?.notes.length > 0 && (
-                <NoticeBox variant="info">{result.lines[0].notes.join(" ")}</NoticeBox>
+              {/* ⚠ 종전에는 `result.lines[0]`의 안내만 보여줬다. 그러면 혼합 묶음에서 **첫 행의
+                     종류에 따라** 통원 공제 설명만 보이거나 입원 상한 설명만 보였다
+                     (`[외래, 입원]`이면 통원용, `[입원, 외래]`면 입원용).
+                     모든 행의 안내를 모으고 **같은 문구만** 중복 제거한다.
+                     ⚠ 문구 내용으로 통원·입원을 판별하거나 걸러내지 않는다 — 엔진이 만든
+                     안내를 그대로 쓰고, 순서도 행 순서를 따른다. */}
+              {lineNotes.length > 0 && (
+                <NoticeBox variant="info">{lineNotes.join(" ")}</NoticeBox>
               )}
               <p className="text-xs text-slate-500">
                 ※ 실제 보험금은 가입 상품, 약관, 연간 누적 사용액, 가입금액 설정에 따라 달라질 수 있습니다.

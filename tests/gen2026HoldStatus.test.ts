@@ -334,12 +334,35 @@ console.log("\n[커밋 D·E] 계산·화면 무변경 (기준 30dee21)");
     "src/lib/insurance/engine/engine.ts": "da28c9f77d7d90ba1d0e18146d626c9ea7fc6a89013293a26ec50e223ee56c8e",
     "src/lib/insurance/engine/capLabels.ts": "23d0bc4b40a1b408cf74ec0189457e1a3c9f6bc75988e4bcde4e7c2c8554410d",
     "src/lib/insurance/engine/itemGuards.ts": "c10d2feab01d251c435a7b5b23e7644ab27d6c8652cb63619d4e0b309d76c027",
-    "src/components/calculators/HealthCalc5th.tsx": "0d6392afbda5754cf62f42bcbede27ebadda6328eda1563ffd8ed932669a43fc",
     "src/app/5th-generation-health-insurance-calculator/page.tsx": "7bc5927da6e9245189cd71524883b432594a8e720d1d2d4c0f73c3c04b1ed375",
   };
   for (const [file, want] of Object.entries(FROZEN)) {
     const got = createHash("sha256").update(readFileSync(file)).digest("hex");
     check(`무변경: ${file.split("/").pop()}`, got === want, `${got.slice(0, 12)} ≠ ${want.slice(0, 12)}`);
+  }
+  // ⚠ G-4 인계 — HealthCalc5th.tsx도 이 표에서 **의도적으로** 뺐다.
+  //   G-4(단건 진료비 입력의 엄격 검증)가 그 화면의 진료비 위젯과 엔진 진입 게이트를
+  //   바꾸므로 해시를 그대로 두면 정당한 변경이 실패로 잡힌다. 해시를 뺀 자리를 빈칸으로
+  //   두지 않고, 아래에서 **G-4가 넣기로 한 변경만 들어갔는지**를 구조로 확인한다.
+  //   특히 HOLD·차단 계약(별도 보장종목 차단, 선택 게이트 3종)이 그대로인지 본다.
+  {
+    const g5 = readFileSync("src/components/calculators/HealthCalc5th.tsx", "utf8");
+    check("변경 의도(G-4): 진료비만 RawAmountInput으로 바뀌었다",
+      /<RawAmountInput\n\s*id="med5-amount"/.test(g5)
+      && /<AmountInput\n\s*id="med5-outpatient-limit"/.test(g5)
+      && /<AmountInput\n\s*id="med5-prior-annual-deductible"/.test(g5));
+    check("변경 의도(G-4): 단건 전용 파서가 원문을 먼저 검증한다",
+      /GEN2026_SINGLE_AMOUNT_FORMAT\.test\(v\)\) return null;[\s\S]{0,80}replace\(\/,\/g/.test(g5));
+    check("변경 의도(G-4): 무효 원문에서 엔진을 호출하지 않는다",
+      /const result = amountInvalid\s*\n\s*\? null/.test(g5));
+    check("무변경(G-4): 별도 보장종목·선택 게이트 3종이 그대로",
+      /const needsItem = coverage === "non_benefit" && nonBenefitItem === null;/.test(g5)
+      && /const needsSeverity =\s*\n\s*coverage === "non_benefit" && nonBenefitItem === "general" && severity === null;/.test(g5)
+      && /const needsTier =\s*\n\s*coverage === "non_benefit" && nonBenefitItem === "general" && severity !== null\s*\n\s*&& visit === "inpatient" && nbInpatientTier === null;/.test(g5));
+    check("무변경(G-4): 결과 표시의 0원 정책이 그대로",
+      /result && result\.status === "OK" && num > 0/.test(g5));
+    check("무변경(G-4): 누적 공제금액 파싱이 그대로",
+      /const priorDeductibleNum = Number\(priorDeductible\.replace\(\/\[\^0-9\]\/g, ""\)\) \|\| 0;/.test(g5));
   }
   // ⚠ types.ts·HealthCalcMulti2026.tsx·specialItem2026.ts는 **의도적으로** 바뀐다
   //   (승인 구간용 새 입력축). 해시로 얼리지 않고 의도한 변경만 들어갔는지로 확인한다.

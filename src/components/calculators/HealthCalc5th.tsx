@@ -3,6 +3,7 @@
 import { useState } from "react";
 import ResultCard from "@/components/ResultCard";
 import AmountInput from "@/components/AmountInput";
+import RawAmountInput from "@/components/RawAmountInput";
 import NoticeBox from "@/components/NoticeBox";
 import { calc2026, GEN2026_NON_BENEFIT_ITEM_LABEL } from "@/lib/insurance/engine/generation2026";
 import { Coverage, Visit, Tier, Severity, Gen2026NonBenefitItem } from "@/lib/insurance/engine/types";
@@ -10,6 +11,34 @@ import { CAP_LABELS } from "@/lib/insurance/engine/capLabels";
 
 const won = (n: number) =>
   `${Math.max(0, Math.round(n)).toLocaleString("ko-KR")}원`;
+
+/**
+ * 5세대 **단건** 진료비 파서. 원문 문자열을 형식으로 **먼저** 판정한다.
+ *
+ * ⚠ 종전 `Number(amount.replace(/[^0-9]/g, "")) || 0`을 쓰면 안 된다. 숫자가 아닌 문자를
+ *   **지우고** 실패를 0으로 바꾸므로 파서에 닿기 전에 값이 다른 유효값으로 둔갑한다 —
+ *   `-1`→**1**(부호를 지워 양수), `1.5`→**15**(점을 지워 10배), `1e3`→**13**, `1,0`→**10**,
+ *   `abc`·빈 값·`Infinity`→**0**. 위젯(`AmountInput`)도 같은 정제를 하고 15자리로 **자르므로**
+ *   파서만 고쳐서는 늦다. 그래서 진료비 위젯만 `RawAmountInput`으로 바꿔 원문을 보존한다.
+ * ⚠ 쉼표를 먼저 지우면 안 된다. `1,0`이 `10`이 되어 잘못된 입력이 유효값이 된다.
+ *   **형식 검증이 끝난 뒤에만** 쉼표를 지운다.
+ * ⚠ 다회 계산기의 `gen2026Amount`·`roomChargeAmount`나 4세대 파서를 재사용하지 않는다.
+ *   형식 규칙이 같아도 세대·화면·안내가 다르고, 다회의 파서·게이트는 이번에 건드리지 않는다.
+ * ⚠ 같은 화면의 **통원 가입금액·누적 공제금액**은 진료비가 아니다. 종전 `AmountInput`과
+ *   종전 파싱을 그대로 둔다(가입금액은 0원을 미입력으로 보는 별도 정책이 있다).
+ *
+ * 유효: 쉼표 없는 0 이상의 정수(`0`, `300000`) 또는 정확한 천 단위 구분
+ *   (`300,000`, `1,234,567`). **명시적으로 입력한 `0`도 파서에서는 유효한 숫자**다 —
+ *   0원에서 결과를 내지 않는 것은 이 화면의 **종전 정책**이며 이번에 바꾸지 않는다.
+ * 무효(null): 빈 값·공백, 부호(`-`/`+`), 문자, `NaN`·`Infinity`, 소수(`1.5`·`1.`·`.5`),
+ *   지수 표기(`1e3`), 잘못된 쉼표(`1,0`·`1,00,000`·`,300`·`300,`), 안전 정수 초과.
+ */
+const GEN2026_SINGLE_AMOUNT_FORMAT = /^(?:[0-9]+|[1-9][0-9]{0,2}(?:,[0-9]{3})+)$/;
+const gen2026SingleAmount = (v: string): number | null => {
+  if (!GEN2026_SINGLE_AMOUNT_FORMAT.test(v)) return null;
+  const n = Number(v.replace(/,/g, ""));
+  return Number.isSafeInteger(n) && n >= 0 ? n : null;
+};
 
 // 화면 표기 순서. ⚠ 기본 선택이 없다 — 사용자가 MRI·주사료·병실료임을 모른 채
 //    "일반 비급여"로 계산되는 일을 막는 것이 이 축의 목적이다.
@@ -42,7 +71,11 @@ export default function HealthCalc5th() {
   const [nhisRate, setNhisRate] = useState<string>("");
   const [submitted, setSubmitted] = useState(false);
 
-  const num = Number(amount.replace(/[^0-9]/g, "")) || 0;
+  // ⚠ 원문이 유효한 형식일 때만 숫자가 된다. 실패를 0으로 바꾸지 않는다.
+  const parsed = gen2026SingleAmount(amount);
+  const amountInvalid = parsed === null;
+  const num = parsed ?? 0;
+  // ⚠ 누적 공제금액은 진료비가 아니다. 종전 파싱을 그대로 둔다(이번 범위 밖).
   const priorDeductibleNum = Number(priorDeductible.replace(/[^0-9]/g, "")) || 0;
 
   // 비급여는 ①치료유형 ②중증/비중증을 모두 고른 뒤에만 계산한다(엔진 호출 전 UI 가드).
@@ -59,8 +92,12 @@ export default function HealthCalc5th() {
     && visit === "inpatient" && nbInpatientTier === null;
 
   // calc2026을 직접 호출한다 — 비급여에서 치료유형 누락이 컴파일 에러가 되는 경로다.
-  const result =
-    coverage === "benefit"
+  //   ⚠ 무효한 원문에서는 **엔진을 호출하지 않는다.** 종전에는 급여에서 렌더마다 무조건
+  //     호출해 `abc`·`-1`이 0원·1원짜리 후보 결과를 만들었고, 비급여에서도 선택 게이트만
+  //     통과하면 같은 일이 벌어졌다. 결과·차단 안내 어느 쪽도 내보내지 않는다.
+  const result = amountInvalid
+    ? null
+    : coverage === "benefit"
       ? calc2026({
           amount: num,
           coverage: "benefit",
@@ -98,11 +135,12 @@ export default function HealthCalc5th() {
           <label className="label-base" htmlFor="med5-amount">
             병원비 (원)
           </label>
-          <AmountInput
+          <RawAmountInput
             id="med5-amount"
             value={amount}
             onChange={setAmount}
             placeholder="예: 300,000"
+            ariaLabel="병원비"
           />
         </div>
 
@@ -291,20 +329,32 @@ export default function HealthCalc5th() {
 
       {submitted && (
         <div className="mt-8 space-y-4">
-          {needsItem && (
+          {/* ⚠ 진료비는 화면 맨 위의 입력이다. 안내 순서를 화면 순서와 맞춘다.
+                 그리고 진료비가 무효인 동안에는 **아직 고르지도 않은 축을 선택하라는
+                 경고를 새로 만들지 않는다** — 먼저 고칠 것을 하나만 가리킨다. */}
+          {amountInvalid && (
+            <NoticeBox variant="warning">
+              <b>병원비</b>를 올바르게 입력해 주세요. <b>0 이상의 정수</b>만 받습니다 —
+              <b> 300000</b> 또는 <b>300,000</b> 형식입니다. 빈 값이나 잘못된 입력(음수·소수·문자·
+              지수 표기·잘못된 쉼표)을 계산기가 <b>임의로 다른 금액으로 바꾸지 않으며</b>,
+              빈 값을 0원으로 보지도 않습니다. 올바르게 입력하기 전에는 계산하지 않습니다.
+            </NoticeBox>
+          )}
+
+          {!amountInvalid && needsItem && (
             <NoticeBox variant="warning">
               비급여는 <b>치료유형</b>에 따라 적용되는 보장종목과 산식이 다릅니다. 치료유형을 먼저
               선택해 주세요. 선택 전에는 계산하지 않습니다.
             </NoticeBox>
           )}
 
-          {needsSeverity && (
+          {!amountInvalid && needsSeverity && (
             <NoticeBox variant="info">
               비급여는 <b>중증 / 비중증</b>에 따라 자기부담률과 한도가 다릅니다. 질환 구분을 선택해 주세요.
             </NoticeBox>
           )}
 
-          {needsTier && (
+          {!amountInvalid && needsTier && (
             <NoticeBox variant="info">
               비급여 <b>입원</b>은 <b>의료기관 종별</b>에 따라 보험금이 달라집니다. 중증은 공제금액
               상한 500만 원이 상급종합·종합병원 입원에만 적용되고(특별약관1 제5조 제5항), 비중증은

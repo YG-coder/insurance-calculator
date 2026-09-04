@@ -516,7 +516,14 @@ console.log("\n[범위] 다른 세대·엔진·공용 위젯은 건드리지 않
   const settle = readFileSync("src/lib/insurance/common/settle.ts", "utf8");
   check("2·3세대는 G-1 계약 그대로다", /const stdAmount = \(v: string\): number \| null =>/.test(std));
   check("4세대는 G-2 계약 그대로다", /const gen2021Amount = \(v: string\): number \| null =>/.test(g4));
-  check("5세대 단건 계산기는 그대로다", !/RawAmountInput/.test(single));
+  // ⚠ 단건 계산기는 G-4에서 **의도적으로** 진료비 위젯을 바꾼다(별도 커밋).
+  //   여기서는 단건이 **다회의 파서·게이트를 재사용하지 않는지**만 지킨다.
+  //   ⚠ 자기 주석에 파서 이름이 나오므로 주석 줄을 뺀 뒤 검사한다.
+  const singleCode = stripComments(single);
+  check("5세대 단건은 다회 파서를 재사용하지 않는다",
+    !/\bgen2026Amount\(/.test(singleCode) && !/roomChargeAmount/.test(singleCode));
+  check("5세대 단건은 자기 파서를 쓴다",
+    /const gen2026SingleAmount = \(v: string\): number \| null =>/.test(single));
   check("공용 AmountInput은 그대로다",
     /replace\(\/\[\^0-9\]\/g, ""\)\.slice\(0, MAX_AMOUNT_DIGITS\)/.test(amountWidget));
   check("RawAmountInput은 그대로다(정제·절단 없음)",

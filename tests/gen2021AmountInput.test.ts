@@ -135,8 +135,12 @@ for (const [what, v] of BAD) {
 check("여러 행이 무효면 전부 지목한다",
   screenOf(setup({ amounts: ["abc", "100000", ""], priorOutVisits: "0" }))
     .warns.some((w) => w.text.includes("1, 3번째 행의")));
+// G-6에서 금액 두 축이 게이트에 합류해 `gated`가 `money`를 거쳐 엔진 인자를 만든다.
+//   차단 계약 자체는 그대로다 — 게이트가 걸리면 엔진 호출식에 도달하지 않는다.
 check("차단 중에는 엔진을 호출하지 않는다",
-  /const result = gated \? null : rider === "manual_therapy"/.test(ui));
+  /const money = gated \|\| priorPaidNum === null \|\| annualLimitNum === null \? null : \{/.test(ui)
+  && /const common = money === null \? null : \{/.test(ui)
+  && /const result = money === null \|\| common === null \? null : rider === "manual_therapy"/.test(ui));
 check("무효 행을 0원으로 대체하는 경로를 두지 않는다",
   /amounts: amounts\.map\(\(a\) => gen2021Amount\(a\) as number\)/.test(ui)
   && !/gen2021Amount\([^)]*\) \?\? 0/.test(stripComments(ui))
@@ -223,10 +227,15 @@ console.log("\n[무회귀] 명시적 0원·횟수·승인 구간은 그대로다
   check("횟수 축 파서는 그대로다", /const GEN2021_COUNT_FORMAT = \/\^\[0-9\]\+\$\/;/.test(ui));
   check("승인 회차 축은 그대로다",
     /approvedThroughVisit: approvedThrough === "" \? undefined : approvedThrough/.test(ui));
-  check("누적 지급보험금·연간 가입금액은 여전히 digits()를 쓴다(범위 밖)",
-    /priorAnnualInsurancePaid: digits\(priorPaid\)/.test(ui)
-    && /annualCoverageLimit: annualLimit \? digits\(annualLimit\) : undefined/.test(ui)
-    // 축별 Record에서 **활성 축만** 꺼내 쓴다(G-5). 파서·전달 형태는 그대로다.
+  // ⚠ 이 절은 G-2 당시 "금액 두 축은 아직 digits()"를 고정했다. G-6이 그 축을
+  //   `gen2021Money`로 옮겼으므로, 여기서는 **진료비 파서가 그 축에 번지지 않았는지**만 본다.
+  //   금액 축 자체의 계약은 tests/gen2021MoneyInput.test.ts가 검사한다.
+  check("금액 두 축은 진료비 파서를 재사용하지 않는다",
+    /priorAnnualInsurancePaid: money\.priorPaid/.test(ui)
+    && /annualCoverageLimit: money\.annualLimit/.test(ui)
+    && !/gen2021Amount\(priorPaid\)/.test(ui)
+    && !/gen2021Amount\(annualLimit\)/.test(ui)
+    // 축별 Record에서 **활성 축만** 꺼내 쓴다(G-5). 그 형태는 그대로다.
     && /const priorPaid = priorPaidByAxis\[paidAxis\];/.test(ui)
     && /const annualLimit = annualLimitByAxis\[generalAxis\];/.test(ui));
 }

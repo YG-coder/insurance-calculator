@@ -287,9 +287,12 @@ console.log("\n[범위] 공용 위젯·다회·2·3세대·엔진은 건드리�
     /replace\(\/\[\^0-9\]\/g, ""\)\.slice\(0, MAX_AMOUNT_DIGITS\)/.test(amountWidget));
   check("RawAmountInput은 그대로다(정제·절단 없음)",
     !/replace\(/.test(stripComments(rawWidget)) && !/slice\(/.test(stripComments(rawWidget)));
-  check("4세대 다회 파서·게이트 그대로",
+  // ⚠ G-6이 4세대 다회 **금액 두 축**을 게이트에 합류시켰다(진료비 계약은 무변경).
+  //   여기서는 단건 작업이 다회 진료비 파서·게이트를 건드리지 않았는지만 본다.
+  check("4세대 다회 진료비 파서·게이트 그대로",
     /const gen2021Amount = \(v: string\): number \| null =>/.test(m4)
-    && /const gated = needsOutVisits \|\| needsRiderVisits \|\| needsAmounts;/.test(m4));
+    && /const gated = needsOutVisits \|\| needsRiderVisits \|\| needsAmounts \|\| limitInvalid \|\| paidInvalid;/.test(m4)
+    && /const needsAmounts = badAmountRows\.length > 0;/.test(m4));
   check("5세대 다회 파서·게이트 그대로",
     /const gen2026Amount = \(v: string\): number \| null =>/.test(m5)
     && /const usesAmounts = coverage === "benefit" \|\| showGeneralForm;/.test(m5)

@@ -21,6 +21,7 @@
 //   특약 선택 시 급여 선택창이 비활성화되는 기존 동작을 그대로 둔다.
 import { readFileSync } from "node:fs";
 import HealthCalcMulti2021 from "../src/components/calculators/HealthCalcMulti2021";
+import RawAmountInput from "../src/components/RawAmountInput";
 import { mount, stateNamesFrom, RenderedNode } from "./_uiRender";
 
 let pass = 0, fail = 0;
@@ -55,12 +56,20 @@ const screenOf = (h: ReturnType<typeof setup>) => {
     warns: s.nodes.filter((n: RenderedNode) => n.tag === "#NoticeBox" && n.props.variant === "warning"),
   };
 };
-/** 라벨 텍스트로 그 축의 맨 <input>을 찾아 **실제 onChange**를 통과시킨다. */
+/**
+ * 라벨 텍스트로 그 축의 실제 `<input>`을 찾아 **실제 onChange**를 통과시킨다.
+ * ⚠ G-6에서 금액 두 축이 `RawAmountInput`으로 바뀌었다. 위젯을 건너뛰고 props의
+ *   onChange를 직접 부르면 위젯이 값을 정제·절단하더라도 검사가 통과한다. 그래서
+ *   **공용 위젯을 실제로 호출해** 그 안의 `<input>`까지 내려간다 — 화면과 같은 경로다.
+ */
 const findInput = (el: unknown): { props: { onChange: (e: unknown) => void; value?: unknown } } | null => {
   if (el === null || el === undefined || typeof el !== "object") return null;
   if (Array.isArray(el)) { for (const c of el) { const r = findInput(c); if (r !== null) return r; } return null; }
   const e = el as { type?: unknown; props?: Record<string, unknown> };
   if (e.type === "input" && typeof e.props?.onChange === "function") return e as never;
+  if (e.type === RawAmountInput) {
+    return findInput((RawAmountInput as unknown as (p: never) => unknown)(e.props as never));
+  }
   return findInput(e.props?.children);
 };
 const widget = (h: ReturnType<typeof setup>, prefix: string) => {
@@ -361,12 +370,18 @@ console.log("\n[라벨] 현재 보장축을 밝힌다");
 // ── 유지해야 할 계약 ─────────────────────────────────────────────────
 console.log("\n[무회귀] 파서·초기값·상한·기존 동작은 그대로다");
 {
-  check("파서는 여전히 digits()다", /const digits = \(v: string\) => Number\(v\.replace\(\/\[\^0-9\]\/g, ""\)\) \|\| 0;/.test(ui));
-  check("지급보험금 전달 형태 그대로",
-    /priorAnnualRiderPaid: isRider \? digits\(priorPaid\) : undefined,/.test(ui)
-    && (ui.match(/priorAnnualInsurancePaid: digits\(priorPaid\),/g) ?? []).length === 3);
+  // ⚠ G-6이 금액 두 축의 파서를 `digits()`에서 `gen2021Money`로 바꿨다. 축 분리(G-5)
+  //   계약은 그대로여야 하므로, 여기서는 **활성 축의 값이 그대로 전달되는지**를 본다.
+  check("복제 횟수는 여전히 digits()다(범위 밖)",
+    /const digits = \(v: string\) => Number\(v\.replace\(\/\[\^0-9\]\/g, ""\)\) \|\| 0;/.test(ui)
+    && /Math\.min\(100, digits\(copyCount\)\)/.test(ui));
+  check("지급보험금은 활성 축 값 하나만 전달한다",
+    /priorAnnualRiderPaid: isRider \? money\.priorPaid : undefined,/.test(ui)
+    && (ui.match(/priorAnnualInsurancePaid: money\.priorPaid,/g) ?? []).length === 3
+    && /const priorPaidNum = priorPaid === "" \? 0 : gen2021Money\(priorPaid\);/.test(ui));
   check("가입금액의 빈 값 미적용 정책 그대로",
-    /annualCoverageLimit: annualLimit \? digits\(annualLimit\) : undefined,/.test(ui));
+    /const annualLimitNum = isRider \|\| annualLimit === "" \? undefined : gen2021Money\(annualLimit\);/.test(ui)
+    && (ui.match(/annualCoverageLimit: money\.annualLimit,/g) ?? []).length === 3);
   check("특약 선택 시 급여 선택창 비활성화가 그대로",
     /value=\{coverage\} onChange=\{\(e\) => setCoverage\(e\.target\.value as Coverage\)\} disabled=\{isRider\}/.test(ui));
   check("coverage 상태를 강제로 바꾸지 않는다",
@@ -396,8 +411,10 @@ console.log("\n[무회귀] 파서·초기값·상한·기존 동작은 그대로
   check("가입금액 한도가 그대로 적용된다", screenOf(capped).pay === "100,000원", String(screenOf(capped).pay));
   typeInto(capped, LIMIT, "99999999999");
   check("약관상 5천만 상한 클램프가 그대로", screenOf(capped).pay === "200,000원", String(screenOf(capped).pay));
+  // ⚠ 종전에는 `abc`가 digits()에서 0이 되어 **한도 미적용**으로 계산됐다(200,000원).
+  //   G-6이 이를 차단으로 바꿨다 — 이번에 승인한 의도된 동작 변경이다.
   typeInto(capped, LIMIT, "abc");
-  check("무효 가입금액의 종전 처리(0 → 미적용) 그대로", screenOf(capped).pay === "200,000원");
+  check("무효 가입금액은 이제 차단된다(G-6)", screenOf(capped).pay === null);
   typeInto(capped, LIMIT, "");
   typeInto(capped, PAID, "49900000");
   check("지급보험금 누적의 종전 처리 그대로(가입금액 없으면 미적용)", screenOf(capped).pay === "200,000원");

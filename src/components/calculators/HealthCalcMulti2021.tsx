@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import NoticeBox from "@/components/NoticeBox";
+import RawAmountInput from "@/components/RawAmountInput";
 import ResultCard from "@/components/ResultCard";
 import {
   calculateMany2021, GEN2021_MSK_APPROVED_THROUGH_VALUES,
@@ -17,6 +18,35 @@ import { GEN2021 } from "@/lib/insurance/engine/constants";
 
 const digits = (v: string) => Number(v.replace(/[^0-9]/g, "")) || 0;
 const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
+
+/**
+ * 4세대 **진료비** 문자열 파서. **원문을 변형 전에 형식으로 판정한다.**
+ *
+ * ⚠ 공용 `digits()`를 쓰면 안 된다. 숫자가 아닌 문자를 **지우고** 실패를 0으로 바꾸므로
+ *   `-1`→**1**(부호를 지워 양수), `1.5`→**15**(점을 지워 10배), `1e3`→**13**,
+ *   `1,0`→**10**이 되고, 빈 값·`abc`·`NaN`·`Infinity`가 전부 **0원**으로 합쳐진다.
+ *   ⚠ 4세대 다회는 행 입력이 맨 `<input>`이라 **화면에는 원문이 그대로 남는다**.
+ *     `-1`을 넣으면 화면은 `-1`인데 결과표는 `1원`으로 계산됐다. 화면과 계산이 어긋난다.
+ *   ⚠ 0원 행은 비급여 통원 연 100회와 특약 연 50회를 1회 소진하고, 도수 승인 구간의
+ *     회차 계산(`amounts.length`)에도 들어간다. 빈 행 하나가 다른 행의 보상 여부를 바꾸고
+ *     승인 부족 차단까지 일으킨다.
+ * ⚠ 입력 위젯도 함께 바꿔야 한다. 파서만 엄격하게 하면 늦는다(RawAmountInput 참조).
+ * ⚠ 쉼표를 먼저 지우면 안 된다. `1,0`이 `10`이 되어 잘못된 입력이 유효값이 된다.
+ *   **형식 검증이 끝난 뒤에만** 쉼표를 지운다.
+ * ⚠ 2·3·5세대 파서를 재사용하지 않는다. 형식 규칙이 같아도 세대·라벨·안내가 다르다.
+ *
+ * 유효: 쉼표 없는 0 이상의 정수(`0`, `100000`) 또는 정확한 천 단위 구분
+ *   (`100,000`, `1,234,567`). **명시적으로 입력한 `0`은 유효값**이다.
+ * 무효(null = 미입력·잘못된 입력): 빈 값·공백, 부호(`-`/`+`), 문자, `NaN`·`Infinity`,
+ *   소수(`1.5`·`1.`·`.5`), 지수 표기(`1e3`), 잘못된 쉼표(`1,0`·`1,00,000`·`,300`),
+ *   안전 정수 범위(2^53−1) 초과.
+ */
+const GEN2021_AMOUNT_FORMAT = /^(?:[0-9]+|[1-9][0-9]{0,2}(?:,[0-9]{3})+)$/;
+const gen2021Amount = (v: string): number | null => {
+  if (!GEN2021_AMOUNT_FORMAT.test(v)) return null;
+  const n = Number(v.replace(/,/g, ""));
+  return Number.isSafeInteger(n) && n >= 0 ? n : null;
+};
 
 /**
  * 4세대 '이미 사용한 횟수' 문자열 파서. **원문을 변형 전에 형식으로 판정한다.**
@@ -68,15 +98,32 @@ export default function HealthCalcMulti2021() {
   //   한도가 걸린 축은 과거 사용량 없이는 계산할 수 없다. 빈 값을 0으로 추정하지 않는다.
   const needsOutVisits = usesOutVisits && gen2021Count(priorOutVisits) === null;
   const needsRiderVisits = usesRiderVisits && gen2021Count(riderVisitsText) === null;
-  const gated = needsOutVisits || needsRiderVisits;
+  // 진료비는 미입력과 잘못된 입력을 0원으로 바꾸지 않는다 — 명시적 0만 유효값이다.
+  //   ⚠ 한 행만 어긋나도 묶음 전체를 계산하지 않는다. 그 행을 0원으로 계산하면 연간
+  //     횟수를 1회 소진해 **다른 행의 보상 여부**를 바꾸고, 도수 승인 구간에서는
+  //     회차가 밀려 승인 부족 차단까지 일으킨다. 행 단위로 넘어갈 수 없다.
+  //   ⚠ 부분합을 결과로 내보내지 않는다. 유효한 행만 더한 값은 실제 총 진료비가 아니다.
+  const badAmountRows = amounts
+    .map((a, i) => (gen2021Amount(a) === null ? i + 1 : null))
+    .filter((n): n is number => n !== null);
+  const needsAmounts = badAmountRows.length > 0;
+  const gated = needsOutVisits || needsRiderVisits || needsAmounts;
+  // 복제 원본은 **첫 행 진료비**다(별도 금액 칸이 없다). 원본만 판정한다 —
+  //   다른 행이 무효여도 복제는 그 행들을 어차피 전부 대체하므로 막지 않는다.
+  //   ⚠ 명시적 0은 유효값이라 복제할 수 있다.
+  const copySourceInvalid = gen2021Amount(amounts[0] ?? "") === null;
 
   // ⚠ 축은 분기마다 자기 것만 싣는다. 스프레드로 공통에 두면 쓰이지 않는 경로에도
   //   같은 필드가 따라 들어가고, 초과 필드는 타입 검사에서 드러나지 않는다.
+  // ⚠ 진료비를 여기서 0으로 만들지 않는다. 무효 행이 있으면 아래에서 엔진 호출 자체를
+  //   막으므로, 이 map은 게이트를 통과한 뒤에만 쓰인다.
   const common = {
-    cause, visit, tier, amounts: amounts.map(digits),
+    cause, visit, tier, amounts: amounts.map((a) => gen2021Amount(a) as number),
     priorAnnualRiderPaid: isRider ? digits(priorPaid) : undefined,
   };
-  const result = rider === "manual_therapy"
+  // ⚠ 게이트가 걸린 동안에는 엔진을 호출하지 않는다. 무효 행을 넘기면 엔진의
+  //   normalizeAmount가 조용히 0원으로 바꿔 계산해 버린다.
+  const result = gated ? null : rider === "manual_therapy"
     ? calculateMany2021({
         ...common, rider: "manual_therapy", coverage,
         priorAnnualRiderVisits: gen2021Count(riderVisitsText) ?? undefined,
@@ -160,8 +207,11 @@ export default function HealthCalcMulti2021() {
         {amounts.map((amount, i) => (
           <div key={i} className="flex items-end gap-2">
             <label className="flex-1 text-sm font-semibold">{i + 1}건 진료비
-              <input className="input-base mt-1" inputMode="numeric" value={amount}
-                onChange={(e) => setLine(i, e.target.value)} />
+              <div className="mt-1">
+                <RawAmountInput id={`gen2021-amount-${i}`} value={amount}
+                  onChange={(v) => setLine(i, v)} placeholder="예: 100,000"
+                  ariaLabel={`${i + 1}건 진료비`} />
+              </div>
             </label>
             <button type="button" className={smallButton} onClick={() => setAmounts((old) => old.filter((_, j) => j !== i))} disabled={amounts.length === 1}>삭제</button>
           </div>
@@ -169,8 +219,17 @@ export default function HealthCalcMulti2021() {
         <div className="flex flex-wrap gap-2">
           <button type="button" className={smallButton} onClick={() => setAmounts((old) => [...old, ""])}>행 추가</button>
           <input className="input-base w-20" inputMode="numeric" value={copyCount} onChange={(e) => setCopyCount(e.target.value)} aria-label="복사할 횟수" />
-          <button type="button" className={smallButton} onClick={() => setAmounts(Array.from({ length: Math.max(1, Math.min(100, digits(copyCount))) }, () => amounts[0] ?? ""))}>첫 금액 × N회</button>
+          <button type="button" className={smallButton} disabled={copySourceInvalid} onClick={() => {
+            // ⚠ 버튼 비활성만으로는 부족하다. 핸들러에서도 막는다 — 무효한 첫 행을
+            //   전 행에 복제하면 한 번에 모든 행이 무효가 된다.
+            if (copySourceInvalid) return;
+            setAmounts(Array.from({ length: Math.max(1, Math.min(100, digits(copyCount))) }, () => amounts[0] ?? ""));
+          }}>첫 금액 × N회</button>
         </div>
+        {copySourceInvalid && <p className="mt-2 text-xs text-amber-700">
+          복제할 <b>1건 진료비</b>가 <b>0 이상의 정수</b>여야 합니다(<b>100000</b> 또는 <b>100,000</b>).
+          음수·소수·문자·잘못된 쉼표는 계산기가 임의로 고치지 않습니다.
+        </p>}
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-3">
@@ -214,14 +273,15 @@ export default function HealthCalcMulti2021() {
 
       {submitted && needsOutVisits && <div className="mt-5"><NoticeBox variant="warning">계약해당일 기준 1년간 <b>이미 사용한 비급여 통원 횟수</b>를 입력해 주세요. 이전 통원이 없으면 <b>0</b>을 입력하세요. 비급여 통원은 연 {GEN2021.nonBenefitOutpatientAnnualVisits}회가 한도라 이 값이 있어야 계산할 수 있고, 계산기가 0으로 추정하지 않습니다. 0 이상의 정수만 받으며 음수·소수는 계산하지 않습니다.</NoticeBox></div>}
       {submitted && needsRiderVisits && <div className="mt-5"><NoticeBox variant="warning">계약해당일 기준 1년간 <b>이미 받은 치료 횟수</b>를 입력해 주세요. 받은 치료가 없으면 <b>0</b>을 입력하세요. 이 특약은 연 {rider === "manual_therapy" ? GEN2021.rider.manual_therapy.annualVisits : GEN2021.rider.injection.annualVisits}회가 한도라 이 값이 있어야 계산할 수 있고, 계산기가 0으로 추정하지 않습니다. 0 이상의 정수만 받으며 음수·소수는 계산하지 않습니다.</NoticeBox></div>}
+      {submitted && needsAmounts && <div className="mt-5"><NoticeBox variant="warning">{badAmountRows.join(", ")}번째 행의 <b>진료비</b>를 올바르게 입력해 주세요. <b>0 이상의 정수</b>만 받습니다 — <b>100000</b> 또는 <b>100,000</b> 형식입니다. 진료비가 실제로 0원이면 <b>0</b>을 입력하세요. 음수·소수·문자·지수 표기·잘못된 쉼표는 계산기가 임의로 고치지 않으며, 빈 값을 0원으로 보지도 않습니다. 0원으로 보면 그 행이 연간 횟수를 1회 소진해 <b>다른 행의 보상 여부</b>가 바뀌고, 도수치료 등에서는 <b>보상 승인 회차</b>까지 밀립니다. 그래서 한 행만 어긋나도 계산하지 않습니다.</NoticeBox></div>}
 
       {/* ⚠ 엔진이 막았으면 후보 금액을 그리지 않는다. 종전 조건은 totalAmount만 봐서
              차단 결과의 null 합계가 "0원"으로 렌더될 수 있었다. */}
-      {submitted && !gated && result.status === "PENDING_UNVERIFIED" && <div className="mt-5">
+      {submitted && result !== null && result.status === "PENDING_UNVERIFIED" && <div className="mt-5">
         {result.notes.map((note) => <div className="mt-3 first:mt-0" key={note}><NoticeBox variant="warning">{note}</NoticeBox></div>)}
       </div>}
 
-      {submitted && !gated && result.status === "OK" && result.totalAmount > 0 && <div className="mt-7">
+      {submitted && result !== null && result.status === "OK" && result.totalAmount > 0 && <div className="mt-7">
         <ResultCard title="다회 청구 합계 (4세대 · 참고용)" items={[
           { label: "총 진료비", value: won(result.totalAmount) },
           { label: "총 본인부담금", value: won(result.totalOwnPay ?? 0), highlight: true },

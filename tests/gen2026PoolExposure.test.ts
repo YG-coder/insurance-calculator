@@ -319,9 +319,13 @@ console.log("\n[소스] 전용 조건을 따로 두고 기존 계약을 건드�
   check("노출이 전용 조건을 쓴다", /\{usesPriorPool && <label className="text-sm font-semibold">계약해당일 기준 1년간 이미 누적된 공제금액 \(500만 원 상한\)/.test(code));
   // ⚠ **미전달은 여기서 확인한다.** 결과 비교로는 증명할 수 없다 — 값이 전달되어도
   //   소비 조건에 걸리지 않으면 결과가 같기 때문이다(기준선이 그 상태였다).
+  // ⚠ G-10 항목 A가 전달 형태를 `deductibles.pool`로 바꿨다. 전용 조건은 그 파생 안으로
+  //   들어갔을 뿐 사라지지 않았다 — `!usesPriorPool`이면 `undefined`다.
   check("전달이 전용 조건을 쓴다 — 비대상에서는 undefined가 넘어간다",
-    /priorAnnualInpatientDeductible: usesPriorPool \? num\(priorPool\) : undefined,/.test(code)
-    && !/priorAnnualInpatientDeductible: num\(priorPool\),/.test(code));
+    /priorAnnualInpatientDeductible: deductibles\.pool,/.test(code)
+    && /const priorPoolNum = !usesPriorPool \? undefined\s*\n\s*: priorPool === "" \? 0 : gen2026Money\(priorPool\);/.test(code)
+    && !/priorAnnualInpatientDeductible: num\(priorPool\),/.test(code)
+    && !/priorAnnualInpatientDeductible: gen2026Money\(priorPool\),/.test(code));
   // ── 기존 계약 무변경 ──
   check("needsRowTier는 그대로다",
     /const needsRowTier = showSpecialForm && severity === "critical" && specialItem === "mri";/.test(code));
@@ -331,15 +335,17 @@ console.log("\n[소스] 전용 조건을 따로 두고 기존 계약을 건드�
     /const rowsIncomplete = showSpecialForm && rows\.some\(\(r\) => r\.visit === "" \|\| \(needsRowTier && r\.visit === "inpatient" && r\.tier === ""\)\);/.test(code));
   check("미선택 안내도 needsRowTier를 그대로 쓴다",
     /\{submitted && rowsIncomplete && <div className="mt-5"><NoticeBox variant="warning">각 행의 <b>치료 형태<\/b>\{needsRowTier \?/.test(code));
-  check("파서·초기값·위젯 무변경(항목 A는 이번 대상이 아니다)",
+  // ⚠ **낡은 계약을 교체했다.** 두 검사는 "항목 A는 아직 안 했다"를 고정하고 있었다.
+  //   항목 A가 파서·위젯을 바꿨으므로, 항목 B가 만든 **노출·전달 조건 자체**가
+  //   그대로인지만 남긴다.
+  check("초기값은 그대로이고 pool 노출 조건은 항목 A가 건드리지 않았다",
     /const \[priorPool, setPriorPool\] = useState\("0"\);/.test(code)
-    && /value=\{priorPool\} onChange=\{\(e\) => setPriorPool\(e\.target\.value\)\}/.test(code)
-    && /inputMode="numeric" value=\{priorPool\}/.test(code)
-    && !/gen2026Money\(priorPool\)/.test(code));
-  check("priorDeductible은 노출·전달·계산 모두 그대로다",
+    && /\{usesPriorPool && <label/.test(code));
+  check("priorDeductible의 노출·전달 조건은 소비 조건과 같다",
     /const \[priorDeductible, setPriorDeductible\] = useState\("0"\);/.test(code)
-    && (code.match(/priorAnnualDeductible: severity === "critical" && visit === "inpatient" && nbInpatientTier === "hospital" \? num\(priorDeductible\) : undefined/g) ?? []).length === 2
-    && /value=\{priorDeductible\} onChange=\{\(e\) => setPriorDeductible\(e\.target\.value\)\}/.test(code));
+    && /const usesPriorDeductible = showGeneralForm && generalAxis !== null\s*\n\s*&& severity === "critical" && visit === "inpatient" && nbInpatientTier === "hospital";/.test(code)
+    && /\{usesPriorDeductible && <label/.test(code)
+    && (code.match(/priorAnnualDeductible: deductibles\.general,/g) ?? []).length === 2);
   check("두 상태를 합치거나 서로 복사하지 않는다",
     !/setPriorPool\(priorDeductible/.test(code) && !/setPriorDeductible\(priorPool/.test(code)
     && !/num\(priorPool\) \+ num\(priorDeductible\)/.test(code));
@@ -390,8 +396,11 @@ console.log("\n[무회귀] 적용 대상 경로의 계산과 다른 입력들은
   typeInto(g, DEDUCT, "4000000");
   check("  공제 400만 반영", scr(g).own === "1,000,000원", String(scr(g).own));
   typeInto(g, DEDUCT, "abc");
-  check("  무효값은 여전히 차단되지 않는다(항목 A는 이번 대상이 아니다)", scr(g).calc && scr(g).own === "3,000,000원",
-    `${scr(g).calc} / ${scr(g).own}`);
+  // ⚠ **낡은 계약을 교체했다.** 항목 A가 이 값을 엄격 검증하면서 차단하도록 바꿨다.
+  check("  무효값은 이제 차단된다(항목 A)", !scr(g).calc && scr(g).warn.includes("이미 누적된 공제금액"),
+    `${scr(g).calc} / ${scr(g).warn.slice(0, 40)}`);
+  typeInto(g, DEDUCT, "4000000");
+  check("  고치면 재개", scr(g).own === "1,000,000원", String(scr(g).own));
   pick(g, TIER, "clinic");
   check("  병·의원급에서는 칸이 없다(종전 그대로)", !has(g, DEDUCT));
 }

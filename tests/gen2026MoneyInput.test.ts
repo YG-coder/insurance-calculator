@@ -3,9 +3,10 @@
 //   ② 연간 보험가입금액(`annualLimitByAxis`, 일반 4축)
 //   ③ 통원 가입금액(`outpatientLimitByAxis`, 일반 4축)
 //
-// ⚠ **`priorDeductible`·`priorPool`(공제금액 두 입력)은 이번 대상이 아니다.** 파서·위젯·
-//   노출·전달·계산을 모두 그대로 두고, 그 사실을 아래에서 검사한다. 이번 커밋이
-//   그 둘까지 엄격 검증했다고 말할 수 없다.
+// ⚠ G-9 당시 `priorDeductible`·`priorPool`(공제금액 두 입력)은 대상이 아니었다.
+//   **G-10 항목 A가 그 둘도 같은 파서로 옮겼다.** 이 파일은 세 축의 계약을 계속 지키고,
+//   공제금액 두 입력의 형식·경계·차단은 `gen2026DeductibleInput.test.ts`가 본다.
+//   아래 무회귀 절은 둘이 **함께 있을 때** 서로를 가리지 않는지만 확인한다.
 //
 // 종전 동작(기준선 `181fecd`를 실제로 실행해 확인): 세 입력 모두 맨 `<input>` + 공용 `num()`.
 //   `num()`은 `/[^0-9.]/`를 지우므로 **점을 남긴다** — 4세대 `digits()`·2·3세대 `onlyNum()`과
@@ -71,16 +72,11 @@ const typeById = (h: H, id: string, v: string) => {
   (w.props.onChange as (e: unknown) => void)({ target: { value: v } });
 };
 const shownById = (h: H, id: string) => { const w = widget(h, id); return w === null ? null : String(w.props.value); };
-/** 라벨로 찾는 맨 `<input>` — 공제금액 두 입력처럼 이번에 안 바꾼 칸용. */
-const typeByLabel = (h: H, p: string, v: string) => {
-  const l = labelOf(h, p); const i = l === undefined ? null : findIn(l.props.children, "input");
-  if (i === null) throw new Error("입력 없음: " + p);
-  (i.props.onChange as (e: unknown) => void)({ target: { value: v } });
-};
+
 const PRIOR_ID = "gen2026-prior-insurance", ANNUAL_ID = "gen2026-annual-limit", OUT_ID = "gen2026-outpatient-limit";
 const COV = "급여 구분", ITEM = "치료유형", SEV = "질환 구분", PUR = "약제 용도";
 const VIS = "치료 형태", TIER = "입원 의료기관", CAUSE = "원인";
-const DEDUCT = "계약해당일 기준 1년간 이미 누적된 공제금액";
+const DEDUCT_ID = "gen2026-prior-deductible";
 const scr = (h: H) => {
   const r = h.render(); const it = r.resultItems();
   const boxes = r.nodes.filter((n: RenderedNode) => n.tag === "#NoticeBox" && n.props.variant === "warning").map((n) => String(n.text));
@@ -364,10 +360,13 @@ console.log("\n[소스] 파서·게이트·전달 형태");
     && !/priorInsuranceNum as number/.test(code) && !/annualLimitNum as number/.test(code));
   check("무효값을 0·undefined로 대체하는 경로가 없다",
     !/gen2026Money\([^)]*\) \?\? 0/.test(code) && !/gen2026Money\([^)]*\) \?\? undefined/.test(code));
+  // ⚠ **낡은 계약을 교체했다.** G-10 항목 A가 공제금액 두 입력의 게이트(`deductibles`)를
+  //   같은 두 분기에 함께 걸었다. 상급병실료 분기는 그대로다 — 그 경로는 두 축을 쓰지 않고
+  //   `roomCharge2026`의 `UNUSED_KEYS`가 오히려 전달을 거부하기 때문이다.
   check("세 결과 분기에 게이트가 걸린다",
-    /if \(money !== null\s*\n?\s*&& coverage === "non_benefit" && specialItem !== null/.test(code)
+    /if \(money !== null && deductibles !== null\s*\n?\s*&& coverage === "non_benefit" && specialItem !== null/.test(code)
     && /if \(money !== null && showRoomChargeForm && !rcIncomplete\)/.test(code)
-    && /: money !== null && nonBenefitItem === "general"/.test(code));
+    && /: money !== null && deductibles !== null && nonBenefitItem === "general"/.test(code));
   check("급여 분기에는 게이트를 걸지 않는다",
     /\? calculateMany2026\(\{\s*\n\s*cause: benefitCause, coverage: "benefit"/.test(code));
   check("엔진 전달 형태",
@@ -376,18 +375,23 @@ console.log("\n[소스] 파서·게이트·전달 형태");
     && (code.match(/outpatientCoverageLimit: money\.out,/g) ?? []).length === 2);
   check("세 축은 더 이상 num()을 쓰지 않는다",
     !/num\(priorInsurance\)/.test(code) && !/num\(annualLimit\)/.test(code) && !/num\(outpatientLimit\)/.test(code));
-  // ── 이번 범위 밖 ──
-  // ⚠ G-10 항목 B가 MRI pool의 **노출·전달 조건**만 소비 조건에 맞췄다(`usesPriorPool`).
-  //   파서는 여전히 `num()`이고 엄격 검증(항목 A)은 아직 하지 않았다.
-  check("공제금액 두 입력은 파서가 그대로다(엄격 검증은 아직 안 함)",
-    /priorAnnualDeductible: severity === "critical" && visit === "inpatient" && nbInpatientTier === "hospital" \? num\(priorDeductible\) : undefined/.test(code)
-    && /priorAnnualInpatientDeductible: usesPriorPool \? num\(priorPool\) : undefined/.test(code)
-    && !/gen2026Money\(priorPool\)/.test(code) && !/gen2026Money\(priorDeductible\)/.test(code)
-    && /const \[priorDeductible, setPriorDeductible\] = useState\("0"\);/.test(code)
+  // ── 공제금액 두 입력 (G-10 항목 A로 같은 파서에 합류) ──
+  // ⚠ **낡은 계약을 교체했다.** 종전 두 검사는 "여전히 num()"·"맨 <input> 그대로"를
+  //   고정하고 있었다. 항목 A가 둘 다 바꿨으므로 사실과 다르다. 여기서는 **같은 파서를
+  //   공유한다는 사실과 초기값 계약**만 확인하고, 형식·경계·차단은
+  //   `gen2026DeductibleInput.test.ts`가 본다.
+  check("공제금액 두 입력도 gen2026Money를 쓴다",
+    /priorDeductible === "" \? 0 : gen2026Money\(priorDeductible\)/.test(code)
+    && /priorPool === "" \? 0 : gen2026Money\(priorPool\)/.test(code)
+    && !/num\(priorDeductible\)/.test(code) && !/num\(priorPool\)/.test(code));
+  check("초기값 \"0\" 계약은 그대로다",
+    /const \[priorDeductible, setPriorDeductible\] = useState\("0"\);/.test(code)
     && /const \[priorPool, setPriorPool\] = useState\("0"\);/.test(code));
-  check("공제금액 두 칸은 맨 <input> 그대로다",
-    /value=\{priorDeductible\} onChange=\{\(e\) => setPriorDeductible\(e\.target\.value\)\}/.test(code)
-    && /value=\{priorPool\} onChange=\{\(e\) => setPriorPool\(e\.target\.value\)\}/.test(code));
+  check("공제금액 두 칸도 RawAmountInput이다",
+    /<RawAmountInput id="gen2026-prior-deductible" value=\{priorDeductible\}/.test(code)
+    && /<RawAmountInput id="gen2026-prior-pool" value=\{priorPool\}/.test(code)
+    && !/value=\{priorDeductible\} onChange=\{\(e\) => setPriorDeductible\(e\.target\.value\)\}/.test(code)
+    && !/value=\{priorPool\} onChange=\{\(e\) => setPriorPool\(e\.target\.value\)\}/.test(code));
   check("num()은 남은 자리에서 그대로 쓰인다",
     /const num = \(v: string\) => Number\(v\.replace\(\/\[\^0-9\.\]\/g, ""\)\) \|\| 0;/.test(code)
     && /num\(nhisRate\)/.test(code) && /num\(priorCount\)/.test(code) && /num\(copyCount\)/.test(code));
@@ -408,17 +412,22 @@ console.log("\n[소스] 파서·게이트·전달 형태");
 // ── 무회귀 ───────────────────────────────────────────────────────────
 console.log("\n[무회귀] 공제금액·진료비·횟수·승인·복제·HOLD 그대로");
 {
-  // 공제금액 두 입력의 종전 동작(무효값을 그대로 num()으로 통과)이 유지된다.
+  // ⚠ **낡은 계약을 교체했다.** 종전에는 공제금액 무효값이 통과했다(`num("abc") = 0`).
+  //   G-10 항목 A가 같은 파서로 옮겨 차단한다. 세부 형식·경계는
+  //   `gen2026DeductibleInput.test.ts`가 보고, 여기서는 세 금액과의 **공존**만 본다.
   const h = gen(setup(), "critical", "disease", "inpatient", "hospital");
   h.set("amounts", ["10000000"]);
   typeById(h, PRIOR_ID, "0");
-  typeByLabel(h, DEDUCT, "4000000");
+  typeById(h, DEDUCT_ID, "4000000");
   const withDeduct = scr(h).own;
-  typeByLabel(h, DEDUCT, "abc");
-  check("일반 입원 공제금액: 무효값이 여전히 차단되지 않는다(이번 대상 아님)",
-    scr(h).calc && scr(h).own !== withDeduct, `${withDeduct} → ${scr(h).own}`);
-  typeByLabel(h, DEDUCT, "0");
-  check("공제금액 0 → 종전 계산", scr(h).calc);
+  check("일반 입원 공제금액 400만 반영", scr(h).calc && withDeduct !== null);
+  typeById(h, DEDUCT_ID, "abc");
+  check("공제금액 무효는 이제 차단된다", !scr(h).calc);
+  typeById(h, PRIOR_ID, "abc");
+  check("  지급보험금까지 무효면 두 안내가 각각 뜬다",
+    scr(h).warn.includes("기존 지급보험금") && scr(h).warn.includes("이미 누적된 공제금액"));
+  typeById(h, PRIOR_ID, "0"); typeById(h, DEDUCT_ID, "4000000");
+  check("고치면 종전 계산으로 복귀", scr(h).calc && scr(h).own === withDeduct);
 }
 {
   const h = gen(setup(), "critical", "disease", "outpatient");

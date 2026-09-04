@@ -510,12 +510,14 @@ console.log("\n[무회귀] 기존 정책은 그대로다");
     && /annualCoverageLimit: money\.annual,/.test(ui)
     && /outpatientCoverageLimit: money\.out,/.test(ui)
     && !/gen2026Amount\(priorInsurance\)/.test(ui) && !/gen2026Amount\(annualLimit\)/.test(ui));
-  // ⚠ G-10 항목 B가 MRI pool의 **노출·전달 조건**만 소비 조건에 맞췄다. 파서는 그대로
-  //   `num()`이고, 엄격 검증(항목 A)은 아직 하지 않았다.
-  check("공제금액 두 입력은 여전히 num()을 쓴다(엄격 검증은 아직 안 함)",
-    /priorAnnualDeductible: severity === "critical" && visit === "inpatient" && nbInpatientTier === "hospital" \? num\(priorDeductible\) : undefined/.test(ui)
-    && /priorAnnualInpatientDeductible: usesPriorPool \? num\(priorPool\) : undefined/.test(ui)
-    && !/gen2026Money\(priorPool\)/.test(ui) && !/gen2026Money\(priorDeductible\)/.test(ui));
+  // ⚠ **낡은 계약을 교체했다.** G-10 항목 A가 공제금액 두 입력도 `gen2026Money`로 옮겼다.
+  //   종전 검사는 "여전히 num()"을 고정하고 있어 이제 사실과 다르다. 진료비 파서가 이 두 축에
+  //   번지지 않았는지만 남기고, 새 계약은 `gen2026DeductibleInput.test.ts`가 본다.
+  check("공제금액 두 입력은 진료비 파서를 재사용하지 않는다",
+    /priorAnnualDeductible: deductibles\.general,/.test(ui)
+    && /priorAnnualInpatientDeductible: deductibles\.pool,/.test(ui)
+    && !/gen2026Amount\(priorDeductible\)/.test(ui) && !/gen2026Amount\(priorPool\)/.test(ui)
+    && !/num\(priorDeductible\)/.test(ui) && !/num\(priorPool\)/.test(ui));
   check("일반 전환 라우팅은 그대로다",
     /routeOfGen2026Item\(severity, specialItem, injectionPurpose === "" \? undefined : injectionPurpose\)/.test(ui));
   check("일반 전환 경로에서도 진료비 게이트를 우회할 수 없다",

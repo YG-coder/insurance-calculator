@@ -548,13 +548,15 @@ console.log("\n[소스] 축 키는 기존 라우팅 결과에서만 만든다");
     && (code.match(/outpatientCoverageLimit: money\.out,/g) ?? []).length === 2
     && /const priorInsuranceNum = priorInsurance === "" \? 0 : gen2026Money\(priorInsurance\);/.test(code)
     && /const priorInsurance = paidAxis === null \? "0" : priorInsuranceByAxis\[paidAxis\];/.test(code));
-  check("공제금액 두 상태는 그대로다",
+  // ⚠ **낡은 계약을 교체했다.** G-10 항목 A가 두 공제금액의 파서·전달 형태를 바꿨다.
+  //   축 분리(G-8) 관점에서 중요한 것은 **두 상태가 축별로 쪼개지지도, 서로 합쳐지지도
+  //   않았다**는 사실이므로 그것만 남긴다. 파서·형식은 다른 파일이 본다.
+  check("공제금액 두 상태는 축별로 쪼개지지 않았다",
     /const \[priorDeductible, setPriorDeductible\] = useState\("0"\);/.test(code)
     && /const \[priorPool, setPriorPool\] = useState\("0"\);/.test(code)
-    && (code.match(/priorAnnualDeductible: severity === "critical" && visit === "inpatient" && nbInpatientTier === "hospital" \? num\(priorDeductible\) : undefined/g) ?? []).length === 2
-    // ⚠ G-10 항목 B가 MRI pool의 **전달 조건**만 소비 조건에 맞췄다(`usesPriorPool`).
-    //   상태·초기값·파서는 그대로다.
-    && /priorAnnualInpatientDeductible: usesPriorPool \? num\(priorPool\) : undefined/.test(code));
+    && !/priorDeductibleByAxis/.test(code) && !/priorPoolByAxis/.test(code)
+    && (code.match(/priorAnnualDeductible: deductibles\.general,/g) ?? []).length === 2
+    && (code.match(/priorAnnualInpatientDeductible: deductibles\.pool,/g) ?? []).length === 1);
   check("계산 결과를 과거 지급액에 되쓰지 않는다",
     !/setPriorInsuranceByAxis\([^)]*result/.test(code)
     && !/setPriorInsurance\([^)]*result/.test(code)

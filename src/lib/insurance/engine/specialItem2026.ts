@@ -183,8 +183,8 @@ function validateItemInput(input: Exclude<Gen2026ItemClaimInput, Gen2026RoomChar
   if (!Array.isArray(raw.amounts) || !raw.amounts.every(isNum)) return rejected("진료비 목록(amounts)", raw.amounts);
 
   // ── 통원 카운터 축 분리 (일반 전환 경로) ───────────────────────────
-  //   중증은 연 100'회'(특약1 제3조·제5조④ '보상한 횟수'),
-  //   비중증은 연 100'일'(특약2 제3조·제5조④ '보상한 일수')로 단위가 다르다.
+  //   중증은 연 100'회'(특약1 제3조 (1)①·(2)① 표),
+  //   비중증은 연 100'일'(특약2 (1)①·(2)① 표)로 단위가 다르다.
   //   반대편 필드가 실려 오면 호출자가 단위를 잘못 알고 있다는 뜻이므로 값이 0이어도 막는다.
   //   ⚠ 조용히 버리지 않는다 — 버리면 한도가 통째로 사라져 보험금이 과다 산출된다.
   if (raw.severity === "critical" && days !== undefined) {

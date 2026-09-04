@@ -51,9 +51,11 @@ const ZERO_PAY_DAYS_HOLD_NOTES = [
 ];
 
 /**
- * 중증도 같다. 표는 '통원 100회'(특약1 제3조 (1)①·(2)① 인쇄 p.258·261)라 통원 자체를,
- * 제5조④(p.280)는 '보상한 횟수'라 보상된 건을 가리키는 것으로 읽혀 갈린다
+ * 중증도 같다. 표는 '통원 100회'(특약1 제3조 (1)①·(2)① 인쇄 p.258·261)라 **통원 자체**를 센다.
+ * 지급 0원 통원의 처리는 직접 읽은 범위에서 판단 문언을 찾지 못해 보류돼 있다
  * (GEN2026-CRITICAL-OUTPATIENT-VISITS-ZEROPAY = HOLD).
+ *   ⚠ 제5조④(p.280)의 '보상한 횟수'를 반대 해석의 근거로 들지 않는다 —
+ *     계속 중인 입원·통원의 이월 한도 전용 조항이다.
  *   ⚠ 비중증(일)과 별개 규칙이다. 안내 문구도 단위를 섞지 않는다.
  */
 const ZERO_PAY_VISITS_HOLD_NOTES = [
@@ -151,19 +153,19 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
     }
 
     // ── 통원 카운터 축 분리 ───────────────────────────────────────
-    //   중증은 '통원 100회'(특약1 제5조④ '보상한 횟수'), 비중증은 '통원 100일'
-    //   (특약2 제5조④ '보상한 일수')로 단위가 다르다. 반대편 필드를 넘겼다면 호출자가
+    //   중증은 '통원 100회'(특약1 제3조 (1)①·(2)① 표), 비중증은 '통원 100일'
+    //   (특약2 (1)①·(2)① 표)로 단위가 다르다. 반대편 필드를 넘겼다면 호출자가
     //   단위를 잘못 알고 있다는 뜻이므로, 값이 0이어도 계산하지 않는다.
     //   ⚠ 대상은 해당 통원 경로뿐이다. 다른 경로의 기존 관용 동작은 이번에 정리하지 않는다.
     if (nb.visit === "outpatient" && severity === "critical" && days !== undefined) {
       return blocked([
-        "중증 통원의 연간 한도는 약관상 통원 100회입니다(특별약관1 제3조 <구분·보상금액>·제5조 제4항 '보상한 횟수').",
+        "중증 통원의 연간 한도는 약관상 통원 100회입니다(특별약관1 제3조 (1)제1항·(2)제1항 <구분·보상금액>).",
         "일수 카운터(priorAnnualOutpatientDays)는 비중증 전용이라 중증 계산에 쓰지 않습니다. 통원 횟수(priorAnnualOutpatientVisits)로 넘겨 주세요.",
       ]);
     }
     if (nb.visit === "outpatient" && severity === "non_critical" && visits !== undefined) {
       return blocked([
-        "비중증 통원의 연간 한도는 약관상 통원 100일입니다(특별약관2 제3조 <구분·보상금액>·제5조 제4항 '보상한 일수').",
+        "비중증 통원의 연간 한도는 약관상 통원 100일입니다(특별약관2 제3조 (1)제1항·(2)제1항 <구분·보상금액>).",
         "횟수 카운터(priorAnnualOutpatientVisits)는 중증 전용이라 비중증 계산에 쓰지 않습니다. 통원일수(priorAnnualOutpatientDays)로 넘겨 주세요.",
       ]);
     }
@@ -174,7 +176,7 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
     if (nb.visit === "outpatient" && severity === "critical") {
       if (visits === undefined) {
         return blocked([
-          "중증 통원은 계약해당일 기준 1년간 통원 100회가 한도입니다(특별약관1 제3조 <구분·보상금액>·제5조 제4항 '보상한 횟수').",
+          "중증 통원은 계약해당일 기준 1년간 통원 100회가 한도입니다(특별약관1 제3조 (1)제1항·(2)제1항 <구분·보상금액>).",
           "이미 사용한 통원 횟수(priorAnnualOutpatientVisits)를 알아야 이후 청구의 보상 여부가 정해지므로, 입력 전에는 계산하지 않습니다. 사용한 통원이 없으면 0을 넣어 주세요.",
         ]);
       }
@@ -188,7 +190,7 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
     if (nb.visit === "outpatient" && severity === "non_critical") {
       if (days === undefined) {
         return blocked([
-          "비중증 통원은 계약해당일 기준 1년간 통원 100일이 한도입니다(특별약관2 제3조 <구분·보상금액>·제5조 제4항 '보상한 일수').",
+          "비중증 통원은 계약해당일 기준 1년간 통원 100일이 한도입니다(특별약관2 제3조 (1)제1항·(2)제1항 <구분·보상금액>).",
           "이미 사용한 통원일수(priorAnnualOutpatientDays)를 알아야 이후 청구의 보상 여부가 정해지므로, 입력 전에는 계산하지 않습니다. 사용한 통원이 없으면 0을 넣어 주세요.",
         ]);
       }

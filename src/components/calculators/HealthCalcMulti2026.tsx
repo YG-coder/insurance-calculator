@@ -390,7 +390,7 @@ export default function HealthCalcMulti2026() {
       {(specialItem === "musculoskeletal_esw" || specialItem === "injection") && <label className="text-sm font-semibold">계약해당일 기준 1년간 이미 <b>보상한 횟수</b> (연 50회 한도용)<input className="input-base mt-1" type="number" min="0" value={priorCount} onChange={(e) => setPriorCount(e.target.value)} /></label>}
       {specialItem === "musculoskeletal_esw" && <label className="text-sm font-semibold">계약해당일 기준 1년간 이미 받은 <b>치료행위 수</b> (보상 승인 회차용)<input className="input-base mt-1" inputMode="numeric" value={priorActs} onChange={(e) => setPriorActs(e.target.value)} placeholder="받은 치료가 없으면 0" /><span className="mt-2 block text-xs font-normal text-slate-500">약관은 보상 승인 회차를 <b>&lsquo;각 치료횟수&rsquo;</b>로 셉니다(&lt;표1&gt; 주)). 위의 <b>보상한 횟수</b>는 보험금이 지급된 횟수라, 공제금액에 못 미쳐 <b>0원이 지급된 치료</b>가 있으면 두 값이 달라집니다. 보험사에서 확인한 값을 입력해 주세요.</span></label>}
       {needsRowTier && <label className="text-sm font-semibold">계약해당일 기준 1년간 이미 누적된 공제금액 (500만 원 상한)<input className="input-base mt-1" inputMode="numeric" value={priorPool} onChange={(e) => setPriorPool(e.target.value)} /></label>}
-      <p className="text-xs text-slate-500 sm:col-span-2">약관은 연간 보장한도(금액)에서 <b>지급한 금액</b>을, 연간 보장한도(횟수)에서 <b>보상한 횟수</b>를 차감합니다(특별약관1 제3조(3)제7항·제5조 제4항). 일반 비급여의 통원 가입금액(20만 원)과 연간 보험가입금액은 이 보장종목에 적용되지 않습니다.</p>
+      <p className="text-xs text-slate-500 sm:col-span-2">보험계약이 종료된 뒤에도 <b>계속 중인 치료</b>는 연간 보장한도(금액)에서 <b>지급한 금액</b>을, 연간 보장한도(횟수)에서 <b>보상한 횟수</b>를 뺀 잔여분을 한도로 보상합니다(특별약관1 제3조(3)제7항·제5조 제4항 — 이월 계산 전용이며, 보험기간 중 연간 한도의 소진 기준을 정하는 조항이 아닙니다). 일반 비급여의 통원 가입금액(20만 원)과 연간 보험가입금액은 이 보장종목에 적용되지 않습니다.</p>
     </div>}
 
     <button className="btn-primary mt-6" onClick={() => setSubmitted(true)}>여러 건 계산하기</button>

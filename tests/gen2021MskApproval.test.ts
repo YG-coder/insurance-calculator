@@ -267,17 +267,17 @@ console.log("\n[UI] 도수에만 승인 select가 열리고 숨은 값은 전달
   check("주사료로 바꿔도 잔존 승인값이 결과를 막지 않는다",
     setup({
       submitted: true, rider: "injection", priorInjectionVisits: "0",
-      approvedThrough: 10, priorPaid: "0",
+      approvedThrough: 10,
     }).resultItems() !== null);
   check("도수 미선택 상태에서 10회 이하는 정상 계산",
     setup({
       submitted: true, rider: "manual_therapy", priorManualVisits: "0",
-      approvedThrough: "", priorPaid: "0", amounts: ["300000", "300000"],
+      approvedThrough: "", amounts: ["300000", "300000"],
     }).resultItems() !== null);
   check("도수 미선택 상태에서 11회째를 넘기면 결과 대신 안내",
     setup({
       submitted: true, rider: "manual_therapy", priorManualVisits: String(INITIAL),
-      approvedThrough: "", priorPaid: "0", amounts: ["300000"],
+      approvedThrough: "", amounts: ["300000"],
     }).resultItems() === null);
   check("UI가 미선택을 undefined로 넘긴다(10을 만들어 보내지 않는다)",
     /approvedThroughVisit: approvedThrough === "" \? undefined : approvedThrough/.test(ui));

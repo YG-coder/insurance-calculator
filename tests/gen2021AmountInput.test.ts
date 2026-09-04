@@ -41,7 +41,8 @@ const gen2021Amount = new Function(
 
 const setup = (over: Record<string, unknown> = {}) => {
   const h = mount(HealthCalcMulti2021 as unknown as () => unknown, names);
-  h.set("submitted", true); h.set("priorPaid", "0");
+  // ⚠ G-5에서 누적 금액이 **축별 Record**가 됐다. 기본값이 모든 축 "0"이라 주입하지 않는다.
+  h.set("submitted", true);
   for (const [k, v] of Object.entries(over)) h.set(k, v);
   return h;
 };
@@ -224,7 +225,10 @@ console.log("\n[무회귀] 명시적 0원·횟수·승인 구간은 그대로다
     /approvedThroughVisit: approvedThrough === "" \? undefined : approvedThrough/.test(ui));
   check("누적 지급보험금·연간 가입금액은 여전히 digits()를 쓴다(범위 밖)",
     /priorAnnualInsurancePaid: digits\(priorPaid\)/.test(ui)
-    && /annualCoverageLimit: annualLimit \? digits\(annualLimit\) : undefined/.test(ui));
+    && /annualCoverageLimit: annualLimit \? digits\(annualLimit\) : undefined/.test(ui)
+    // 축별 Record에서 **활성 축만** 꺼내 쓴다(G-5). 파서·전달 형태는 그대로다.
+    && /const priorPaid = priorPaidByAxis\[paidAxis\];/.test(ui)
+    && /const annualLimit = annualLimitByAxis\[generalAxis\];/.test(ui));
 }
 
 // ── 범위 밖 무변경 ───────────────────────────────────────────────────

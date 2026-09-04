@@ -7,9 +7,33 @@ import NoticeBox from "@/components/NoticeBox";
 import { calc2026, GEN2026_NON_BENEFIT_ITEM_LABEL } from "@/lib/insurance/engine/generation2026";
 import { Coverage, Visit, Tier, Severity, Gen2026NonBenefitItem } from "@/lib/insurance/engine/types";
 import { CAP_LABELS } from "@/lib/insurance/engine/capLabels";
+import { GEN2026 } from "@/lib/insurance/engine/constants";
 
 const won = (n: number) =>
   `${Math.max(0, Math.round(n)).toLocaleString("ko-KR")}원`;
+
+/**
+ * **고정 비율 경로**의 자기부담률(%) 표기. 급여 입원(20%)·비급여 중증 입원(30%)·비중증
+ * 입원(50%)처럼 규칙값에서 온 비율만 여기로 온다.
+ *
+ * ⚠ **사용자가 입력한 급여 통원 비율은 이 함수를 쓰지 않는다.** 아래
+ *   `benefitOutpatientPct`가 곱셈을 거치지 않은 값을 그대로 그린다 — 그 경로에서
+ *   `rate * 100`을 하면 이진 부동소수점 흔적이 생기고(실측: `0.259 * 100`은
+ *   **25.900000000000002**, `0.269 * 100`은 **26.900000000000002**), 그것을 반올림해
+ *   지우면 이번에는 **입력 자릿수가 잘린다**(`20.12345678901` → `toFixed(10)`이면
+ *   `20.123456789`). 계약이 자릿수를 제한하지 않으므로 둘 다 곤란하다.
+ *   (`0.305 * 100`은 정확히 `30.5`라 흔적이 없다 — 값에 따라 다르다.)
+ * ⚠ 고정 비율은 `0.2`·`0.3`·`0.5`·`1`이라 `* 100`이 정확히 `20`·`30`·`50`·`100`이다.
+ *   그래서 이 경로에는 곱셈이 안전하고, 꼬리 `0` 정리만 남긴다.
+ * ⚠ **표시만 다룬다.** 계산에 쓰이는 값(`rateApplied`)도 산식도 엔진도 건드리지 않는다.
+ *   최소공제액이 커서 실제 부담이 이 비율을 넘는 경우가 있는데, 그 사실은 라벨 뒤의
+ *   "최소공제액 … 비교" 문구가 종전대로 알린다.
+ */
+const pct = (rate: number) => {
+  const v = (rate ?? 0) * 100;
+  if (!Number.isFinite(v)) return "0";
+  return v.toFixed(10).replace(/0+$/, "").replace(/\.$/, "");
+};
 
 /**
  * 5세대 **단건** 진료비 파서. 원문 문자열을 형식으로 **먼저** 판정한다.
@@ -44,6 +68,37 @@ const gen2026SingleAmount = (v: string): number | null => {
   if (!GEN2026_SINGLE_AMOUNT_FORMAT.test(v)) return null;
   const n = Number(v.replace(/,/g, ""));
   return Number.isSafeInteger(n) && n >= 0 ? n : null;
+};
+
+/**
+ * 5세대 단건 **급여 통원의 건강보험 본인부담률(%)** 전용 파서. 원문 문자열을 형식으로 먼저
+ * 판정한다.
+ *
+ * ⚠ **금액 파서와 합치지 않는다.** 비율은 계약이 다르다 — 소수를 허용해야 하고(정당한
+ *   `12.5%`를 금액 규칙으로 막으면 안 된다), 쉼표는 쓰지 않으며, 값의 범위가 0~100으로
+ *   닫혀 있다. `gen2026SingleAmount`를 재사용하면 이 셋이 모두 어긋난다.
+ * ⚠ 종전 `Math.min(100, Math.max(0, Number(nhisRate))) / 100`을 쓰면 안 된다. 그 식은
+ *   **조용히 보정한다** — `1e3`·`300000`은 1000%·300000%인데 **100%로 깎여** 보험금이
+ *   0원이 되고, `-1`은 **0%로 올라가** 하한 20%로 계산된다. 사용자는 자기가 넣은 값이
+ *   바뀐 줄 모른다. 보정 대신 **차단**한다.
+ * ⚠ 위젯도 함께 바꾼다. `type="number"`는 브라우저가 문자를 지워 원문이 상태에 닿지 않으므로
+ *   파서만 고쳐서는 늦다(`abc`를 치면 화면과 상태가 조용히 `""`이 된다).
+ *   `type="text"` + `inputMode="decimal"`로 원문을 보존하고 여기서 판정한다.
+ * ⚠ **소수 자릿수를 제한하지 않는다.** 종전 화면의 `step="0.1"`은 스피너 증감폭이지
+ *   약관이 한 자리로 정했다는 근거가 아니다. 자리 제한을 새로 만들면 근거 없는 규칙이 된다.
+ * ⚠ **0~100 밖은 깎지 않고 차단한다.** `100.1`·`101`·아주 큰 수 모두 무효다.
+ *
+ * 유효: 부호·공백·쉼표·지수 표기 없는 0 이상 100 이하의 숫자.
+ *   정수부는 필수, 소수부는 선택 — `0`, `00`, `01`, `20`, `12.5`, `12.50`, `100`, `100.0`.
+ * 무효(null): `.5`(정수부 없음), `1.`(소수부 없음), `+1`·`-1`, `1e3`, `1,0`, `20만`, `abc`,
+ *   공백만·앞뒤 공백, `NaN`, `Infinity`, `100.1`·`101` 같은 범위 초과.
+ *   빈 문자열 `""`은 파서가 아니라 **호출부**에서 처리한다(미입력 → `undefined`).
+ */
+const GEN2026_NHIS_RATE_FORMAT = /^[0-9]+(?:\.[0-9]+)?$/;
+const gen2026NhisRate = (v: string): number | null => {
+  if (!GEN2026_NHIS_RATE_FORMAT.test(v)) return null;
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 && n <= 100 ? n : null;
 };
 
 // 화면 표기 순서. ⚠ 기본 선택이 없다 — 사용자가 MRI·주사료·병실료임을 모른 채
@@ -116,6 +171,36 @@ export default function HealthCalc5th() {
     coverage === "non_benefit" && nonBenefitItem === "general"
     && severity === "critical" && visit === "inpatient" && nbInpatientTier === "hospital";
   /**
+   * 건강보험 본인부담률의 활성 조건 (G-11B). 엔진이 이 값을 읽는 곳은 **급여 통원 분기뿐**이다
+   * (`generation2026.ts`의 `Math.max(nhis, floorRate)`). 급여 입원과 모든 비급여 경로에서는
+   * 검증도 전달도 하지 않는다.
+   */
+  const usesNhisRate = coverage === "benefit" && visit === "outpatient";
+  /**
+   * ⚠ **빈 문자열만** `undefined`다 — 그래야 엔진의 종전 `PENDING_UNVERIFIED` 안내
+   *   ("건강보험 본인부담률 미제공 → 계산 불가")가 그대로 나온다.
+   *   **공백만은 빈 값이 아니라 무효**다. `trim()`으로 정리해 통과시키지 않는다.
+   * ⚠ 명시적 `0`은 숫자 0으로 전달하고 엔진의 종전 20% 하한 처리를 그대로 따른다.
+   */
+  const nhisRateNum = !usesNhisRate || nhisRate === "" ? undefined : gen2026NhisRate(nhisRate);
+  const nhisRateInvalid = nhisRateNum === null;
+  /**
+   * 급여 통원 결과 라벨에 그릴 **적용 퍼센트**. `/100`하기 전의 검증된 값을 그대로 쓴다.
+   *
+   * ⚠ 이렇게 하는 이유는 **곱셈으로 생기는 부동소수점 흔적 자체를 피하기 위해서**다.
+   *   엔진은 `Math.max(nhis, floorRate)`를 rate 단위로 계산하는데, 그 결과에 `* 100`을 하면
+   *   실측으로 `0.259 * 100 = 25.900000000000002`, `0.269 * 100 = 26.900000000000002`처럼
+   *   꼬리가 붙는다. 반올림으로 지우면 이번에는 입력 자릿수가 잘린다
+   *   (`20.12345678901`은 `toFixed(10)`에서 `20.123456789`가 된다).
+   *   사용자가 친 십진 값 자체를 들고 있으면 두 문제가 모두 사라진다.
+   * ⚠ 하한은 엔진과 **같은 규칙값**을 쓴다. `floorRate`는 `0.2`이고 `0.2 * 100`은 정확히
+   *   `20`이라 이 곱셈에는 흔적이 없다. 화면에 `20`을 하드코딩하지 않는다.
+   * ⚠ 이것은 **표시 전용**이다. 엔진에는 여전히 `nhisRateNum / 100`이 간다.
+   */
+  const benefitOutpatientPct = !usesNhisRate || nhisRateNum === null || nhisRateNum === undefined
+    ? null
+    : Math.max(nhisRateNum, GEN2026.benefit.outpatient.floorRate * 100);
+  /**
    * ⚠ **활성일 때만 검증한다.** 조건이 거짓이면 `undefined`다 — 숨은 원문은 상태에 남지만
    *   파서에 닿지 않고 엔진에도 가지 않는다. 조건이 돌아오면 무효값 안내도 다시 나타난다.
    * ⚠ **빈 값의 뜻이 서로 다르다.** 통원 가입금액은 `undefined`(미적용, 초기값이 `""`),
@@ -149,16 +234,18 @@ export default function HealthCalc5th() {
   const result = amountInvalid
     ? null
     : coverage === "benefit"
-      ? calc2026({
-          amount: num,
-          coverage: "benefit",
-          visit,
-          tier: benefitTier,
-          nhisCoinsuranceRate:
-            visit === "outpatient" && nhisRate.trim() !== ""
-              ? Math.min(100, Math.max(0, Number(nhisRate))) / 100
-              : undefined,
-        })
+      // ⚠ 본인부담률이 무효이면 **엔진을 호출하지 않는다.** 결과 카드도 엔진 안내도 나오지
+      //   않는다. `null`을 배제해야만 다음 줄에 닿으므로 타입 단언도 0 대체도 없다.
+      ? nhisRateNum === null
+        ? null
+        : calc2026({
+            amount: num,
+            coverage: "benefit",
+            visit,
+            tier: benefitTier,
+            // ⚠ 여기서 깎지 않는다. 범위 판정은 파서가 이미 했다.
+            nhisCoinsuranceRate: nhisRateNum === undefined ? undefined : nhisRateNum / 100,
+          })
       : needsItem || needsSeverity || needsTier || limits === null
         ? null
         : calc2026({
@@ -271,20 +358,31 @@ export default function HealthCalc5th() {
                 </button>
               </div>
             </div>
+            {/* ⚠ 이 입력의 라벨은 **하나뿐이다.** 같은 페이지의 다회 계산기에도 같은 이름의
+                   라벨이 있지만 그것은 다른 컴포넌트의 정상 라벨이며 건드리지 않는다.
+                   `id`는 `med5-` 접두사라 다회(무명 input)와 충돌하지 않는다.
+                ⚠ `type="number"`를 쓰면 안 된다. 브라우저가 문자를 지워 원문이 상태에 닿지
+                   않으므로(`abc` → 화면·상태 모두 `""`) 아래 파서가 판정할 기회가 사라진다.
+                   `min`/`max`/`step`도 함께 없앤다 — `type="text"`에서는 동작하지 않는 데다
+                   `step="0.1"`은 약관이 소수 한 자리로 정했다는 근거가 아니다. */}
             <div className="sm:col-span-2 max-w-md">
               <label className="label-base" htmlFor="med5-nhis-rate">건강보험 본인부담률 (%)</label>
               <input
                 id="med5-nhis-rate"
-                type="number"
-                min="0"
-                max="100"
-                step="0.1"
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
+                aria-describedby="med5-nhis-rate-help"
                 value={nhisRate}
                 onChange={(e) => setNhisRate(e.target.value)}
                 placeholder="진료비 영수증·보험사 안내에서 확인"
                 className="input-base w-full"
               />
-              <p className="mt-2 text-xs text-slate-500">건강보험 본인부담률을 모르면 정확한 급여 통원 계산을 제공하지 않습니다.</p>
+              <p id="med5-nhis-rate-help" className="mt-2 text-xs text-slate-500">
+                <b>0~100 사이의 숫자</b>를 입력해 주세요. 소수도 받습니다 — <b>20</b> 또는
+                <b> 12.5</b> 형식입니다. 건강보험 본인부담률을 모르면 <b>비워</b> 두세요.
+                정확한 급여 통원 계산을 제공하지 않습니다.
+              </p>
             </div>
           </>
         )}
@@ -388,6 +486,18 @@ export default function HealthCalc5th() {
             </NoticeBox>
           )}
 
+          {/* 급여 통원의 본인부담률. 화면에서 병원비 바로 다음에 오는 입력이므로 안내도
+                 병원비 다음에 둔다. 아래 비급여 안내들과는 경로가 배타적이라 겹치지 않는다. */}
+          {!amountInvalid && nhisRateInvalid && (
+            <NoticeBox variant="warning">
+              <b>건강보험 본인부담률</b>을 올바르게 입력해 주세요. <b>0~100 사이의 숫자</b>만
+              받습니다 — <b>20</b> 또는 <b>12.5</b> 형식이고 소수도 받습니다. 모르면
+              <b> 완전히 비워</b> 두세요. 공백만 입력한 값은 빈 값으로 보지 않습니다.
+              음수·100 초과·문자·지수 표기·쉼표를 계산기가 <b>0%나 100%로 바꾸지 않으며</b>,
+              올바르게 입력하기 전에는 계산하지 않습니다.
+            </NoticeBox>
+          )}
+
           {!amountInvalid && needsItem && (
             <NoticeBox variant="warning">
               비급여는 <b>치료유형</b>에 따라 적용되는 보장종목과 산식이 다릅니다. 치료유형을 먼저
@@ -443,7 +553,8 @@ export default function HealthCalc5th() {
                 items={[
                   { label: "총 진료비", value: won(result.amount) },
                   {
-                    label: `자기부담률 (${((result.rateApplied ?? 0) * 100).toFixed(0)}%${
+                    // ⚠ 급여 통원은 사용자가 친 십진 값을, 그 밖의 경로는 규칙값을 그린다.
+                    label: `자기부담률 (${benefitOutpatientPct === null ? pct(result.rateApplied ?? 0) : String(benefitOutpatientPct)}%${
                       result.minDeductible ? ` · 최소공제액 ${won(result.minDeductible)} 비교` : ""
                     })`,
                     value: won(result.rateBased ?? 0),

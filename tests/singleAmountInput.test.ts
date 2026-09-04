@@ -226,8 +226,11 @@ console.log("\n[게이트] 무효 원문에서는 엔진을 호출하지 않는�
   const fresh = setup(HealthCalc5th as unknown as Comp, names5, { amount: "abc" });
   check("5세대: 무효 금액이면 치료유형 선택 경고를 함께 띄우지 않는다",
     warnText(fresh).includes("올바르게 입력해 주세요") && !warnText(fresh).includes("치료유형"));
+  // ⚠ G-11B가 급여 통원의 본인부담률 안내를 **병원비 다음, 비급여 안내들보다 앞**에 넣었다.
+  //   화면 순서(병원비 → 급여 통원의 본인부담률 → 비급여의 치료유형…)와 같다.
+  //   여기서는 **병원비가 여전히 맨 앞**인지만 본다.
   check("5세대: 안내 순서가 화면 순서와 맞다(진료비가 먼저)",
-    /\{amountInvalid && \([\s\S]{0,600}\{!amountInvalid && needsItem &&/.test(ui5));
+    /\{amountInvalid && \([\s\S]{0,900}\{!amountInvalid && nhisRateInvalid &&[\s\S]{0,900}\{!amountInvalid && needsItem &&/.test(ui5));
 }
 
 // ── 선택 축 전환 ─────────────────────────────────────────────────────

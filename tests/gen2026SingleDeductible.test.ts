@@ -321,8 +321,16 @@ console.log("\n[소스] 형식 우선 검증 · 전달 조건 · 금지 사항")
     /nonBenefitItem: nonBenefitItem as Gen2026NonBenefitItem,/.test(code));
   check("게이트가 기존 선택 게이트와 함께 걸린다",
     /needsItem \|\| needsSeverity \|\| needsTier \|\| limits === null/.test(code));
-  check("급여 분기에는 게이트를 걸지 않는다(두 값을 쓰지 않는다)",
-    /\? calc2026\(\{\s*\n\s*amount: num,\s*\n\s*coverage: "benefit",/.test(code));
+  // ⚠ G-11B가 급여 분기에 **본인부담률 전용** 게이트(`nhisRateNum === null`)를 넣었다.
+  //   여기서 확인할 것은 **두 금액의 게이트(`limits`)가 급여 분기에 붙지 않았다**는 사실이다.
+  check("급여 분기에는 두 금액의 게이트를 걸지 않는다(급여가 쓰지 않는 값이다)",
+    // 급여 분기의 게이트 줄에는 `nhisRateNum`만 있고 `limits`가 없다.
+    /\? nhisRateNum === null\s*\n\s*\? null\s*\n\s*: calc2026\(\{\s*\n\s*amount: num,\s*\n\s*coverage: "benefit",/.test(code)
+    && !/nhisRateNum === null \|\| limits === null/.test(code)
+    && !/limits === null \|\| nhisRateNum === null/.test(code)
+    // 비급여 분기의 게이트 줄에는 `limits`가 있고 `nhisRateNum`이 없다.
+    && /: needsItem \|\| needsSeverity \|\| needsTier \|\| limits === null\s+\? null/.test(code)
+    && !/needsTier \|\| limits === null \|\| nhisRateNum/.test(code));
   check("두 칸 모두 RawAmountInput이고 AmountInput은 남아 있지 않다",
     /<RawAmountInput\n\s*id="med5-outpatient-limit"/.test(code)
     && /<RawAmountInput\n\s*id="med5-prior-annual-deductible"/.test(code)
@@ -339,9 +347,14 @@ console.log("\n[소스] 형식 우선 검증 · 전달 조건 · 금지 사항")
   check("계산 결과를 과거 누적액에 되쓰지 않는다",
     !/setPriorDeductible\([^)]*result/.test(code) && !/setOutpatientLimit\([^)]*result/.test(code));
   // ── 이번 범위 밖 ──
-  check("nhisRate는 그대로다(G-11B)",
-    /type="number"/.test(code)
-    && /Math\.min\(100, Math\.max\(0, Number\(nhisRate\)\)\) \/ 100/.test(code)
+  // ⚠ **낡은 계약을 교체했다.** G-11A 시점에는 `nhisRate`가 `type="number"` + 자동 보정이었다.
+  //   G-11B가 그것을 바꿨으므로, 여기서는 **두 금액 필드와 섞이지 않았다**는 것만 본다.
+  //   비율 필드의 계약은 `gen2026NhisRate.test.ts`가 본다.
+  check("비율 필드는 금액 파서와 분리돼 있다",
+    /const GEN2026_NHIS_RATE_FORMAT = /.test(code)
+    && !/gen2026SingleAmount\(nhisRate\)/.test(code)
+    && !/gen2026NhisRate\(outpatientLimit\)/.test(body)
+    && !/gen2026NhisRate\(priorDeductible\)/.test(body)
     && /const \[nhisRate, setNhisRate\] = useState<string>\(""\);/.test(code));
   const widgetSrc = readFileSync("src/components/RawAmountInput.tsx", "utf8");
   check("공용 위젯 파일은 그대로다",

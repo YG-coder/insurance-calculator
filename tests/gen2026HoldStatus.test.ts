@@ -333,7 +333,14 @@ console.log("\n[커밋 D·E] 계산·화면 무변경 (기준 30dee21)");
     "src/lib/insurance/engine/generation2026.ts": "2c019bb8fa843b59cc6a60c0f5c7dc6350b991f52c7e1026ce694329165a017a",
     "src/lib/insurance/engine/engine.ts": "da28c9f77d7d90ba1d0e18146d626c9ea7fc6a89013293a26ec50e223ee56c8e",
     "src/lib/insurance/engine/capLabels.ts": "23d0bc4b40a1b408cf74ec0189457e1a3c9f6bc75988e4bcde4e7c2c8554410d",
-    "src/lib/insurance/engine/itemGuards.ts": "c10d2feab01d251c435a7b5b23e7644ab27d6c8652cb63619d4e0b309d76c027",
+    // ⚠ G-14D에서 **의도적으로** 갱신했다(종전 c10d2fea…).
+    //   `rejected()`의 '받은 값' 표시가 `JSON.stringify(got) ?? String(got)`이라
+    //   `bigint`·순환 참조·`toJSON()`이 던지는 값에서 결과가 아니라 **런타임 예외**로 끝났다
+    //   (별도 보장종목 30곳·상급병실료 11곳 전부, 두 진입점 모두 실측). 지역 `showValue()`를
+    //   넣어 예외를 낮췄고, 계산식·검증 순서·허용 범위·첫 번째 안내·반환 객체는 그대로다.
+    //   정상 직렬화 값의 표시도 종전과 같다 — 바뀐 것은 **예외가 나던 값뿐**이다.
+    //   ⚠ roomCharge2026.ts는 이 커밋에서 손대지 않았으므로 아래 해시는 그대로다.
+    "src/lib/insurance/engine/itemGuards.ts": "ad08c2d9640544c5dc7faf9e328cac805ed9c2dfdd73409a05207e48d5ae110f",
     "src/app/5th-generation-health-insurance-calculator/page.tsx": "7bc5927da6e9245189cd71524883b432594a8e720d1d2d4c0f73c3c04b1ed375",
   };
   for (const [file, want] of Object.entries(FROZEN)) {

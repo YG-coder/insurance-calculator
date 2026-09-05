@@ -2824,8 +2824,96 @@ C군 clamp+문자열 변환 / C군 소비 조건 완화 3(`visit`·`severity`·`
 - **`itemGuards.rejected()`의 같은 노출(2026-09-05 확인).** `specialItem2026.ts`가 쓰는 공용
   `rejected()`도 `JSON.stringify(got)`를 직접 부르므로 `bigint`·순환 참조에서 **똑같이 예외를
   던진다**(G-14B가 추가한 두 축 포함). 공용 헬퍼라 다른 진입점 전부에 영향을 주므로 이번 범위에
-  넣지 않았다. **별도 승인이 필요하다.**
+  넣지 않았다. → **§5.23(G-14D)에서 별도 승인을 받아 처리했다.**
 - 4세대 금액 축의 관용 검증, `priorAnnualTreatmentActCount`의 일반 전환 경로 런타임 검사,
   `undefined`를 "미입력 차단"으로 바꾸는 정책.
 
 새 계약은 `tests/gen2026MultiInputContract.test.ts`(116건)가 본다.
+
+
+### 5.23 공용 `rejected()`의 '받은 값' 안전 표시 (2026-09-05, G-14D)
+
+**§5.22가 범위 밖으로 남긴 항목을 별도 승인으로 처리한 커밋이다.** 계산식·규칙값·타입·입력 허용
+범위·검증 순서·안내의 첫 문장·반환 객체가 모두 그대로다. 바뀐 것은 **예외가 나던 값의 표시뿐**이다.
+
+#### 확인한 결함 (기준선 `72e0c96` 엔진 직접 호출, UI 미경유)
+
+`itemGuards.rejected()`의 두 번째 안내는 `받은 값: ${JSON.stringify(got) ?? String(got)}`였다.
+`??`는 `JSON.stringify`가 **정상적으로** `undefined`를 돌려줄 때만 동작한다. `JSON.stringify`가
+**던지는** 경우에는 폴백이 없어 그대로 호출자에게 예외가 나갔다.
+
+| `got` | `JSON.stringify` | `String` | 종전 결과 |
+| --- | --- | --- | --- |
+| 숫자·문자열·배열·객체·`null`·`NaN`·`Infinity` | ok | — | 정상 |
+| `undefined`·Symbol·함수 | `undefined` 반환 | ok | 정상(`??`가 받음) |
+| `toString()`이 던지는 객체 | ok(`{}`) | — | 정상 |
+| `bigint` | **throw** | ok | **throw** |
+| 순환 참조 객체·배열 | **throw** | ok | **throw** |
+| `toJSON()`이 던지는 객체 | **throw** | ok | **throw** |
+| null-prototype + `bigint` | **throw** | **throw** | **throw** |
+
+예외는 **항상 1단계(`JSON.stringify`)**에서 났다.
+
+⚠ **G-14B가 추가한 두 축만의 문제가 아니었다.** 같은 `rejected()`를 쓰는 호출부는
+`specialItem2026.ts` **30곳**(`route`·`coverage`·`severity`·`item`·`injectionPurpose`·`lines`·
+행의 `amount`/`visit`/`tier`·`priorAnnualTreatmentActCount`·`approvedThroughVisit`·`cause`·
+`amounts`·경로 대조 등)과 `roomCharge2026.ts` **11곳**이다. 축 18종을 직접 호출로 찔러 **전부
+`TypeError` 관통**을 실측했고, 상급병실료는 `calculateGen2026Item` 경유와 `calculateRoomCharge2026`
+직접 호출 **양쪽 모두** 같았다.
+
+⚠ 공개 화면은 리터럴만 넘기므로 이 값들을 만들 수 없다. 프로덕션 무회귀 실측(약 40 시나리오)에서
+거부 안내가 화면에 나온 적은 없다. 이 커밋은 **엔진 직접 호출 계약** 전용이다.
+
+#### 고친 방식 — `itemGuards.ts` 안의 지역 `showValue()`
+
+`JSON.stringify` → 실패하면 `String(v)` → 그것마저 실패하면 `"(표시할 수 없는 값)"`.
+`rejected()`의 **두 번째 안내에서만** 쓴다. `roomCharge2026.ts`는 손대지 않았다.
+
+⚠ **두 번째 `catch`는 `JSON.stringify`와 `String()`이 모두 실패하는 값 전용**이다. `toString()`만
+던지는 보통의 객체는 JSON 직렬화가 성공해 폴백에 도달하지 않으므로 그 값으로는 이 분기를 검사할
+수 없다. 검사는 null-prototype + `bigint`로 고정했다.
+
+⚠ **`multiClaim2026.ts`의 G-14C `showValue()`와 통합하지 않는다.** 공용 leaf 모듈로 빼는 안도
+만들어 실측했고 출력은 두 안이 완전히 같았지만(23/23, `multiClaim2026` 결과 72/72 동일), 그 경우
+`tests/gen2026MultiInputContract.test.ts`가 굳혀 둔 소스 계약 검사(그 파일 **본문**에 헬퍼 선언이
+있고 `받은 값: ${showValue(` 가 9곳이라는 검사)가 깨진다. G-14C가 방금 세운 방지턱을 다음 커밋이
+다시 쓰는 모양이 되므로, 8행 중복을 받아들이고 **엔진 간 결합을 만들지 않는 쪽**을 골랐다.
+`itemGuards`는 계속 `types`만 import하는 leaf다.
+
+⚠ 결과 비교용 `fingerprint()`의 `JSON.stringify`는 표시용이 아니므로 **대상이 아니다.**
+
+#### 차분 결과 (기준선 `72e0c96` 소스와 수정본을 각각 번들해 직접 호출, 실행 확인)
+
+| 버킷 | 건수 | 동일 | 차이 |
+| --- | --- | --- | --- |
+| 1. 정상 직렬화 값의 표시 | 38 | **38** | 0 |
+| 2. 예외를 던지던 값의 `rejected` 전환 | 6 | 0 | **6**(의도) |
+| 3. 반환 계약 8필드 + 첫 안내 + `notes.length` | 43 | **43** | 0 |
+| 4. 정상 입력 계산 결과(별도 보장종목·일반 전환·상급병실료 전 조합) | 882 | **882** | 0 |
+| 5. 두 엔진 × 두 진입점의 위험 값 | 21 | 0 | **21**(의도) |
+| 6. null-prototype + `bigint`의 고정 대체 문구 | 1 | 0 | **1**(의도) |
+| 7. `multiClaim2026.ts` 무변경 | 1 | **1** | 0 |
+
+합계 **992건 · 동일 964 · 차이 28**, 차이는 전부 버킷 2·5·6의 의도된 전환이다. 그 28건은 모두
+**기준선에서 예외 → 수정본에서 `route:"rejected"`** 형태였고, 수정본의 **잔여 런타임 예외는
+0건**이다.
+
+변조 **6종을 모두 검출**했다 — ①안전 표시 제거로 종전 표현 복원(`bigint` throw) ②첫 번째
+try/catch 제거(순환 throw) ③`String()` 폴백 제거 ④고정 문구 제거(표시 불가 값에서 throw)
+⑤첫 번째 안내 문장 변경 ⑥`totalAmount`를 `null`로 변경. 6종 모두 **신규 테스트가 행위로**
+잡았고, `gen2026HoldStatus`의 FROZEN 해시도 함께 잡았다(바이트 해시라 어떤 변경이든 잡는다 —
+행위 검출과 별개의 경로다). 검사 후 원본과 바이트 단위로 대조해 원복을 확인했다.
+
+⚠ `tests/gen2026HoldStatus.test.ts`의 FROZEN 표에 있던 `itemGuards.ts` 해시를 **의도적으로**
+갱신했다(`c10d2fea…` → `ad08c2d9…`). 갱신 이유를 그 자리에 주석으로 남겼다.
+`roomCharge2026.ts` 해시는 그대로다.
+
+#### 범위 밖으로 남긴 것
+
+- `outpatientCoverageLimit`·`nhisCoinsuranceRate`·`tier`의 전체 경로 봉인, 4세대 금액 축의 관용
+  검증(§5.22와 같다).
+- G-14A pool 공유 범위 HOLD, 지급 0원 HOLD 3종, 상급병실료 HOLD — 어느 것도 건드리지 않았다.
+- 통원 가입금액에 `0`을 넣으면 "미적용"이 되는 동작(`generation2026.ts`의 `value <= 0 →
+  undefined`). G-14C 이전부터 있던 의도된 동작이며 주석에 근거가 있다.
+
+새 계약은 `tests/gen2026RejectedSafeDisplay.test.ts`(85건)가 본다.

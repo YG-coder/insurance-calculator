@@ -114,6 +114,29 @@ const GEN2026_COUNTED_ITEM_ANNUAL_VISITS: Record<Gen2026CountedItem, number> = {
  */
 const coveredCount = nonNegSafeInt;
 
+/** 복제 버튼이 한 번에 만들 수 있는 최대 행 수(5세대 화면의 종전 상한). */
+const GEN2026_MAX_COPIES = 100;
+/**
+ * 복제 **횟수** 전용 파서(5세대). 이 값은 "만들 행 수"일 뿐이고 보험 횟수·한도·소진
+ * 상태와 아무 관계가 없다 — 통원 카운터(`nonNegSafeInt`)나 보상 횟수(`coveredCount`)와
+ * **재사용하지 않는다.** 허용 범위도 다르다(여기는 1 이상 상한 이하, 저기는 0 이상).
+ *
+ * ⚠ 공용 `num()`을 쓰면 안 된다. 실측: `1e3`→**13행**, `1,0`→**10행**, `20만`→**20행**,
+ *   `1.5`→1행(내림), `abc`·빈 값·공백·`0`→**1행**. 종전에는 무효값에서도 복제가 실행돼
+ *   **이미 입력한 행을 전부 지우고 1행으로 만들었다**(4행 → 1행을 실측).
+ * ⚠ 상한을 넘는 값을 상한으로 **깎지 않는다.**
+ * ⚠ 4세대·2·3세대 파서를 재사용하지 않는다. 상한과 라벨·안내가 화면마다 다르다.
+ *
+ * 유효: 1 이상 GEN2026_MAX_COPIES 이하의 안전 정수.
+ * 무효(null): 빈 값·공백·`0`·상한 초과·부호·소수·지수 표기·쉼표·문자·안전 정수 초과.
+ */
+const GEN2026_COPY_FORMAT = /^[0-9]+$/;
+const gen2026CopyCount = (v: string): number | null => {
+  if (!GEN2026_COPY_FORMAT.test(v)) return null;
+  const n = Number(v);
+  return Number.isSafeInteger(n) && n >= 1 && n <= GEN2026_MAX_COPIES ? n : null;
+};
+
 const roomChargeAmount = (v: string): number | null => {
   if (!ROOM_CHARGE_AMOUNT_FORMAT.test(v)) return null;
   const n = Number(v.replace(/,/g, ""));
@@ -570,6 +593,8 @@ export default function HealthCalcMulti2026() {
    *   ⚠ 대체될 다른 행이 무효여도 복제는 막지 않는다 — 어차피 원본으로 덮인다.
    */
   const copySourceInvalid = gen2026Amount(amounts[0] ?? "") === null;
+  const copyCountNum = gen2026CopyCount(copyCount);
+  const copyCountInvalid = copyCountNum === null;
 
   // ⚠ 무효 행은 위 게이트가 엔진 호출 자체를 막는다. 0원으로 대체하거나 행을 지우지 않는다.
   //   0원으로 바꾸면 사용자가 입력하지 않은 금액을 계산기가 만들어 내는 것이고, 결과표에
@@ -810,12 +835,17 @@ export default function HealthCalcMulti2026() {
           </label>
           <button className={smallButton} disabled={amounts.length === 1} onClick={() => setAmounts((old) => old.filter((_, j) => j !== i))}>삭제</button>
         </div>)}</div>
-        <div className="mt-3 flex flex-wrap gap-2"><button className={smallButton} onClick={() => setAmounts((old) => [...old, ""])}>행 추가</button><input className="input-base w-20" value={copyCount} onChange={(e) => setCopyCount(e.target.value)} aria-label="복사할 횟수" /><button className={smallButton} disabled={copySourceInvalid} onClick={() => {
+        <div className="mt-3 flex flex-wrap gap-2"><button className={smallButton} onClick={() => setAmounts((old) => [...old, ""])}>행 추가</button><input className="input-base w-20" inputMode="numeric" autoComplete="off" value={copyCount} onChange={(e) => setCopyCount(e.target.value)} aria-label="복사할 횟수" /><button className={smallButton} disabled={copySourceInvalid || copyCountInvalid} onClick={() => {
           // ⚠ 버튼 비활성만으로는 부족하다. 핸들러에서도 원본을 다시 검증한다.
           if (copySourceInvalid) return;
-          setAmounts(Array.from({ length: Math.max(1, Math.min(100, Math.floor(num(copyCount)))) }, () => amounts[0] ?? ""));
+          // ⚠ 무효한 횟수로 실행되면 종전처럼 **이미 입력한 행이 지워지고 1행만 남는다.**
+          if (copyCountNum === null) return;
+          setAmounts(Array.from({ length: copyCountNum }, () => amounts[0] ?? ""));
         }}>첫 금액 × N회</button></div>
         {copySourceInvalid && <p className="mt-2 text-xs text-slate-500">1건 진료비를 올바르게 입력하면 복제할 수 있습니다. 실제로 0원이면 <b>0</b>을 입력하세요.</p>}
+        {/* ⚠ 경고 상자를 새로 띄우지 않는다. 버튼 비활성과 짧은 입력 안내로 충분하고,
+               이미 입력한 행과 계산 결과는 그대로 둔다. */}
+        {copyCountInvalid && <p className="mt-2 text-xs text-slate-500">복사할 횟수는 <b>1</b>부터 <b>{GEN2026_MAX_COPIES}</b>까지의 정수여야 합니다. 계산기가 임의로 1이나 {GEN2026_MAX_COPIES}로 바꾸지 않으며, 이미 입력한 행은 그대로 둡니다.</p>}
       </>}
 
     {/* ── 누적 입력 ── */}

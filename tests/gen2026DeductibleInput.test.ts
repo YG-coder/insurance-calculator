@@ -405,12 +405,13 @@ console.log("\n[소스] 형식 우선 검증 · 전달 조건 · 타입 단언 �
     /const priorInsuranceNum = priorInsurance === "" \? 0 : gen2026Money\(priorInsurance\);/.test(code)
     && /const money = priorInsuranceNum === null \|\| annualLimitNum === null \|\| outpatientLimitNum === null/.test(code)
     && (code.match(/priorAnnualInsurancePaid: money\.prior,/g) ?? []).length === 7);
-  // ⚠ 계약 교체(G-13A): `num(priorCount)`는 사라졌다 — 보상 횟수는 항목별 전용 파서를 쓴다.
-  //   `nhisRate`·`copyCount`는 아직 num()이며 이번 범위가 아니다.
-  check("num()은 남은 자리에서 그대로 쓰인다",
+  // ⚠ 계약 교체(G-13A·G-13B): `num(priorCount)`(G-13A)와 `num(copyCount)`(G-13B)는 사라졌다.
+  //   각각 항목별 보상 횟수 파서와 세대별 복제 횟수 파서를 쓴다.
+  //   `nhisRate`만 아직 num()이며 G-13C 범위로 남겼다.
+  check("num()은 nhisRate 한 자리에만 남아 있다",
     /const num = \(v: string\) => Number\(v\.replace\(\/\[\^0-9\.\]\/g, ""\)\) \|\| 0;/.test(code)
-    && /num\(nhisRate\)/.test(code) && /num\(copyCount\)/.test(code)
-    && !/num\(priorCount\)/.test(code));
+    && /num\(nhisRate\)/.test(code)
+    && !/num\(copyCount\)/.test(code) && !/num\(priorCount\)/.test(code));
   const widgetSrc = readFileSync("src/components/RawAmountInput.tsx", "utf8");
   check("공용 위젯 파일은 그대로다",
     !/\.trim\(/.test(widgetSrc) && !/\.replace\(/.test(widgetSrc) && !/slice\(/.test(widgetSrc));

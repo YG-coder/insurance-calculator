@@ -209,8 +209,11 @@ console.log("\n[범위] 다른 세대·엔진은 건드리지 않았다");
   const g5 = readFileSync("src/components/calculators/HealthCalcMulti2026.tsx", "utf8");
   const settle = readFileSync("src/lib/insurance/common/settle.ts", "utf8");
   const multi = readFileSync("src/lib/insurance/engine/multiClaim.ts", "utf8");
-  check("4세대 다회는 여전히 digits()로 진료비를 읽는다(범위 밖)",
-    /const digits = \(v: string\) => Number\(v\.replace\(\/\[\^0-9\]\/g, ""\)\) \|\| 0;/.test(g4));
+  // ⚠ 계약 교체(G-13B): 복제 횟수가 전용 파서 `gen2021CopyCount`로 바뀌었고 공용 `digits()`는
+  //   마지막 사용처가 사라져 삭제됐다. 1~GEN2021_MAX_COPIES만 허용하고 절삭하지 않는다.
+  check("4세대 다회 진료비는 전용 파서를 쓴다(공용 digits()는 삭제됨)",
+    /const gen2021Amount = \(v: string\): number \| null =>/.test(g4)
+    && !/const digits = \(v: string\) =>/.test(g4));
   check("5세대 다회는 여전히 num()으로 진료비를 읽는다(범위 밖)",
     /const num = \(v: string\) => Number\(v\.replace\(\/\[\^0-9.\]\/g, ""\)\) \|\| 0;/.test(g5));
   check("엔진 normalizeAmount는 그대로다",
@@ -229,8 +232,12 @@ console.log("\n[범위] 다른 세대·엔진은 건드리지 않았다");
     && /perVisitCoverageLimit: money\.perVisit,/.test(ui)
     && !/stdAmount\(priorPaid\)/.test(ui) && !/stdAmount\(perVisitLimit\)/.test(ui)
     && !/onlyNum\(priorPaid\)/.test(ui) && !/onlyNum\(perVisitLimit\)/.test(ui));
-  check("빠른 채우기 횟수는 여전히 onlyNum()을 쓴다(범위 밖)",
-    /Math\.max\(1, onlyNum\(quickCount\) \|\| 1\)/.test(ui));
+  // ⚠ 계약 교체(G-13B): 반복 횟수가 전용 파서 `stdRepeatCount`로 바뀌었고 공용 `onlyNum()`은
+  //   마지막 사용처가 사라져 삭제됐다. 1~MAX_ROWS만 허용하고 절삭하지 않는다.
+  check("빠른 채우기 횟수는 전용 파서를 쓴다(공용 onlyNum()은 삭제됨)",
+    /const quickCountNum = stdRepeatCount\(quickCount\);/.test(ui)
+    && !/onlyNum\(quickCount\)/.test(ui)
+    && !/const onlyNum = \(v: string\) =>/.test(ui));
 }
 
 console.log(`\n[2·3세대 진료비 입력 검증] ✅ ${pass} / ❌ ${fail}`);

@@ -439,7 +439,11 @@ console.log("\n[무회귀] 진료비·횟수·빠른채우기·상한 계약 그
   check("횟수 복구 후 재개", screenOf(h).calculated);
   check("진료비 파서 그대로", /const STD_AMOUNT_FORMAT = \/\^\(\?:\[0-9\]\+\|\[1-9\]\[0-9\]\{0,2\}\(\?:,\[0-9\]\{3\}\)\+\)\$\/;/.test(ui));
   check("횟수 파서 그대로", /const STD_COUNT_FORMAT = \/\^\[0-9\]\+\$\/;/.test(ui));
-  check("빠른 채우기 횟수는 onlyNum 그대로", /Math\.max\(1, onlyNum\(quickCount\) \|\| 1\)/.test(ui));
+  // ⚠ 계약 교체(G-13B): 반복 횟수가 전용 파서 `stdRepeatCount`로 바뀌었고 공용 `onlyNum()`은
+  //   마지막 사용처가 사라져 삭제됐다. 1~MAX_ROWS만 허용하고 절삭하지 않는다.
+  check("빠른 채우기 횟수는 전용 파서 stdRepeatCount다",
+    /const stdRepeatCount = \(v: string\): number \| null =>/.test(ui)
+    && !/onlyNum\(quickCount\)/.test(ui));
   const q = make("외래만");
   typeInto(q, "std-quick-amount", "100000");
   clickButton(q, "채우기");

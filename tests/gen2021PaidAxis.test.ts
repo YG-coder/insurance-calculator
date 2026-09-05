@@ -372,9 +372,12 @@ console.log("\n[무회귀] 파서·초기값·상한·기존 동작은 그대로
 {
   // ⚠ G-6이 금액 두 축의 파서를 `digits()`에서 `gen2021Money`로 바꿨다. 축 분리(G-5)
   //   계약은 그대로여야 하므로, 여기서는 **활성 축의 값이 그대로 전달되는지**를 본다.
-  check("복제 횟수는 여전히 digits()다(범위 밖)",
-    /const digits = \(v: string\) => Number\(v\.replace\(\/\[\^0-9\]\/g, ""\)\) \|\| 0;/.test(ui)
-    && /Math\.min\(100, digits\(copyCount\)\)/.test(ui));
+  // ⚠ 계약 교체(G-13B): 복제 횟수가 전용 파서 `gen2021CopyCount`로 바뀌었고 공용 `digits()`는
+  //   마지막 사용처가 사라져 삭제됐다. 1~GEN2021_MAX_COPIES만 허용하고 절삭하지 않는다.
+  check("복제 횟수는 전용 파서를 쓰고 공용 digits()는 삭제됐다",
+    /const gen2021CopyCount = \(v: string\): number \| null =>/.test(ui)
+    && !/const digits = \(v: string\) =>/.test(ui)
+    && !/digits\(copyCount\)/.test(ui));
   check("지급보험금은 활성 축 값 하나만 전달한다",
     /priorAnnualRiderPaid: isRider \? money\.priorPaid : undefined,/.test(ui)
     && (ui.match(/priorAnnualInsurancePaid: money\.priorPaid,/g) ?? []).length === 3
@@ -391,10 +394,10 @@ console.log("\n[무회귀] 파서·초기값·상한·기존 동작은 그대로
     && /const \[priorManualVisits, setPriorManualVisits\] = useState\(""\);/.test(ui)
     && /const \[priorInjectionVisits, setPriorInjectionVisits\] = useState\(""\);/.test(ui));
   check("승인 회차 축 그대로", /approvedThroughVisit: approvedThrough === "" \? undefined : approvedThrough/.test(ui));
-  check("진료비·복제 계약 그대로",
+  check("진료비 계약 그대로 · 복제는 전용 파서(G-13B)",
     /const gen2021Amount = \(v: string\): number \| null =>/.test(ui)
     && /const copySourceInvalid = gen2021Amount\(amounts\[0\] \?\? ""\) === null;/.test(ui)
-    && /Math\.max\(1, Math\.min\(100, digits\(copyCount\)\)\)/.test(ui));
+    && /Array\.from\(\{ length: copyCountNum \}/.test(ui));
 
   // 상한 적용과 기존 계산은 그대로 — 축 하나만 쓰는 계산은 종전과 같은 값이다.
   //   축 이동은 여기서도 실제 선택창으로만 한다.

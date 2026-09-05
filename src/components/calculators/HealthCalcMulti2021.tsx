@@ -16,7 +16,9 @@ import {
 import { CAP_LABELS } from "@/lib/insurance/engine/capLabels";
 import { GEN2021 } from "@/lib/insurance/engine/constants";
 
-const digits = (v: string) => Number(v.replace(/[^0-9]/g, "")) || 0;
+// ⚠ 종전 공용 정제 `digits()`(= `Number(v.replace(/[^0-9]/g, "")) || 0`)는 이 커밋에서
+//   마지막 사용처(복제 횟수)가 사라져 **삭제했다.** 아래 주석들이 이 이름을 언급하는 것은
+//   "그 관용 정제를 쓰면 안 된다"는 근거를 남기기 위해서다.
 const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
 
 /**
@@ -98,6 +100,29 @@ const gen2021Count = (v: string): number | null => {
   if (!GEN2021_COUNT_FORMAT.test(v)) return null;
   const n = Number(v);
   return Number.isSafeInteger(n) && n >= 0 ? n : null;
+};
+
+/** 복제 버튼이 한 번에 만들 수 있는 최대 행 수(4세대 화면의 종전 상한). */
+const GEN2021_MAX_COPIES = 100;
+/**
+ * 복제 **횟수** 전용 파서(4세대). 이 값은 "만들 행 수"일 뿐이고 보험 횟수·한도·소진
+ * 상태와 아무 관계가 없다 — `gen2021Count`(통원·특약 횟수)와 **재사용하지 않는다.**
+ * 허용 범위도 다르다(여기는 1 이상 상한 이하, 저기는 0 이상 무제한).
+ *
+ * ⚠ 공용 `digits()`를 쓰면 안 된다. 실측: `1.5`→**15행**(점을 지운다), `1e3`→**13행**,
+ *   `1,0`→**10행**, `20만`→**20행**, `abc`·빈 값·공백·`0`→**1행**. 종전에는 무효값에서도
+ *   복제가 실행돼 **이미 입력한 행을 전부 지우고 1행으로 만들었다**(4행 → 1행을 실측).
+ * ⚠ 상한을 넘는 값을 상한으로 **깎지 않는다.**
+ * ⚠ 5세대·2·3세대 파서를 재사용하지 않는다. 상한과 라벨·안내가 화면마다 다르다.
+ *
+ * 유효: 1 이상 GEN2021_MAX_COPIES 이하의 안전 정수.
+ * 무효(null): 빈 값·공백·`0`·상한 초과·부호·소수·지수 표기·쉼표·문자·안전 정수 초과.
+ */
+const GEN2021_COPY_FORMAT = /^[0-9]+$/;
+const gen2021CopyCount = (v: string): number | null => {
+  if (!GEN2021_COPY_FORMAT.test(v)) return null;
+  const n = Number(v);
+  return Number.isSafeInteger(n) && n >= 1 && n <= GEN2021_MAX_COPIES ? n : null;
 };
 
 /**
@@ -215,6 +240,8 @@ export default function HealthCalcMulti2021() {
   //   다른 행이 무효여도 복제는 그 행들을 어차피 전부 대체하므로 막지 않는다.
   //   ⚠ 명시적 0은 유효값이라 복제할 수 있다.
   const copySourceInvalid = gen2021Amount(amounts[0] ?? "") === null;
+  const copyCountNum = gen2021CopyCount(copyCount);
+  const copyCountInvalid = copyCountNum === null;
 
   // ⚠ 축은 분기마다 자기 것만 싣는다. 스프레드로 공통에 두면 쓰이지 않는 경로에도
   //   같은 필드가 따라 들어가고, 초과 필드는 타입 검사에서 드러나지 않는다.
@@ -327,17 +354,25 @@ export default function HealthCalcMulti2021() {
         ))}
         <div className="flex flex-wrap gap-2">
           <button type="button" className={smallButton} onClick={() => setAmounts((old) => [...old, ""])}>행 추가</button>
-          <input className="input-base w-20" inputMode="numeric" value={copyCount} onChange={(e) => setCopyCount(e.target.value)} aria-label="복사할 횟수" />
-          <button type="button" className={smallButton} disabled={copySourceInvalid} onClick={() => {
+          <input className="input-base w-20" inputMode="numeric" autoComplete="off" value={copyCount} onChange={(e) => setCopyCount(e.target.value)} aria-label="복사할 횟수" />
+          <button type="button" className={smallButton} disabled={copySourceInvalid || copyCountInvalid} onClick={() => {
             // ⚠ 버튼 비활성만으로는 부족하다. 핸들러에서도 막는다 — 무효한 첫 행을
             //   전 행에 복제하면 한 번에 모든 행이 무효가 된다.
             if (copySourceInvalid) return;
-            setAmounts(Array.from({ length: Math.max(1, Math.min(100, digits(copyCount))) }, () => amounts[0] ?? ""));
+            // ⚠ 무효한 횟수로 실행되면 종전처럼 **이미 입력한 행이 지워지고 1행만 남는다.**
+            if (copyCountNum === null) return;
+            setAmounts(Array.from({ length: copyCountNum }, () => amounts[0] ?? ""));
           }}>첫 금액 × N회</button>
         </div>
         {copySourceInvalid && <p className="mt-2 text-xs text-amber-700">
           복제할 <b>1건 진료비</b>가 <b>0 이상의 정수</b>여야 합니다(<b>100000</b> 또는 <b>100,000</b>).
           음수·소수·문자·잘못된 쉼표는 계산기가 임의로 고치지 않습니다.
+        </p>}
+        {/* ⚠ 경고 상자를 새로 띄우지 않는다. 버튼 비활성과 짧은 입력 안내로 충분하고,
+               이미 입력한 행과 계산 결과는 그대로 둔다. */}
+        {copyCountInvalid && <p className="mt-2 text-xs text-slate-500">
+          복사할 횟수는 <b>1</b>부터 <b>{GEN2021_MAX_COPIES}</b>까지의 정수여야 합니다. 계산기가 임의로 1이나 {GEN2021_MAX_COPIES}로
+          바꾸지 않으며, 이미 입력한 행은 그대로 둡니다.
         </p>}
       </div>
 

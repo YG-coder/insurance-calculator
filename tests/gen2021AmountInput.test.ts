@@ -184,8 +184,12 @@ console.log("\n[복제] 원본은 첫 행 진료비다 — 별도 금액 칸이 
   check("첫 행이 무효면 이유를 화면에 밝힌다",
     setup({ amounts: ["-1", "100000"], priorOutVisits: "0" }).render().nodes
       .some((n) => n.tag === "p" && n.text.includes("복제할")));
-  check("copyCount 정책은 그대로다(digits 사용·1~100 클램프)",
-    /Math\.max\(1, Math\.min\(100, digits\(copyCount\)\)\)/.test(ui));
+  // ⚠ 계약 교체(G-13B): 복제 횟수가 전용 파서 `gen2021CopyCount`로 바뀌었고 공용 `digits()`는
+  //   마지막 사용처가 사라져 삭제됐다. 1~GEN2021_MAX_COPIES만 허용하고 절삭하지 않는다.
+  check("copyCount는 전용 파서를 쓰고 절삭하지 않는다",
+    /const gen2021CopyCount = \(v: string\): number \| null =>/.test(ui)
+    && /Array\.from\(\{ length: copyCountNum \}/.test(ui)
+    && !/Math\.min\(100, digits\(copyCount\)\)/.test(ui));
 }
 
 // ── 유지해야 할 계약 ─────────────────────────────────────────────────

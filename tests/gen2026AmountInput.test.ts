@@ -292,8 +292,12 @@ console.log("\n[복제] 원본은 첫 행 진료비다");
   check("첫 행이 무효면 이유를 화면에 밝힌다",
     screenOf(setup({ ...base, amounts: ["-1", "300000"] })).s.nodes
       .some((n) => n.tag === "p" && n.text.includes("복제할")));
-  check("copyCount 정책은 그대로다(num 사용·1~100 클램프·내림)",
-    /Math\.max\(1, Math\.min\(100, Math\.floor\(num\(copyCount\)\)\)\)/.test(ui));
+  // ⚠ 계약 교체(G-13B): 복제 횟수가 전용 파서 `gen2026CopyCount`로 바뀌었다. `num()`은
+  //   `nhisRate`에서만 쓰이며(G-13C 범위) 여기서는 더 이상 쓰지 않는다.
+  check("copyCount는 전용 파서를 쓰고 절삭·내림하지 않는다",
+    /const gen2026CopyCount = \(v: string\): number \| null =>/.test(ui)
+    && /Array\.from\(\{ length: copyCountNum \}/.test(ui)
+    && !/Math\.floor\(num\(copyCount\)\)/.test(ui));
 }
 
 // ── 안내 문구 ────────────────────────────────────────────────────────

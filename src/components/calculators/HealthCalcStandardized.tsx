@@ -14,7 +14,9 @@ type Row = { id: number; amount: string; visit: Visit; facility: Facility };
 const MAX_ROWS = 20;
 
 const won = (n: number) => `${Math.max(0, Math.round(n)).toLocaleString("ko-KR")}원`;
-const onlyNum = (v: string) => Number(v.replace(/[^0-9]/g, "")) || 0;
+// ⚠ 종전 공용 정제 `onlyNum()`(= `Number(v.replace(/[^0-9]/g, "")) || 0`)은 이 커밋에서
+//   마지막 사용처(빠른 채우기 반복 횟수)가 사라져 **삭제했다.** 아래 주석들이 이 이름을
+//   언급하는 것은 "그 관용 정제를 쓰면 안 된다"는 근거를 남기기 위해서다.
 
 /**
  * 2·3세대 **진료비** 문자열 파서. **원문을 변형 전에 형식으로 판정한다.**
@@ -98,6 +100,28 @@ const stdCount = (v: string): number | null => {
   if (!STD_COUNT_FORMAT.test(v)) return null;
   const n = Number(v);
   return Number.isSafeInteger(n) && n >= 0 ? n : null;
+};
+
+/**
+ * 빠른 채우기 **반복 횟수** 전용 파서(2·3세대). 이 값은 "만들 행 수"일 뿐이고
+ * 보험 횟수·한도·소진 상태와 아무 관계가 없다 — `stdCount`(외래 방문·처방전 횟수)와
+ * **재사용하지 않는다.** 두 값은 허용 범위도 다르다(여기는 1 이상, 저기는 0 이상).
+ *
+ * ⚠ 공용 `onlyNum()`을 쓰면 안 된다. 실측: `1.5`→**15행**(점을 지운다), `1e3`→**13행**,
+ *   `1,0`→**10행**, `20만`→**20행**, `abc`·빈 값·공백·`0`→**1행**. 게다가 종전에는
+ *   무효값에서도 `채우기`가 실행돼 **이미 입력한 행을 전부 지우고 1행으로 만들었다**
+ *   (4행 → 1행을 실측). 화면에 보이는 값과 실제로 만들어지는 행 수가 갈렸다.
+ * ⚠ 상한을 넘는 값을 상한으로 **깎지 않는다.** 깎으면 사용자가 21을 넣었는데 20행이
+ *   말없이 만들어진다.
+ *
+ * 유효: 1 이상 MAX_ROWS 이하의 안전 정수(`1`, `01`, `20`).
+ * 무효(null): 빈 값·공백·`0`·상한 초과·부호·소수·지수 표기·쉼표·문자·안전 정수 초과.
+ */
+const STD_REPEAT_FORMAT = /^[0-9]+$/;
+const stdRepeatCount = (v: string): number | null => {
+  if (!STD_REPEAT_FORMAT.test(v)) return null;
+  const n = Number(v);
+  return Number.isSafeInteger(n) && n >= 1 && n <= MAX_ROWS ? n : null;
 };
 
 const btn = (active: boolean) =>
@@ -204,10 +228,15 @@ export default function HealthCalcStandardized() {
 
   // 빠른 채우기 금액은 모든 행의 진료비를 덮어쓴다. 같은 규칙으로 판정한다.
   const quickAmountInvalid = stdAmount(quickAmount) === null;
+  const quickCountNum = stdRepeatCount(quickCount);
+  const quickCountInvalid = quickCountNum === null;
   const quickFill = () => {
     // ⚠ 잘못된 금액을 행에 복사하지 않는다. 복사하면 전 행이 한꺼번에 무효가 된다.
     if (quickAmountInvalid) return;
-    const count = Math.min(MAX_ROWS, Math.max(1, onlyNum(quickCount) || 1));
+    // ⚠ 버튼 비활성만으로는 부족하다. 핸들러에서도 막는다 — 무효한 횟수로 실행되면
+    //   종전처럼 **이미 입력한 행이 지워지고 1행만 남는다.**
+    if (quickCountNum === null) return;
+    const count = quickCountNum;
     const base = rows[0] ?? newRow();
     setRows(
       Array.from({ length: count }, () => ({
@@ -330,16 +359,18 @@ export default function HealthCalcStandardized() {
           </p>
           <div className="mt-3 grid grid-cols-1 sm:grid-cols-[1fr_7rem_auto] gap-2">
             <RawAmountInput id="std-quick-amount" value={quickAmount} onChange={setQuickAmount} placeholder="1회 금액" ariaLabel="빠른 채우기 1회 금액" />
+            {/* ⚠ `type="number"`가 아니라 원문 보존 입력이다. `type="number"`는 `1e3`·`1.5`를
+                   그대로 통과시키면서 화면에는 원문을 남겨, 보이는 값과 만들어지는 행 수가
+                   갈렸다. `min`·`max`도 제거한다 — 브라우저 힌트일 뿐 값을 막지 못했다. */}
             <input
               aria-label="반복 횟수"
-              type="number"
-              min={1}
-              max={MAX_ROWS}
+              inputMode="numeric"
+              autoComplete="off"
               className="input-base w-full"
               value={quickCount}
               onChange={(e) => setQuickCount(e.target.value)}
             />
-            <button type="button" disabled={quickAmountInvalid} className="px-4 py-3 rounded-xl border border-slate-300 text-sm font-semibold text-slate-700 hover:border-brand-300 disabled:cursor-not-allowed disabled:opacity-50" onClick={quickFill}>
+            <button type="button" disabled={quickAmountInvalid || quickCountInvalid} className="px-4 py-3 rounded-xl border border-slate-300 text-sm font-semibold text-slate-700 hover:border-brand-300 disabled:cursor-not-allowed disabled:opacity-50" onClick={quickFill}>
               채우기
             </button>
           </div>
@@ -347,6 +378,14 @@ export default function HealthCalcStandardized() {
             <p className="mt-2 text-xs text-amber-700">
               채울 금액은 <b>0 이상의 정수</b>여야 합니다(<b>300000</b> 또는 <b>300,000</b>). 음수·소수·문자·잘못된 쉼표는
               계산기가 임의로 고치지 않습니다.
+            </p>
+          )}
+          {/* ⚠ 경고 상자를 새로 띄우지 않는다. 이 값은 버튼을 누를 때만 쓰이므로 버튼
+                 비활성과 짧은 입력 안내로 충분하다. 이미 입력한 행과 계산 결과는 그대로 둔다. */}
+          {quickCountInvalid && (
+            <p className="mt-2 text-xs text-slate-500">
+              반복 횟수는 <b>1</b>부터 <b>{MAX_ROWS}</b>까지의 정수여야 합니다. 계산기가 임의로 1이나 {MAX_ROWS}로 바꾸지 않으며,
+              이미 입력한 행은 그대로 둡니다.
             </p>
           )}
         </div>

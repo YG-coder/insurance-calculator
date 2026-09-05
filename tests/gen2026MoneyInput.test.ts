@@ -392,12 +392,13 @@ console.log("\n[소스] 파서·게이트·전달 형태");
     && /<RawAmountInput id="gen2026-prior-pool" value=\{priorPool\}/.test(code)
     && !/value=\{priorDeductible\} onChange=\{\(e\) => setPriorDeductible\(e\.target\.value\)\}/.test(code)
     && !/value=\{priorPool\} onChange=\{\(e\) => setPriorPool\(e\.target\.value\)\}/.test(code));
-  // ⚠ 계약 교체(G-13A): `num(priorCount)`는 사라졌다 — 보상 횟수는 항목별 전용 파서를 쓴다.
-  //   `nhisRate`·`copyCount`는 아직 num()이며 이번 범위가 아니다.
-  check("num()은 남은 자리에서 그대로 쓰인다",
+  // ⚠ 계약 교체(G-13A·G-13B): `num(priorCount)`(G-13A)와 `num(copyCount)`(G-13B)는 사라졌다.
+  //   각각 항목별 보상 횟수 파서와 세대별 복제 횟수 파서를 쓴다.
+  //   `nhisRate`만 아직 num()이며 G-13C 범위로 남겼다.
+  check("num()은 nhisRate 한 자리에만 남아 있다",
     /const num = \(v: string\) => Number\(v\.replace\(\/\[\^0-9\.\]\/g, ""\)\) \|\| 0;/.test(code)
-    && /num\(nhisRate\)/.test(code) && /num\(copyCount\)/.test(code)
-    && !/num\(priorCount\)/.test(code));
+    && /num\(nhisRate\)/.test(code)
+    && !/num\(copyCount\)/.test(code) && !/num\(priorCount\)/.test(code));
   check("공용 위젯 파일은 그대로다",
     !/trim\(|replace\(/.test(stripComments(readFileSync("src/components/RawAmountInput.tsx", "utf8")))
     && /replace\(\/\[\^0-9\]\/g, ""\)\.slice\(0, MAX_AMOUNT_DIGITS\)/.test(readFileSync("src/components/AmountInput.tsx", "utf8")));
@@ -453,9 +454,9 @@ console.log("\n[무회귀] 공제금액·진료비·횟수·승인·복제·HOLD
   check("상급병실료 계산 유지", scr(r).calc, scr(r).warn.slice(0, 40));
   r.set("rcRows", [{ amount: "600000", days: "0" }]);
   check("상급병실료 일수 게이트 유지", !scr(r).calc && scr(r).warn.includes("총 입원일수"));
-  check("진료비 파서·복제 정책 그대로",
+  check("진료비 파서 그대로 · 복제는 전용 파서(G-13B)",
     /const gen2026Amount = \(v: string\): number \| null =>/.test(ui)
-    && /Math\.max\(1, Math\.min\(100, Math\.floor\(num\(copyCount\)\)\)\)/.test(ui));
+    && /Array\.from\(\{ length: copyCountNum \}/.test(ui));
   check("승인 회차 기본값 그대로", /GEN2026_MSK_APPROVED_THROUGH_VALUES\[0\]/.test(ui));
 }
 

@@ -369,7 +369,11 @@ console.log("\n[소스] 파서·게이트·전달 형태");
     && !/priorPaidNum as number/.test(src) && !/annualLimitNum as number/.test(src));
   check("금액 두 축에 digits()를 쓰지 않는다",
     !/digits\(priorPaid\)/.test(src) && !/digits\(annualLimit\)/.test(src));
-  check("복제 횟수는 여전히 digits()다(범위 밖)", /Math\.min\(100, digits\(copyCount\)\)/.test(src));
+  // ⚠ 계약 교체(G-13B): 복제 횟수가 전용 파서 `gen2021CopyCount`로 바뀌었고 공용 `digits()`는
+  //   마지막 사용처가 사라져 삭제됐다. 1~GEN2021_MAX_COPIES만 허용하고 절삭하지 않는다.
+  check("복제 횟수는 전용 파서 gen2021CopyCount다",
+    /const gen2021CopyCount = \(v: string\): number \| null =>/.test(src)
+    && !/digits\(copyCount\)/.test(src));
   check("엔진 전달 형태", (src.match(/annualCoverageLimit: money\.annualLimit,/g) ?? []).length === 3
     && (src.match(/priorAnnualInsurancePaid: money\.priorPaid,/g) ?? []).length === 3
     && /priorAnnualRiderPaid: isRider \? money\.priorPaid : undefined,/.test(src));

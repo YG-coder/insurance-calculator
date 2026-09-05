@@ -299,12 +299,13 @@ console.log("\n[G-17] 8. 소스 계약");
   check("안내에 JSON.stringify를 쓰지 않는다", !/받은 값의 형식: \$\{JSON\.stringify/.test(body));
   check("일반·특약 안내를 나눠 쓴다",
     /기존 지급보험금\(priorAnnualInsurancePaid\)/.test(body) && /이 특약의 기존 지급보험금\(priorAnnualRiderPaid\)/.test(body));
-  check("nonNegInt를 지우지 않았다", /const nonNegInt = \(value: number \| undefined\) =>/.test(body));
-  check("nonNegInt의 정의가 그대로다",
-    /value !== undefined && Number\.isFinite\(value\) \? Math\.max\(0, Math\.floor\(value\)\) : 0;/.test(body));
-  check("annualCoverageLimit은 여전히 nonNegInt의 관용을 쓴다",
-    /input\.annualCoverageLimit === undefined \|\| nonNegInt\(input\.annualCoverageLimit\) <= 0/.test(body));
-  check("paid는 검증 뒤에 만든다", /let paid = nonNegInt\(paidRaw as number \| undefined\);/.test(body));
+  // ⚠ **낡은 계약을 교체했다.** G-17 시점에는 `nonNegInt()`가 `annualCoverageLimit` 때문에
+  //   남아 있었고, 이 절이 "지우지 않았다"를 고정했다. G-18이 그 축까지 검증으로 바꾸면서
+  //   파서의 마지막 사용처가 사라져 삭제됐다. 이 절이 지켜야 할 것은 파서의 존재가 아니라
+  //   **지급보험금 축이 정규화 없이 검증된 원값을 쓴다**는 사실이므로 그쪽으로 옮긴다.
+  //   nonNegInt 제거 자체와 가입금액 축의 새 계약은 gen2021AnnualLimitValue가 본다.
+  check("paid는 검증 뒤에 원값 그대로 만든다", /let paid = \(paidRaw as number \| undefined\) \?\? 0;/.test(body));
+  check("paidRaw에 정규화를 걸지 않는다", !/nonNegInt\(paidRaw/.test(body) && !/Math\.floor\(paidRaw/.test(body));
   // 순서: G-16 금액 → 횟수 → 승인 preflight → 지급보험금 → 계산
   const iAmt = body.indexOf("Array.isArray(rawAmounts)");
   const iCnt = body.indexOf('readCount(input, "priorAnnualOutpatientVisits")');

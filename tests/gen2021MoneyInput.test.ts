@@ -380,10 +380,13 @@ console.log("\n[소스] 파서·게이트·전달 형태");
 }
 {
   const eng = readFileSync("src/lib/insurance/engine/multiClaim2021.ts", "utf8");
-  check("엔진은 그대로다(정규화·상한·잔여액)",
-    /const nonNegInt = \(value/.test(eng)
-    && /GEN2021\.annualLimitMaximum/.test(eng)
+  // ⚠ **낡은 계약을 교체했다.** G-18이 관용 파서 `nonNegInt()`를 삭제했다(마지막 사용처인
+  //   연간 가입금액이 검증으로 바뀌었다). 이 검사가 확인하려던 것은 UI 파서가 바뀌어도
+  //   **엔진의 상한·잔여액 산식이 그대로**라는 점이므로, 사라진 파서 대신 그 두 가지를 본다.
+  check("엔진의 상한·잔여액 산식은 그대로다",
+    /GEN2021\.annualLimitMaximum/.test(eng)
     && /const remaining = Math\.max\(selectedLimit - paid, 0\);/.test(eng));
+  check("엔진에 관용 정규화가 남아 있지 않다", !/const nonNegInt = \(value/.test(eng));
   const g5 = readFileSync("src/components/calculators/HealthCalcMulti2026.tsx", "utf8");
   check("5세대 다회는 4세대 금액 파서를 재사용하지 않는다",
     !/gen2021Money/.test(g5) && !/GEN2021_MONEY_FORMAT/.test(g5));

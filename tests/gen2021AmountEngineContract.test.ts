@@ -256,12 +256,14 @@ console.log("\n[G-16] 7. 소스 계약");
   //   바꿨으므로(무효값 → blocked), 그 부분은 새 계약으로 옮기고 여기서는
   //   `annualCoverageLimit`이 아직 관용을 쓴다는 사실만 남긴다.
   //   두 지급보험금 축의 새 계약은 tests/gen2021PaidAxisValue.test.ts가 본다.
-  check("annualCoverageLimit은 아직 nonNegInt의 관용을 쓴다(후속 항목)",
-    /input\.annualCoverageLimit === undefined \|\| nonNegInt\(input\.annualCoverageLimit\) <= 0/.test(body));
+  // ⚠ **낡은 계약을 두 번째로 교체했다.** G-18이 `annualCoverageLimit`까지 검증으로 바꿨다.
+  //   그 축의 새 계약(허용·거부·안내 분리)은 tests/gen2021AnnualLimitValue.test.ts가 본다.
+  check("annualCoverageLimit도 형식 검증으로 옮겨졌다",
+    /if \(limitRaw !== undefined && badCount\(limitRaw\)\) \{/.test(body));
   check("지급보험금 2축은 더 이상 nonNegInt로 조용히 정규화되지 않는다",
     !/let paid = nonNegInt\(rider === "none" \? input\.priorAnnualInsurancePaid : input\.priorAnnualRiderPaid\);/.test(body)
     && /if \(paidRaw !== undefined && badCount\(paidRaw\)\) \{/.test(body));
-  check("nonNegInt 자체는 그대로 남아 있다", /const nonNegInt = \(value: number \| undefined\) =>/.test(body));
+  check("금액 누적 3축 어디에도 관용 정규화가 남아 있지 않다", !/nonNegInt/.test(body));
   // 상수는 건드리지 않았다.
   check("4세대 규칙값이 그대로",
     GEN2021.nonBenefitOutpatientAnnualVisits === 100

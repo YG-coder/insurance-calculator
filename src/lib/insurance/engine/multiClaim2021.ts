@@ -9,13 +9,18 @@ import {
   Gen2021Rider, MultiClaimResult,
 } from "./types";
 
-const nonNegInt = (value: number | undefined) =>
-  value !== undefined && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+// ⚠ 관용 파서 `nonNegInt()`를 이 파일에서 **삭제했다.** 마지막 사용처였던 연간 보험가입금액이
+//   엄격 검증으로 바뀌어, 이제 이 파일의 모든 숫자 축은 검증을 통과한 원값만 쓴다.
+//   `undefined`이거나 0 이상의 안전한 정수뿐이므로 정규화할 것이 남아 있지 않다.
+//   파서를 남겨 두면 다음에 추가되는 축이 다시 조용히 변형될 자리가 생긴다.
+//   ⚠ 2·3세대 `multiClaim.ts`와 5세대 `multiClaim2026.ts`는 각자 자기 사본을 가지며
+//     이번 변경 범위가 아니다. 그쪽 동작은 그대로다.
 
 /**
  * 0 이상의 안전한 정수인지만 보는 **형식 검증**(4세대 전용).
  *
- * ⚠ nonNegInt()의 관용(음수→0, NaN·Infinity→0, 문자열·객체→0, 소수 내림)을 물려받지 않는다.
+ * ⚠ 종전 관용 파서 nonNegInt()의 관용(음수→0, NaN·Infinity→0, 문자열·객체→0, 소수 내림)을
+ *   물려받지 않았다(그 파서는 이제 이 파일에 없다).
  *   실제로 nonNegInt()는 문자열 "100"과 Infinity를 **0**으로 만들었다 — "이미 100회 썼다"가
  *   "한 번도 안 썼다"가 되어 한도가 사라지고 보험금이 과다 산출된다.
  *   ⚠ 한도를 넘는 값도 유효한 과거 상태다. 절삭하지 않는다.
@@ -23,7 +28,8 @@ const nonNegInt = (value: number | undefined) =>
  * ⚠ 쓰는 곳: 두 횟수 축(일반 통원 100회·특약 50회)과, G-17에서 **활성 지급보험금 누적 축**
  *   (일반 priorAnnualInsurancePaid / 특약 priorAnnualRiderPaid)이 같은 형식 규칙을 쓴다.
  *   ⚠ 형식 규칙만 공유한다. 한도·근거·CapCode·안내 문구는 축마다 다르며 섞지 않는다.
- *   ⚠ annualCoverageLimit은 아직 nonNegInt()의 관용을 그대로 쓴다(후속 항목).
+ *   ⚠ 연간 보험가입금액(annualCoverageLimit)도 같은 형식 규칙을 쓴다. 다만 그 축은
+ *     `undefined`와 숫자 `0`을 모두 "한도 미적용"으로 받고, 안내만 서로 다르다.
  */
 const badCount = (v: unknown): boolean =>
   !(typeof v === "number" && Number.isSafeInteger(v) && v >= 0);
@@ -233,10 +239,15 @@ export function calculateMany2021(input: Gen2021MultiClaimInput): MultiClaimResu
   // ⚠ 정규화하지 않는다. 위에서 미입력·잘못된 값을 이미 차단했고, 쓰이지 않는 축은
   //   실려 오는 것 자체가 차단된다. 여기서 ?? 0은 "쓰이지 않는 축"의 자리값이다.
   let visits = ((usesGeneralVisits ? visitsRaw : riderVisitsRaw) as number | undefined) ?? 0;
-  // 0·음수·비정상 값은 미입력으로 본다(0을 한도로 적용하면 보험금이 0원이 된다).
-  const selectedLimit = input.annualCoverageLimit === undefined || nonNegInt(input.annualCoverageLimit) <= 0
-    ? undefined
-    : Math.min(nonNegInt(input.annualCoverageLimit), GEN2021.annualLimitMaximum);
+  // ── 연간 보험가입금액 축: 원문만 읽어 둔다 ──────────────────────────
+  //   ⚠ 값 검증도 `selectedLimit` 계산도 아래 **지급보험금 축 검증 뒤**에서 한다.
+  //     진료비·횟수·승인 회차·지급보험금이 함께 잘못되어 있으면 그 안내가 더 앞선다.
+  //   ⚠ **일반 축일 때만 읽는다.** 특약 경로는 이 값을 계산에 쓰지 않는데, 이름에 접근하는
+  //     것만으로 외부 객체의 접근자(getter)가 실행된다 — 쓰지 않는 값을 읽다가 부작용이
+  //     나거나, getter가 던지면 특약 묶음 전체가 예외로 죽는다. "보지 않는다"는 계약은
+  //     검증을 건너뛰는 것이 아니라 **읽지 않는 것**이어야 한다. 활성 축 하나만 읽는
+  //     G-17의 규칙과 같다.
+  const limitRaw = rider === "none" ? readCount(input, "annualCoverageLimit") : undefined;
 
   // ── preflight: 도수 계열 보상 승인 회차 ─────────────────────────────────
   //   승인 범위가 부족한 것은 "보상 거절 확정"이 아니라 **확인 불가**다. 행을 제외하지
@@ -298,7 +309,7 @@ export function calculateMany2021(input: Gen2021MultiClaimInput): MultiClaimResu
   //     진료비가 이미 검증을 통과했으므로 신뢰할 수 있는 총액이 있다. G-16의
   //     `unusable()`(총액 0)은 쓰지 않는다.
   //   ⚠ 형식 규칙은 횟수 축과 같은 `badCount`를 쓴다. 안내 문구·근거는 축마다 다르다.
-  //   ⚠ `nonNegInt()`는 `annualCoverageLimit`이 계속 쓰므로 그대로 둔다(후속 항목).
+  //   ⚠ `nonNegInt()`는 연간 보험가입금액까지 검증으로 바뀌면서 사용처가 사라져 삭제됐다.
   if (paidRaw !== undefined && badCount(paidRaw)) {
     return blocked([
       rider === "none"
@@ -314,8 +325,46 @@ export function calculateMany2021(input: Gen2021MultiClaimInput): MultiClaimResu
       `받은 값의 형식: ${typeof paidRaw}`,
     ]);
   }
-  // 여기 오는 값은 `undefined`이거나 0 이상의 안전한 정수다. nonNegInt는 그 위에서 항등이다.
-  let paid = nonNegInt(paidRaw as number | undefined);
+  // ── 연간 보험가입금액의 값 검증 ─────────────────────────────────────
+  //   종전 동작은 **이 축 안에서 값에 따라 방향이 갈렸다.** (지급보험금 축도 값에 따라 양쪽으로
+  //   갈렸다 — 두 축이 서로 반대라는 뜻이 아니다. 축끼리 방향을 대응시키지 않는다.)
+  //     - 문자열·음수·`NaN`·`±Infinity`·`null`·불리언·객체·배열은 nonNegInt()가 조용히 0으로
+  //       만들었고, 0은 이 축에서 "미입력"으로 읽혀 **한도가 통째로 사라졌다** → 과다 산출.
+  //       그러면서 안내는 "증권의 금액을 입력하지 않아"라고 말했다 — 값을 넘겼는데도.
+  //     - 소수는 조용히 내려갔다(`500000.9` → 500,000). 한도가 실제보다 작아진다 → 과소 산출.
+  //     - 안전 정수 범위를 넘는 값은 5천만원 상한으로 잘려 통과했다.
+  //   ⚠ 그래서 안내는 한 방향으로 단정하지 않는다. "값을 임의로 고치지 않는다"만 말한다.
+  //
+  //   ⚠ **허용**: `undefined`(미입력)와 숫자 `0`. 둘 다 종전과 같이 한도를 적용하지 않는다.
+  //     이 커밋은 두 값의 계산 결과를 바꾸지 않고 **안내만 분리**한다.
+  //   ⚠ 0을 미적용으로 보는 것은 **이 계산기의 정책**이지 약관 해석이 아니다. 표준약관에서
+  //     직접 읽어 확인한 것은 가입금액의 최대치(5천만원)뿐이고, 0원이 실제로 선택 가능한
+  //     계약값인지는 원문에서 확인하지 않았다. 그래서 0을 무효로 차단하지도, 한도 0원으로
+  //     적용하지도 않고 종전 계산을 유지한 채 "계산기가 이렇게 다뤘다"고만 알린다.
+  //     (0을 한도로 그대로 적용하면 보험금이 0원이 되어, 확인하지 않은 전제로 지급액을
+  //      0으로 만드는 셈이 된다.)
+  //   ⚠ 5천만원을 넘는 안전 정수는 **거부하지 않는다.** 상한 절삭은 약관 근거가 있는
+  //     정당한 계산이고 종전 안내도 그대로다.
+  //   ⚠ **일반 축에서만** 검증한다. 특약 경로는 이 값을 계산에 쓰지 않으며, 쓰이지 않는 축의
+  //     stray 값 거부는 후속 항목이다 — 그 조용한 폐기 동작은 이번에 바꾸지 않는다.
+  //   ⚠ 반환은 기존 `blocked()`다 — 진료비 합계(`totalAmount`)를 보존한다.
+  if (limitRaw !== undefined && badCount(limitRaw)) {
+    return blocked([
+      "연간 보험가입금액(annualCoverageLimit)은 0 이상의 안전한 정수여야 합니다. 음수·소수·NaN·Infinity·안전 정수 범위를 넘는 값·문자열·객체는 계산하지 않습니다.",
+      "계산기가 잘못된 값을 임의로 고치지 않습니다 — 가입금액을 고치면 연간 지급 한도가 증권과 달라져 보험금이 잘못 계산됩니다. 증권에 적힌 연간 보험가입금액을 입력해 주세요.",
+      // ⚠ 받은 값을 그대로 문자열로 만들지 않는다. Symbol이나 toString()이 던지는 객체에서
+      //   안내를 만드는 중에 예외가 난다.
+      `받은 값의 형식: ${typeof limitRaw}`,
+    ]);
+  }
+
+  // 여기 오는 두 값은 `undefined`이거나 0 이상의 안전한 정수다. 정규화하지 않고 그대로 쓴다.
+  let paid = (paidRaw as number | undefined) ?? 0;
+  // ⚠ 특약 경로에서는 위에서 읽지 않았으므로 언제나 `undefined`다(계산에도 쓰이지 않는다).
+  const limit = limitRaw as number | undefined;
+  const selectedLimit = limit === undefined || limit === 0
+    ? undefined
+    : Math.min(limit, GEN2021.annualLimitMaximum);
 
   amounts.forEach((amount, index) => {
     if (rider === "none" && input.coverage === "non_benefit" && input.visit === "outpatient") {
@@ -378,10 +427,17 @@ export function calculateMany2021(input: Gen2021MultiClaimInput): MultiClaimResu
   if (rider === "none") {
     notes.push(`${causeLabel}·${input.coverage === "benefit" ? "급여" : "비급여"} 보장축만 계산했습니다. 다른 원인의 청구는 별도로 계산해 주세요.`);
   }
-  if (rider === "none" && selectedLimit === undefined) {
+  // ⚠ 미입력과 명시적 0원을 **나눠서** 안내한다. 종전에는 0원을 넘겨도 "입력하지 않아"라고
+  //   말해, 사용자가 넣은 값이 무시된 사실을 알 수 없었다.
+  if (rider === "none" && limit === undefined) {
     notes.push("연간 보험가입금액은 계약자가 선택한 값입니다. 증권의 금액을 입력하지 않아 연간 지급 한도는 적용하지 않았습니다.");
   }
-  if (rider === "none" && input.annualCoverageLimit !== undefined && nonNegInt(input.annualCoverageLimit) > GEN2021.annualLimitMaximum) {
+  // ⚠ 이 문장은 **계산기가 0원을 어떻게 다뤘는지**만 말한다. 0원 가입이 가능한 계약인지,
+  //   0원의 약관상 의미가 무엇인지는 원문에서 확인하지 않았고 여기서 단정하지 않는다.
+  if (rider === "none" && limit === 0) {
+    notes.push("연간 보험가입금액을 0원으로 입력하셔서 계산기에서는 연간 지급 한도를 적용하지 않았습니다. 실제 가입금액이 있으면 증권의 금액을 입력해 주세요.");
+  }
+  if (rider === "none" && limit !== undefined && limit > GEN2021.annualLimitMaximum) {
     notes.push("입력한 연간 가입금액이 약관상 최대 5천만원을 넘어 5천만원으로 적용했습니다.");
   }
   const excludedCount = results.filter((r) => !r.covered).length;

@@ -2576,3 +2576,122 @@ G-14A는 **계산을 손대지 않고**, 확정된 것과 확정되지 않은 �
 
 새 계약은 `tests/gen2026DeductibleScopeCopy.test.ts`(40건)와
 `tests/regulatoryRules.test.ts`의 G-14A 절이 본다.
+
+---
+
+### 5.21 별도 보장종목 진입점의 두 입력 축 엄격 검증 (2026-09-05, G-14B)
+
+**규제 규칙 추가가 아니다.** 500만 원 값·<표1> 한도·산식·엔진 계산·UI·규칙값·HOLD가 모두
+그대로다. `specialItem2026.ts`의 **직접 호출 계약**만 다뤘다.
+
+#### 확인한 결함 (기준선 `ecf990d` 엔진 직접 호출, UI 미경유)
+
+`priorAnnualInpatientDeductible`(제5조⑤ 500만 원 pool)과 `priorAnnualCoveredCount`(<표1>
+연 50회) 두 축에 **진입점 검증이 전혀 없었다.**
+
+- `nonNegInt()`가 `"100"`·`""`·`null`·`{}`·`[1]`·`true`·`false`·`-1`·`NaN`·`±Infinity`를
+  **조용히 0**으로 만들었다. 방향이 "이미 4,900,000 썼다"·"이미 50회 썼다" →
+  "한 번도 안 썼다"라 **보험금 과다 산출** 쪽이다.
+- 소수를 조용히 `floor`했다(`1.5` → `poolUsedAfter` 600001, `actIndex` 2).
+- 안전 정수 초과를 그대로 썼다(`MAX_SAFE_INTEGER+1` → `9007199254740992`, `1e308` → `1e+308`).
+- **미사용 축 stray를 거부하지 않았다.** 비중증 MRI·근골격계·주사료·일반 전환 경로에
+  실려도 값이 `0`이든 4,900,000이든 `OK`로 통과했고, 중증 MRI에 `priorAnnualCoveredCount`를
+  실어도 통과했다(MRI는 `spec.annualVisits === null`이라 소비하지 않는다).
+
+같은 파일의 `priorAnnualTreatmentActCount`·통원 카운터, 4세대 `priorAnnualRiderVisits`,
+그리고 상급병실료의 `UNUSED_KEYS`는 **모두 이미 막고 있었다.** 한 파일 안에서 계약이 갈려
+있었던 것이 이번 결함의 본질이다.
+
+타입은 **리터럴 초과 속성 검사에만** 의존했다 — 리터럴 5종은 tsc가 거부했지만 변수 경유와
+`JSON.parse(...) as ...`는 통과했다.
+
+#### 고친 방식
+
+**① 런타임 검증 — 경로 분기보다 먼저.** 두 블록을 `validateItemInput`의
+`if (raw.route === "special_item")` **앞**에 두었다. 통원 카운터가 같은 자리에 있는 이유와
+같다 — 분기 안에 두면 일반 (1)(2)로 되돌아가는 조합(항암제 등 주사료·비중증 근골격계·주사료)에
+실린 값이 검사에 닿지 못하고 조용히 버려진다. 그래서 허용 축 판정에 **`route`까지** 넣는다.
+
+```
+covered: route==="special_item" && critical && (musculoskeletal_esw || injection)
+pool   : route==="special_item" && critical && mri
+         + lines.some(visit==="inpatient" && (tier==="hospital" || tier===undefined))
+```
+
+값 검사는 두 축 모두 `Number.isSafeInteger(v) && v >= 0`이다. 미사용 축이면 **값이 `0`이어도**
+거부한다. 절삭·`floor`·문자열 변환을 하지 않는다.
+
+**② 혼합 행은 `some`이다.** 엔진은 `spec.poolEligible && visit === "inpatient" &&
+tier === "hospital"`인 **행에서만** pool을 소진하므로, 그런 행이 하나라도 있으면 값이 실제로
+쓰이고 하나도 없으면 어디에도 쓰이지 않는다. `every`로 바꾸면 혼합 구성에서 정상 입력이 막힌다.
+
+⚠ **`tier === undefined`(종별 미선택)를 후보에 포함한다.** 종별 미선택은
+`calculateSpecialItem2026`의 preflight가 "…번째 행의 의료기관 종별을 선택해 주세요"로 막아야
+할 상황이다. 검증 순서상 pool 검사가 먼저이므로, 여기서 `tier === "hospital"`만 대상으로 보면
+**"종별을 고르세요" 대신 "이 필드를 쓰지 마세요"라는 엉뚱한 안내**가 나간다. 후보로 두면
+preflight가 제 안내를 내고 `totalAmount`도 보존한다.
+
+**③ 거부 형태는 기존 `rejected()`.** 같은 분기의 acts·통원 카운터·route 불일치와 같다.
+그래서 `totalAmount`가 **0으로 보고**되는데, 이는 **기존 거부 계약을 따른 결과**이지 이번에
+생긴 손실이 아니다. 입력 형식 오류를 규제 HOLD와 섞지 않는다 — 거부 note에 HOLD 문구가 섞이면
+검사가 실패한다.
+
+**④ 타입 봉인.** `types.ts`에 경로별 `?: never`를 넣었다 — 근골격계·주사료·비중증 MRI·일반
+전환에 pool 봉인 4곳, 중증 MRI·비중증 MRI·일반 전환에 횟수 봉인 3곳(상급병실료는 종전부터
+있었다). **정상 호출부는 한 곳도 고치지 않았다** — 전체 타입 검사가 그대로 통과했다.
+타입은 리터럴만 막으므로 **런타임 검증이 본체**다.
+
+#### 차분 결과 (기준선 `git archive ecf990d`, 실행 확인)
+
+| 버킷 | 건수 | 동일 | 차이 | 성격 |
+| --- | --- | --- | --- | --- |
+| 1. 허용 경로 정상 입력 | 27 | **27** | 0 | 값·격자 전부 무회귀 |
+| 2. 허용 경로 무효값 | 28 | 0 | **28** | 관용 변환 → 명시적 거부(의도) |
+| 3. 미사용 경로 stray | 18 | 4 | **14** | 무시 → 명시적 거부(의도). 동일 4건은 상급병실료 — 종전부터 거부 |
+| 4. `undefined`·`0`·한도 초과 유효값 | 11 | **11** | 0 | 5,000,001·51·100·안전 정수 최대 무절삭 |
+| 5. 혼합 행 경계 | 21 | 15 | **6** | 대상 행 없는 3구성 × 값 2종만 거부. 대상 행 있음·종별 미선택·필드 생략은 전부 동일 |
+| 6. 다른 필드·다른 경로 | 16 | **16** | 0 | acts·통원 카운터·일반 전환·상급병실료·비중증 MRI·주사료·route 불일치·지급 0원 HOLD |
+
+합계 **121건 · 동일 73 · 차이 48**, 차이는 전부 버킷 2·3·5의 의도된 전환이다.
+
+**버킷 6(UI)·버킷 7(규칙값·산식·HOLD)의 차이는 구조적으로 0이다** —
+`HealthCalcMulti2026.tsx`·`regulatoryRules.ts`·`multiClaim2026.ts`·`generation2026.ts`·
+`roomCharge2026.ts`·`constants.ts` 여섯 파일이 `ecf990d`와 **바이트 단위로 동일**함을
+해시로 확인했다.
+
+변조 **20종을 모두 검출**했다 — count/pool 값 검증 제거 2 / 미사용 축에서 `0`만 예외 허용 2 /
+안전 정수 완화 2 / clamp·`floor`·문자열 변환 재도입 2 / 허용 축을 MRI·근골격계·주사료로 확대 2 /
+허용 축에서 주사료 제외 1 / 혼합 행 `some`→`every` 1 / 종별 미선택을 후보에서 제외 1 /
+`route` 조건 제거 2 / 소비 조건을 묶음 단위로 변경 1 / 거부를 HOLD note로 변경 1 /
+타입 봉인 해제 1 / HOLD를 CONFIRMED로 변경 1 / UI 전달 축 교차 1. 검사 후 원본과 바이트
+단위로 대조해 원복을 확인했다.
+
+⚠ **검출 주체를 구분해 기록한다.** 13종은 신규 테스트가 **단독으로** 잡았고, 6종은 신규
+테스트와 기존 검사(`gen2026SpecialItem`·`gen2026PoolExposure`·`gen2026CoveredCountAxis`·
+`gen2026DeductibleInput`·`regulatoryRules`·`gen2026DeductibleScopeCopy`·tsc)가 함께 잡았으며,
+**"UI 전달 축 교차" 1종은 신규 테스트가 잡지 못하고 기존 UI 검사만 잡았다.** 신규 테스트는
+엔진 진입점 계약만 보므로 이는 의도된 역할 분담이다.
+
+#### 교체한 낡은 테스트 계약
+
+`tests/gen2026SpecialItem.test.ts`의 [불변식] 격자가 **통원 행에도**
+`priorAnnualInpatientDeductible`을 함께 넘기고 있었다. 그 조합에서는 엔진이 값을 쓰지 않으므로
+이제 진입점이 미사용 축으로 거부한다. 격자는 **산식 불변식**을 보는 검사이므로 거부 계약을
+섞지 않고, 입원 행일 때만 값을 넘기도록 고쳤다(이유를 주석에 남겼다). 거부 계약은
+`tests/gen2026ItemInputContract.test.ts`가 전담한다.
+
+#### 범위 밖으로 남긴 것 (후속 항목)
+
+- **`multiClaim2026.ts`의 추가 stray 가드.** 다회 진입점에 `priorAnnualInpatientDeductible`·
+  `priorAnnualCoveredCount`가 실리면 지금도 조용히 무시된다. 5세대 다회 입력 타입에 그 필드가
+  아예 없어 리터럴은 tsc가 막고 내부 호출자도 넘기지 않는다. 이번 커밋에 포함하지 않았다.
+- **4세대 금액 축의 관용 검증.** `priorAnnualRiderPaid`·`priorAnnualInsurancePaid` 등은
+  문자열·음수를 여전히 `nonNegInt()`로 0으로 만든다(4세대 `priorAnnualRiderVisits` 같은 횟수
+  축은 이미 엄격하다). 같은 결함 유형이지만 다른 세대·다른 축이라 이번 범위에 넣지 않았다.
+- **`priorAnnualTreatmentActCount`의 일반 전환 경로 검사.** `special_item` 분기 안에만 있어
+  `route === "general"`에서는 런타임 검사가 없다(타입은 `never`로 닫혀 있다). 이번에 승인된
+  두 필드가 아니므로 건드리지 않았다.
+- `undefined`의 의미(0에서 시작)를 통원 카운터처럼 "미입력이면 차단"으로 바꾸는 것.
+- G-14A pool 공유 범위 HOLD, 지급 0원 HOLD 3종, 상급병실료 HOLD, pool 합산 구현.
+
+새 계약은 `tests/gen2026ItemInputContract.test.ts`(121건)가 본다.

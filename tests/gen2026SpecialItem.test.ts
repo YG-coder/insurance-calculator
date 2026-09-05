@@ -368,7 +368,14 @@ console.log("\n[불변식] 격자");
       msk([{ amount, visit }], { priorAnnualInsurancePaid: prior, approvedThroughVisit: 50 }),
       inj([{ amount, visit }], { priorAnnualInsurancePaid: prior }),
       nMri([{ amount, visit }], { priorAnnualInsurancePaid: prior }),
-      cMri([visit === "inpatient" ? mriHosp(amount) : mriOut(amount)], { priorAnnualInsurancePaid: prior, priorAnnualInpatientDeductible: prior }),
+      // ⚠ G-14B — pool 값은 **소진 대상 행이 있을 때만** 넘긴다.
+      //    종전에는 통원 행에도 함께 넘겼는데, 그 조합에서는 엔진이 값을 쓰지 않으므로
+      //    이제 진입점이 미사용 축으로 거부한다(값이 0이어도 거부). 격자는 산식 불변식을
+      //    보는 검사라 그 거부까지 여기서 섞지 않는다 — 거부 계약은
+      //    tests/gen2026ItemInputContract.test.ts가 전담한다.
+      visit === "inpatient"
+        ? cMri([mriHosp(amount)], { priorAnnualInsurancePaid: prior, priorAnnualInpatientDeductible: prior })
+        : cMri([mriOut(amount)], { priorAnnualInsurancePaid: prior }),
     ];
     for (const r of runs) {
       cases++;

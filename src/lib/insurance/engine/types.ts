@@ -462,6 +462,13 @@ export interface Gen2026CriticalMskInput extends Gen2026SpecialBase {
    */
   priorAnnualTreatmentActCount?: number;
   injectionPurpose?: never;
+  /**
+   * ⚠ 제5조⑤ 500만원 pool은 3대비급여 중 **MRI만** 대상이다 — 근골격계 이학요법·체외충격파와
+   *   주사료는 같은 항의 괄호가 명시적으로 제외한다(2026-09-05 직독, 인쇄 p.280).
+   *   `never`로 닫아 리터럴 호출을 컴파일 단계에서 막고, 변수·외부 데이터는
+   *   `validateItemInput`이 런타임에서 막는다.
+   */
+  priorAnnualInpatientDeductible?: never;
 }
 
 export interface Gen2026CriticalInjectionInput extends Gen2026SpecialBase {
@@ -473,6 +480,8 @@ export interface Gen2026CriticalInjectionInput extends Gen2026SpecialBase {
   priorAnnualCoveredCount?: number;
   /** 승인 구간은 근골격계에만 있다. */
   priorAnnualTreatmentActCount?: never;
+  /** 제5조⑤ 괄호가 주사료를 500만원 pool에서 제외한다. */
+  priorAnnualInpatientDeductible?: never;
 }
 
 export interface Gen2026CriticalMriInput extends Gen2026SpecialBase {
@@ -484,6 +493,12 @@ export interface Gen2026CriticalMriInput extends Gen2026SpecialBase {
   injectionPurpose?: never;
   priorAnnualTreatmentActCount?: never;
   // <표1>에 횟수 한도가 없다 → 횟수 필드 없음
+  /**
+   * ⚠ 중증 MRI는 <표1>에 연간 보상 **횟수** 한도가 없다(금액 300만원만 있다).
+   *   엔진도 `spec.annualVisits === null`이라 이 축을 소비하지 않는다. 실려 오면
+   *   반영됐다고 오해할 수 있으므로 타입에서 닫고 런타임에서도 거부한다.
+   */
+  priorAnnualCoveredCount?: never;
 }
 
 export interface Gen2026NonCriticalMriInput extends Gen2026SpecialBase {
@@ -493,6 +508,9 @@ export interface Gen2026NonCriticalMriInput extends Gen2026SpecialBase {
   injectionPurpose?: never;
   priorAnnualTreatmentActCount?: never;
   // 특약2 제5조에는 500만원 조항이 없고(인쇄 p.309~310), <표1>에 횟수 한도도 없다.
+  //   ⚠ 그 두 사실을 주석이 아니라 타입으로도 못박는다.
+  priorAnnualInpatientDeductible?: never;
+  priorAnnualCoveredCount?: never;
 }
 
 export type Gen2026SpecialItemInput =
@@ -518,6 +536,13 @@ interface Gen2026RoutedGeneralBase {
   priorAnnualDeductible?: number;
   /** 승인 구간은 (3)3대비급여의 근골격계에만 있다. 일반 경로에는 없다. */
   priorAnnualTreatmentActCount?: never;
+  /**
+   * ⚠ 아래 두 축도 (3)3대비급여 전용이다. 일반 (1)(2)로 되돌아온 조합은
+   *   `priorAnnualDeductible`(제5조⑤의 일반 축)과 통원 카운터를 쓰고,
+   *   <표1>의 횟수·MRI pool은 적용되지 않는다.
+   */
+  priorAnnualCoveredCount?: never;
+  priorAnnualInpatientDeductible?: never;
   // ⚠ 통원 카운터는 여기 두지 않는다. 중증은 '회'(특약1), 비중증은 '일'(특약2)로
   //   단위가 다르므로 공통 베이스에 두면 어느 축이든 아무 필드나 실을 수 있게 된다.
   //   각 변형에서 쓰는 쪽만 열고 반대편은 never로 닫는다.

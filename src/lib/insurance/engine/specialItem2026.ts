@@ -143,6 +143,69 @@ function validateItemInput(input: Exclude<Gen2026ItemClaimInput, Gen2026RoomChar
   const days = raw.priorAnnualOutpatientDays;
   const visits = raw.priorAnnualOutpatientVisits;
 
+  // ── (3) 별도 보장종목 전용 두 축도 **경로와 무관하게 먼저** 본다 ──
+  //   ⚠ 위 통원 카운터와 같은 이유다. `special_item` 분기가 먼저 return하면 일반 (1)(2)로
+  //     되돌아가는 조합(항암제 등 주사료·비중증 근골격계/주사료)에 실린 값이 검사에 닿지
+  //     못하고 조용히 버려진다. 두 축은 **route === "special_item"에서만** 쓰인다.
+
+  // ── '보상한 횟수'(priorAnnualCoveredCount) ───────────────────────
+  //   <표1>의 **연간 보상 횟수 한도(50회)가 있는 항목 전용** 축이다. 중증 근골격계와
+  //   중증 일반 주사료뿐이며, MRI 두 종은 <표1>에 횟수 한도가 없어(금액 한도만 있다)
+  //   엔진도 `spec.annualVisits === null`이라 이 값을 소비하지 않는다.
+  //   ⚠ 승인 구간의 '치료횟수'(priorAnnualTreatmentActCount)와 다른 축이다. 합치지 않는다.
+  //   ⚠ 값이 0이어도 거부한다. 쓰이지 않는 입력을 조용히 버리면 반영됐다고 오해한다 —
+  //     acts·통원 카운터와 같은 계약이다.
+  const covered = (raw as { priorAnnualCoveredCount?: unknown }).priorAnnualCoveredCount;
+  const usesCovered = raw.route === "special_item" && raw.severity === "critical"
+    && (raw.item === "musculoskeletal_esw" || raw.item === "injection");
+  if (!usesCovered && covered !== undefined) {
+    return rejected("이미 보상한 횟수(priorAnnualCoveredCount)는 <표1>에 연간 보상 횟수 한도가 있는 보장종목(중증 근골격계 이학요법·체외충격파, 중증 비급여 주사료)에만 쓰입니다 —", covered);
+  }
+  //   ⚠ 미입력(undefined)은 종전 그대로 0에서 시작한다는 뜻이다. 이번에 그 의미를 바꾸지
+  //     않는다(통원 카운터처럼 "미입력이면 차단"으로 바꾸는 것은 이 커밋의 범위가 아니다).
+  //   ⚠ 50을 넘는 값도 유효한 과거 상태다. 절삭하지 않는다 — 한도 판정은 산식이 한다.
+  if (covered !== undefined
+    && !(typeof covered === "number" && Number.isSafeInteger(covered) && covered >= 0)) {
+    return rejected("이미 보상한 횟수(priorAnnualCoveredCount)는 0 이상의 정수여야 합니다 —", covered);
+  }
+
+  // ── 500만원 pool 누적 공제금액(priorAnnualInpatientDeductible) ────
+  //   특별약관1 제5조⑤(2026-09-05 직독, 인쇄 p.280)은 이 상한을 **상급종합병원·종합병원
+  //   입원**에만 걸고, 3대비급여 중 근골격계 이학요법·체외충격파와 주사료를 괄호로
+  //   제외한다. 특별약관2(비중증) 제5조에는 같은 항이 없다(인쇄 p.308~310).
+  //   ⚠ 합산 범위(상해·질병 및 3대비급여를 하나로 세는지)는 확정되지 않았고
+  //     (GEN2026-CRITICAL-DEDUCTIBLE-POOL-SCOPE = HOLD) 이 검증은 그것을 건드리지 않는다.
+  //     여기서 하는 것은 **이 필드가 실제로 소비되는 조합인지**만 보는 것이다.
+  const pool = (raw as { priorAnnualInpatientDeductible?: unknown }).priorAnnualInpatientDeductible;
+  const usesPoolItem = raw.route === "special_item" && raw.severity === "critical" && raw.item === "mri";
+  if (!usesPoolItem && pool !== undefined) {
+    return rejected("누적 공제금액(priorAnnualInpatientDeductible)은 500만 원 공제금액 상한의 대상인 중증 비급여 MRI에만 쓰입니다(특별약관1 제5조 제5항 — 근골격계 이학요법·체외충격파와 주사료는 괄호로 제외) —", pool);
+  }
+  //   ⚠ 행 단위 조건까지 본다. 엔진은 `spec.poolEligible && visit === "inpatient" &&
+  //     tier === "hospital"`인 **행에서만** pool을 소진하므로, 그런 행이 하나도 없으면
+  //     이 값은 어디에도 쓰이지 않는다. `every`가 아니라 `some`이다 — 혼합 구성에서
+  //     대상 행이 하나라도 있으면 실제로 소진된다.
+  //   ⚠ `tier === undefined`(종별 미선택)도 후보에 넣는다. 종별 미선택은
+  //     `calculateSpecialItem2026`의 preflight가 전용 안내로 막아야 할 상황이고,
+  //     여기서 먼저 거부하면 "종별을 고르세요" 대신 "이 필드를 쓰지 마세요"라는
+  //     엉뚱한 안내가 나간다. 후보로 두면 preflight가 제 안내를 낸다.
+  //   ⚠ 행 형식 자체는 아래 special_item 분기가 검사한다. 여기서는 배열이 아닐 수 있는
+  //     외부 데이터를 만나도 던지지 않도록 방어적으로 읽는다.
+  if (usesPoolItem && pool !== undefined) {
+    const lines = Array.isArray(raw.lines) ? raw.lines as { visit?: unknown; tier?: unknown }[] : [];
+    const eligible = lines.some((l) => l !== null && typeof l === "object"
+      && l.visit === "inpatient" && (l.tier === "hospital" || l.tier === undefined));
+    if (!eligible) {
+      return rejected("누적 공제금액(priorAnnualInpatientDeductible)은 상급종합·종합병원 입원 행에만 적용됩니다(특별약관1 제5조 제5항). 입력한 행에는 해당하는 행이 없습니다 —", pool);
+    }
+  }
+  //   ⚠ 500만 원을 넘는 값도 유효한 과거 상태다. 절삭하지 않는다 — 상한 처리는 산식이
+  //     `Math.max(cap - poolUsed, 0)`으로 한다.
+  if (pool !== undefined
+    && !(typeof pool === "number" && Number.isSafeInteger(pool) && pool >= 0)) {
+    return rejected("누적 공제금액(priorAnnualInpatientDeductible)은 0 이상의 정수여야 합니다 —", pool);
+  }
+
   if (raw.route === "special_item") {
     // (3) 별도 보장종목에는 통원 한도가 적용되지 않는다. <표1>의 보장한도는 별개이며
     //   통원 가입금액·연간 가입금액도 여기 적용되지 않는다(제5조①단서·③).

@@ -13,15 +13,17 @@ const nonNegInt = (value: number | undefined) =>
   value !== undefined && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
 
 /**
- * 이미 사용한 횟수 축 검증(4세대 전용).
+ * 0 이상의 안전한 정수인지만 보는 **형식 검증**(4세대 전용).
  *
- * ⚠ 금액 축이 쓰는 nonNegInt()의 관용(음수→0, NaN·Infinity→0, 소수 내림)을 물려받지 않는다.
+ * ⚠ nonNegInt()의 관용(음수→0, NaN·Infinity→0, 문자열·객체→0, 소수 내림)을 물려받지 않는다.
  *   실제로 nonNegInt()는 문자열 "100"과 Infinity를 **0**으로 만들었다 — "이미 100회 썼다"가
  *   "한 번도 안 썼다"가 되어 한도가 사라지고 보험금이 과다 산출된다.
  *   ⚠ 한도를 넘는 값도 유효한 과거 상태다. 절삭하지 않는다.
- *   (금액 축의 관용은 이번 범위가 아니라 그대로 둔다.)
  *
- * ⚠ 형식 규칙만 공유한다. 일반 통원 100회와 특약 50회는 한도·근거·CapCode·안내가 모두 다르다.
+ * ⚠ 쓰는 곳: 두 횟수 축(일반 통원 100회·특약 50회)과, G-17에서 **활성 지급보험금 누적 축**
+ *   (일반 priorAnnualInsurancePaid / 특약 priorAnnualRiderPaid)이 같은 형식 규칙을 쓴다.
+ *   ⚠ 형식 규칙만 공유한다. 한도·근거·CapCode·안내 문구는 축마다 다르며 섞지 않는다.
+ *   ⚠ annualCoverageLimit은 아직 nonNegInt()의 관용을 그대로 쓴다(후속 항목).
  */
 const badCount = (v: unknown): boolean =>
   !(typeof v === "number" && Number.isSafeInteger(v) && v >= 0);
@@ -220,7 +222,14 @@ export function calculateMany2021(input: Gen2021MultiClaimInput): MultiClaimResu
     }
   }
 
-  let paid = nonNegInt(rider === "none" ? input.priorAnnualInsurancePaid : input.priorAnnualRiderPaid);
+  // ── 활성 지급보험금 누적 축: 원문만 읽어 둔다 ────────────────────────
+  //   ⚠ 값 검증은 아래 **승인 회차 preflight 뒤**에서 한다. 잘못된 진료비·횟수·승인
+  //     회차가 함께 있으면 그 안내가 더 앞선 안내이므로 가려지면 안 된다.
+  //   ⚠ **활성 축 하나만** 읽는다. 일반 경로는 priorAnnualInsurancePaid, 특약 경로는
+  //     priorAnnualRiderPaid다. 비활성 축에 남아 있는 값은 이번 커밋에서 보지 않는다 —
+  //     미사용 금액 축 stray 거부는 후속 항목이고, 그 조용한 폐기 동작은 그대로다.
+  const paidKey = rider === "none" ? "priorAnnualInsurancePaid" : "priorAnnualRiderPaid";
+  const paidRaw = readCount(input, paidKey);
   // ⚠ 정규화하지 않는다. 위에서 미입력·잘못된 값을 이미 차단했고, 쓰이지 않는 축은
   //   실려 오는 것 자체가 차단된다. 여기서 ?? 0은 "쓰이지 않는 축"의 자리값이다.
   let visits = ((usesGeneralVisits ? visitsRaw : riderVisitsRaw) as number | undefined) ?? 0;
@@ -268,6 +277,45 @@ export function calculateMany2021(input: Gen2021MultiClaimInput): MultiClaimResu
       ]);
     }
   }
+
+  // ── 활성 지급보험금 누적 축의 값 검증 ───────────────────────────────
+  //   종전 동작은 값에 따라 **방향이 갈렸다.**
+  //     - 문자열·음수·NaN·±Infinity·null·불리언·객체·배열·bigint·순환 참조는
+  //       nonNegInt()가 **조용히 0**으로 만들어 남은 한도가 되살아났다 → 보험금 과다 산출
+  //       (실측: 가입금액 500,000·기존 지급 400,000에서 정답 ins=100,000이어야 할 계산이
+  //        무효값 12종에서 모두 ins=200,000이 됐다).
+  //     - 안전 정수 범위를 넘는 값(MAX_SAFE+1 등)은 **그대로 통과**해 한도를 다 소진했다
+  //       → 보험금 과소 산출(같은 격자에서 ins=0).
+  //   ⚠ 그래서 두 사례를 하나의 방향으로 설명하지 않는다. 안내는 방향을 단정하지 않고
+  //     "값을 임의로 고치지 않는다"만 말하며, 두 사례가 **같은 문구**로 차단된다.
+  //
+  //   ⚠ `undefined`와 명시적 숫자 `0`은 종전대로 허용한다 — 둘 다 "누적 0에서 시작"이다.
+  //   ⚠ 약관 한도를 넘는 과거 지급액도 **유효한 상태**다. 절삭하지 않는다.
+  //   ⚠ 연간 가입금액이 없어 이 값이 결과를 바꾸지 못하는 경우에도 검증한다.
+  //     "현재 산식에 영향이 없다"와 "올바른 입력이다"는 다른 말이고, 뒤에 가입금액이
+  //     입력되면 같은 값이 곧바로 금액을 바꾼다.
+  //   ⚠ 반환은 이 파일의 기존 `blocked()`다 — 진료비 합계(`totalAmount`)를 보존한다.
+  //     진료비가 이미 검증을 통과했으므로 신뢰할 수 있는 총액이 있다. G-16의
+  //     `unusable()`(총액 0)은 쓰지 않는다.
+  //   ⚠ 형식 규칙은 횟수 축과 같은 `badCount`를 쓴다. 안내 문구·근거는 축마다 다르다.
+  //   ⚠ `nonNegInt()`는 `annualCoverageLimit`이 계속 쓰므로 그대로 둔다(후속 항목).
+  if (paidRaw !== undefined && badCount(paidRaw)) {
+    return blocked([
+      rider === "none"
+        ? "기존 지급보험금(priorAnnualInsurancePaid)은 0 이상의 안전한 정수여야 합니다. 음수·소수·NaN·Infinity·안전 정수 범위를 넘는 값·문자열·객체는 계산하지 않습니다."
+        : "이 특약의 기존 지급보험금(priorAnnualRiderPaid)은 0 이상의 안전한 정수여야 합니다. 음수·소수·NaN·Infinity·안전 정수 범위를 넘는 값·문자열·객체는 계산하지 않습니다.",
+      // ⚠ 방향을 단정하지 않는다. 종전 동작은 값에 따라 **반대로** 갈렸다 —
+      //   문자열·음수·NaN 등은 0이 되어 한도가 되살아났고(보험금이 많아짐),
+      //   안전 정수 범위를 넘는 값은 그대로 통과해 한도를 다 소진했다(보험금이 적어짐).
+      //   한쪽 방향으로만 단정하는 문구를 쓰면 두 번째 사례에서 사용자를 오도한다.
+      "계산기가 잘못된 값을 임의로 고치지 않습니다 — 값을 고치면 남은 한도가 실제와 달라져 보험금이 잘못 계산됩니다. 지급받은 적이 없으면 0을 넣어 주세요.",
+      // ⚠ 받은 값을 그대로 문자열로 만들지 않는다. Symbol이나 toString()이 던지는 객체에서
+      //   안내를 만드는 중에 예외가 난다. 이 파일 기존 안내 6곳의 JSON.stringify는 범위 밖이다.
+      `받은 값의 형식: ${typeof paidRaw}`,
+    ]);
+  }
+  // 여기 오는 값은 `undefined`이거나 0 이상의 안전한 정수다. nonNegInt는 그 위에서 항등이다.
+  let paid = nonNegInt(paidRaw as number | undefined);
 
   amounts.forEach((amount, index) => {
     if (rider === "none" && input.coverage === "non_benefit" && input.visit === "outpatient") {

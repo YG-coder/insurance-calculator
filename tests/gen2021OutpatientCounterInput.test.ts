@@ -265,8 +265,16 @@ console.log("\n[구조] 검증 위치와 세대 분리");
     && /if \(usesRiderVisits\) \{[\s\S]{0,200}if \(riderVisitsRaw === undefined\)/.test(eng));
   check("카운터를 더 이상 정규화하지 않는다",
     !/nonNegInt\(rider === "none" \? input\.priorAnnualOutpatientVisits/.test(eng));
-  check("금액 축의 nonNegInt는 그대로 남아 있다",
-    /nonNegInt\(rider === "none" \? input\.priorAnnualInsurancePaid/.test(eng));
+  // ⚠ **낡은 계약을 교체했다.** 이 검사는 "카운터만 엄격해지고 금액 축은 nonNegInt의
+  //   관용을 그대로 쓴다"를 지급보험금 축으로 확인하고 있었다. G-17이 **활성 지급보험금
+  //   2축**을 badCount 검증으로 바꿨으므로, 확인 대상을 아직 관용을 쓰는
+  //   `annualCoverageLimit`으로 옮긴다. 요지(카운터와 금액 축의 계약이 다르다)는 같다.
+  check("nonNegInt 자체는 그대로 남아 있다",
+    /const nonNegInt = \(value: number \| undefined\) =>/.test(eng));
+  check("annualCoverageLimit은 아직 nonNegInt의 관용을 쓴다(후속 항목)",
+    /nonNegInt\(input\.annualCoverageLimit\) <= 0/.test(eng));
+  check("지급보험금 축은 카운터와 같은 형식 검증(badCount)으로 옮겨졌다",
+    /if \(paidRaw !== undefined && badCount\(paidRaw\)\) \{/.test(eng));
   check("차단 결과가 진료비 합계를 유지한다",
     /totalAmount: totalInput, totalOwnPay: null, totalInsurancePay: null, appliedCaps: \[\]/.test(eng));
   check("5세대 파서·상수를 재사용하지 않는다",

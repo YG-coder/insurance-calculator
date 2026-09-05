@@ -251,10 +251,17 @@ console.log("\n[G-16] 7. 소스 계약");
   check("기존 안내 6곳의 JSON.stringify는 그대로",
     (body.match(/받은 값: \$\{JSON\.stringify\(/g) ?? []).length === 6,
     String((body.match(/받은 값: \$\{JSON\.stringify\(/g) ?? []).length));
-  // 이번 범위 밖: 금액 누적 3축의 관용은 그대로 둔다.
-  check("금액 누적 3축의 nonNegInt 관용은 그대로",
-    /let paid = nonNegInt\(rider === "none" \? input\.priorAnnualInsurancePaid : input\.priorAnnualRiderPaid\);/.test(body)
-    && /nonNegInt\(input\.annualCoverageLimit\) <= 0/.test(body));
+  // ⚠ **낡은 계약을 교체했다.** G-16 시점에는 금액 누적 3축이 모두 nonNegInt의 관용을
+  //   쓰고 있어 그 사실을 한 줄로 고정했다. G-17이 **활성 지급보험금 2축**을 검증으로
+  //   바꿨으므로(무효값 → blocked), 그 부분은 새 계약으로 옮기고 여기서는
+  //   `annualCoverageLimit`이 아직 관용을 쓴다는 사실만 남긴다.
+  //   두 지급보험금 축의 새 계약은 tests/gen2021PaidAxisValue.test.ts가 본다.
+  check("annualCoverageLimit은 아직 nonNegInt의 관용을 쓴다(후속 항목)",
+    /input\.annualCoverageLimit === undefined \|\| nonNegInt\(input\.annualCoverageLimit\) <= 0/.test(body));
+  check("지급보험금 2축은 더 이상 nonNegInt로 조용히 정규화되지 않는다",
+    !/let paid = nonNegInt\(rider === "none" \? input\.priorAnnualInsurancePaid : input\.priorAnnualRiderPaid\);/.test(body)
+    && /if \(paidRaw !== undefined && badCount\(paidRaw\)\) \{/.test(body));
+  check("nonNegInt 자체는 그대로 남아 있다", /const nonNegInt = \(value: number \| undefined\) =>/.test(body));
   // 상수는 건드리지 않았다.
   check("4세대 규칙값이 그대로",
     GEN2021.nonBenefitOutpatientAnnualVisits === 100

@@ -116,7 +116,13 @@ const ZERO_PAY_VISITS_HOLD_NOTES = [
  *   비중증 — 특별약관2 제3조: 보상 단위 자체가 "통원 1일당(외래 및 처방·조제비 합산)"이다.
  * 두 경우 모두 같은 날은 합산해 한 행으로 입력하는 것이 약관대로다.
  */
-function buildNotes(input: Gen2026MultiClaimInput, limitApplied: boolean): string[] {
+/**
+ * @param limitState 연간 보험가입금액의 상태.
+ *   "applied" = 한도로 적용됨 / "unset" = 미입력 / "zero" = 명시적 0원.
+ *   ⚠ "unset"과 "zero"는 **계산이 같고 안내만 다르다.** 종전에는 둘을 구분하지 않아
+ *     0원을 넣은 사용자에게도 "입력하지 않으면 적용하지 않습니다"라고 말했다.
+ */
+function buildNotes(input: Gen2026MultiClaimInput, limitState: "applied" | "unset" | "zero"): string[] {
   const causeLabel = input.cause === "injury" ? "상해" : "질병";
   const coverageLabel = input.coverage === "benefit" ? "급여" : "비급여";
   const notes = [
@@ -142,8 +148,13 @@ function buildNotes(input: Gen2026MultiClaimInput, limitApplied: boolean): strin
       notes.push("통원 가입금액은 계약마다 다른 값이라 입력하지 않으면 적용하지 않습니다. 증권에서 확인해 입력하면 지급 한도로 반영됩니다.");
     }
   }
-  if (!limitApplied) {
+  if (limitState === "unset") {
     notes.push(`연간 보험가입금액도 계약자가 선택한 값이라 입력하지 않으면 적용하지 않습니다. 약관상 상해비급여·질병비급여 각각에 대해 따로 정해지므로, ${causeLabel}비급여 축의 가입금액을 입력해 주세요.`);
+  }
+  // ⚠ 이 문장은 **계산기가 0원을 어떻게 다뤘는지**만 말한다. 0원 가입이 유효한 계약인지,
+  //   무효인지, 실제 한도가 0원인지는 원문에서 확인하지 않았고 여기서 단정하지 않는다.
+  if (limitState === "zero") {
+    notes.push("연간 보험가입금액을 0원으로 입력하셔서 계산기에서는 연간 지급 한도를 적용하지 않았습니다. 실제 가입금액이 있으면 증권의 금액을 입력해 주세요.");
   }
   return notes;
 }
@@ -376,15 +387,54 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
     ]);
   }
 
-  // 연간 보험가입금액도 "N원 이내에서 계약자가 선택한 금액"이다(제5조①).
-  // 0·음수·미입력은 미적용으로 본다. 상한선을 넘겨 입력하면 상한선으로 깎는다.
+  // ── 연간 보험가입금액 축의 값 검증 ────────────────────────────────
+  //   연간 보험가입금액은 "N원 이내에서 계약자가 선택한 금액"이다(제5조①).
+  //
+  //   종전 동작(기준선 99925c3 엔진 직접 호출로 실측): `!Number.isFinite(raw) || raw <= 0`이
+  //   음수·`NaN`·`±Infinity`·문자열·빈 문자열·`null`·불리언·객체·배열·`bigint`·Symbol·순환 참조를
+  //   **미입력과 같게** 만들어 연간 한도가 통째로 사라졌고, 그러면서 안내는 "입력하지 않으면
+  //   적용하지 않습니다"라고 말했다 — 값을 넘겼는데도.
+  //   ⚠ 방향은 값에 따라 갈렸다. 위 무효값들은 한도가 사라지는 쪽이지만, `Math.floor`가
+  //     **0과 1 사이의 소수를 한도 0원으로 만들어** 적용했다 — 실측에서 `0.5`는 보험금을
+  //     0원으로 만들었고(같은 격자에서 명시적 `0`은 한도 미적용이라 전액 지급이다) 그때
+  //     아무 안내도 나가지 않았다. 1 이상의 소수는 조용히 내려갔다.
+  //   ⚠ 이 축은 **런타임 예외를 내지 않았다** — `Number.isFinite`가 bigint·객체를 걸러
+  //     던지지 않기 때문이다. 문제는 예외가 아니라 조용히 틀린 금액이다.
+  //
+  //   ⚠ **읽는 축은 비급여 하나뿐이다.** 급여 묶음에는 이 축이 타입에 없다. `readCount(nb, …)`가
+  //     `nb`가 없으면 이름에 접근조차 하지 않으므로, 급여에서는 외부 객체의 접근자(getter)가
+  //     실행되지 않는다(G-20과 같은 규칙, 실측으로 확인).
+  //   ⚠ **원문을 한 번만 읽는다.** `runBundle` 밖이라 지급 0원 HOLD의 두 해석이 같은 값에서
+  //     출발한다. HOLD의 값·상태·계산 동작은 바꾸지 않는다.
+  //   ⚠ **허용**: `undefined`(미입력)와 숫자 `0`. 둘 다 종전과 같이 한도를 적용하지 않는다.
+  //     이 커밋은 두 값의 계산을 바꾸지 않고 **안내만 분리**한다.
+  //   ⚠ 0을 미적용으로 보는 것은 **이 계산기의 정책**이지 약관 해석이 아니다. 0원 가입이
+  //     실제로 선택 가능한 계약값인지, 그 경우 한도가 0원인지는 원문에서 확인하지 않았다.
+  //     그래서 0을 무효로 차단하지도, 한도 0원으로 적용하지도 않고 종전 계산을 유지한다.
+  //   ⚠ 상한을 넘는 안전 정수는 **거부하지 않는다.** 상한 절삭은 제5조①에 근거가 있는
+  //     정당한 계산이고 종전 동작 그대로다.
+  //   ⚠ 검증 위치는 G-20 지급보험금 검증 **뒤, 실제 계산 앞**이다.
+  //   ⚠ 반환은 이 파일의 기존 `blocked()`다 — 진료비 합계(`totalAmount`)를 보존한다.
+  const limitRaw = readCount(nb, "annualCoverageLimit");
+  if (limitRaw !== undefined && badCount(limitRaw)) {
+    return blocked([
+      "연간 보험가입금액(annualCoverageLimit)은 0 이상의 안전한 정수여야 합니다. 음수·소수·NaN·Infinity·안전 정수 범위를 넘는 값·문자열·객체는 계산하지 않습니다.",
+      // ⚠ 지급 방향을 단정하지 않는다. 종전 동작은 값에 따라 양쪽으로 갈렸다.
+      "계산기가 잘못된 값을 임의로 고치지 않습니다 — 가입금액을 고치면 연간 지급 한도가 증권과 달라져 보험금이 잘못 계산될 수 있습니다. 증권에 적힌 연간 보험가입금액을 입력해 주세요.",
+      `받은 값: ${showValue(limitRaw)}`,
+    ]);
+  }
+
   const annualMax = severity === "critical"
     ? GEN2026.nonBenefit.critical.annualLimitMax
     : GEN2026.nonBenefit.nonCritical.annualLimitMax;
-  const raw = nb?.annualCoverageLimit;
-  const annualLimit = raw === undefined || !Number.isFinite(raw) || raw <= 0
-    ? undefined
-    : Math.min(Math.floor(raw), annualMax);
+  // 여기 오는 값은 `undefined`이거나 0 이상의 안전한 정수다. 내림·정규화 없이 그대로 쓴다.
+  const limit = limitRaw as number | undefined;
+  const limitState: "applied" | "unset" | "zero" =
+    limit === undefined ? "unset" : limit === 0 ? "zero" : "applied";
+  const annualLimit = limitState === "applied"
+    ? Math.min(limit as number, annualMax)
+    : undefined;
   const isCriticalOutpatient = !!nb && severity === "critical" && input.visit === "outpatient";
   const isNonCriticalOutpatient = !!nb && severity === "non_critical" && input.visit === "outpatient";
 
@@ -496,7 +546,7 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
       totalOwnPay: results.reduce((s, x) => s + (x.ownPay ?? 0), 0),
       totalInsurancePay: results.reduce((s, x) => s + (x.insurancePay ?? 0), 0),
       appliedCaps: [...new Set(results.flatMap((x) => x.appliedCaps))],
-      notes: buildNotes(input, annualLimit !== undefined),
+      notes: buildNotes(input, limitState),
     };
   }
 

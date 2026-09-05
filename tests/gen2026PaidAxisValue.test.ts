@@ -304,8 +304,14 @@ console.log("\n[G-20] 10. 다른 진입점·다른 축·HOLD 무변경");
   check("별도 보장종목: 무효값이 종전대로 통과한다(후속 과제)",
     statusOf(item("9900000")) === "OK", shape(item("9900000")));
   // 다른 축은 그대로다.
-  check("annualCoverageLimit은 아직 검증되지 않는다(후속 과제 G-21)",
-    statusOf(wrap(() => calculateMany2026(NB({ annualCoverageLimit: "abc", priorAnnualInsurancePaid: 0 }) as never))) === "OK");
+  // ⚠ **낡은 계약을 교체했다.** G-20 시점에는 `annualCoverageLimit`이 아직 관용을 써서 그 사실을
+  //   후속 과제 표지로 고정했다. G-21이 그 축도 검증으로 바꿨으므로, 확인 대상을 "두 축이
+  //   서로 독립적으로 검증된다"로 옮긴다. 그 축의 새 계약은 gen2026AnnualLimitValue가 본다.
+  check("가입금액이 무효여도 지급보험금 안내가 먼저 나온다(순서 유지)",
+    notes(wrap(() => calculateMany2026(NB({ annualCoverageLimit: "abc", priorAnnualInsurancePaid: "abc" }) as never)))
+      .startsWith(FIRST));
+  check("지급보험금이 유효하면 가입금액 안내가 나온다",
+    statusOf(wrap(() => calculateMany2026(NB({ annualCoverageLimit: "abc", priorAnnualInsurancePaid: 0 }) as never))) === "PENDING_UNVERIFIED");
   // 지급 0원 HOLD의 이중 실행·차단은 그대로다.
   const eng = readFileSync("src/lib/insurance/engine/multiClaim2026.ts", "utf8");
   check("HOLD 이중 실행과 fingerprint 비교가 그대로",
@@ -350,7 +356,7 @@ console.log("\n[G-20] 11. 소스 계약");
   const iDays = body.indexOf("if (badCount(days))");
   const iDeduct = body.indexOf('readCount(input, "priorAnnualDeductible")');
   const iPaid = body.indexOf('const paidRaw = readCount(nb, "priorAnnualInsurancePaid")');
-  const iLimit = body.indexOf("const annualLimit = raw === undefined");
+  const iLimit = body.indexOf('const limitRaw = readCount(nb, "annualCoverageLimit")');
   const iRun = body.indexOf("function runBundle(");
   check("검증 순서: 레거시 → 별도 키 → 치료유형 → 통원 카운터 → 공제금액 → 지급보험금 → 가입금액 → 계산",
     iLegacy > 0 && iLegacy < iStray && iStray < iProbe && iProbe < iDays && iDays < iDeduct

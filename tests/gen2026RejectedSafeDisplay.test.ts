@@ -290,10 +290,10 @@ console.log("\n[G-14D] 7. 소스 계약");
     /const showValue = \(v: unknown\): string => \{/.test(multiBody));
   check("multiClaim2026이 itemGuards를 import하지 않는다",
     !/from "\.\/itemGuards"/.test(multiBody));
-  // ⚠ 계약 갱신(G-20): 기존 지급보험금 축이 값 검증으로 옮겨지면서 안내가 9곳 → 10곳이 됐다.
+  // ⚠ 계약 갱신(G-20·G-21): 두 금액 축이 값 검증으로 옮겨지면서 안내가 9곳 → 11곳이 됐다.
   //   요지(이 파일의 안내는 전부 지역 showValue를 거친다)는 그대로다.
-  check("multiClaim2026의 '받은 값' 10곳이 모두 안전 표시를 쓴다",
-    (multiBody.match(/받은 값: \$\{showValue\(/g) ?? []).length === 10
+  check("multiClaim2026의 '받은 값' 11곳이 모두 안전 표시를 쓴다",
+    (multiBody.match(/받은 값: \$\{showValue\(/g) ?? []).length === 11
     && !/받은 값: \$\{JSON\.stringify/.test(multiBody),
     String((multiBody.match(/받은 값: \$\{showValue\(/g) ?? []).length));
   // fingerprint는 결과 비교용이라 대상이 아니다 — 그대로 JSON.stringify를 쓴다.

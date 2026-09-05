@@ -78,8 +78,10 @@ check("5세대 페이지: 단건 미반영 범위를 연간 항목으로 한정"
   //    **미선택·무효 입력이면 null로 끝나는지**와 급여 분기가 coverage로 갈리는지를 본다.
   check("5세대 다회 UI: 미선택이면 결과가 null",
     /: null;/.test(gen5Multi) && /const plainResult = [\s\S]{0,80}coverage === "benefit"/.test(gen5Multi));
-  check("5세대 다회 UI: 일반·급여 계산 진입 앞에 진료비 게이트",
-    /const plainResult = amountsIncomplete\s*\n\s*\? null/.test(gen5Multi));
+  // ⚠ 계약 교체(G-13C): 급여 분기 게이트에 본인부담률 무효(`nhisRateInvalid`)가 더해졌다.
+  //   진료비 게이트가 먼저라는 계약은 그대로다(둘 다 같은 조건식에서 `null`로 끝난다).
+  check("5세대 다회 UI: 일반·급여 계산 진입 앞에 진료비·본인부담률 게이트",
+    /const plainResult = amountsIncomplete \|\| nhisRateInvalid\s*\n\s*\? null/.test(gen5Multi));
   check("5세대 다회 UI: 별도 보장종목 계산 게이트에 행 진료비 배제",
     specialGate.includes("!rowAmountsIncomplete"), specialGate);
   // 선택값이 실제 엔진 입력으로 전달되는지 — 화면에만 있고 엔진이 받지 않으면 차단이 무의미하다.

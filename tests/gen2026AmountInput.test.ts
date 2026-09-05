@@ -557,9 +557,13 @@ console.log("\n[범위] 다른 세대·엔진·공용 위젯은 건드리지 않
     !/replace\(/.test(stripComments(rawWidget)) && !/slice\(/.test(stripComments(rawWidget)));
   check("엔진 normalizeAmount는 그대로다",
     /return Number\.isFinite\(amount\) \? Math\.max\(0, Math\.floor\(amount\)\) : 0;/.test(settle));
-  check("num()은 남아 있되 진료비에는 쓰이지 않는다",
-    /const num = \(v: string\) => Number\(v\.replace\(\/\[\^0-9\.\]\/g, ""\)\) \|\| 0;/.test(ui)
-    && !/amounts\.map\(num\)/.test(ui) && !/amount: num\(r\.amount\)/.test(ui));
+  // ⚠ 계약 교체(G-13C): 5세대 다회의 마지막 `num()` 사용처(본인부담률)가 전용 파서
+  //   `gen2026MultiNhisRate`로 바뀌면서 공용 `num()`도 삭제됐다. 주석 제외 실사용처를 전수로
+  //   확인한 뒤 지웠고, 다른 용도로 남겨 둘 자리는 없었다.
+  check("공용 num()은 삭제됐고 진료비는 전용 파서를 쓴다",
+    !/const num = \(v: string\) =>/.test(ui)
+    && !/amounts\.map\(num\)/.test(ui) && !/amount: num\(r\.amount\)/.test(ui)
+    && /const gen2026Amount = \(v: string\): number \| null =>/.test(ui));
   check("satisfies로 초과 필드를 막는 계약은 그대로다",
     (ui.match(/\} satisfies Gen2026\w+\)/g) ?? []).length >= 3);
 }

@@ -565,7 +565,10 @@ console.log("\n[소스] 축 키는 기존 라우팅 결과에서만 만든다");
     !/setPriorInsuranceByAxis\([^)]*result/.test(code)
     && !/setPriorInsurance\([^)]*result/.test(code)
     && !/setPriorInsurance\([^)]*total/.test(code));
-  check("파서 num()은 그대로다", /const num = \(v: string\) => Number\(v\.replace\(\/\[\^0-9\.\]\/g, ""\)\) \|\| 0;/.test(code));
+  // ⚠ 계약 교체(G-13C): 5세대 다회의 마지막 `num()` 사용처(본인부담률)가 전용 파서
+  //   `gen2026MultiNhisRate`로 바뀌면서 공용 `num()`도 삭제됐다. 주석 제외 실사용처를 전수로
+  //   확인한 뒤 지웠고, 다른 용도로 남겨 둘 자리는 없었다.
+  check("공용 num()은 삭제됐다(G-13C)", !/const num = \(v: string\) =>/.test(code));
   check("진료비·상급병실료 파서 그대로",
     /const GEN2026_AMOUNT_FORMAT = \/\^\(\?:\[0-9\]\+\|\[1-9\]\[0-9\]\{0,2\}\(\?:,\[0-9\]\{3\}\)\+\)\$\/;/.test(code)
     && /const roomChargeAmount = \(v: string\): number \| null =>/.test(code)

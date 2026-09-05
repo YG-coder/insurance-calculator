@@ -26,7 +26,10 @@ const NON_BENEFIT_ITEMS: Gen2026NonBenefitItem[] = [
 ];
 const INJECTION_PURPOSES: Gen2026InjectionPurpose[] = ["general", "anticancer", "antibiotic", "orphan_drug"];
 
-const num = (v: string) => Number(v.replace(/[^0-9.]/g, "")) || 0;
+// ⚠ 종전 공용 정제 `num()`(= `Number(v.replace(/[^0-9.]/g, "")) || 0`)은 G-13C에서 마지막
+//   사용처(건강보험 본인부담률)가 사라져 **삭제했다.** 주석 제외 실사용처를 전수로 확인한 뒤
+//   지웠고, 다른 용도로 남겨 둘 자리는 없었다. 아래 주석들이 이 이름을 언급하는 것은
+//   "그 관용 정제를 쓰면 안 된다"는 근거를 남기기 위해서다.
 const won = (v: number) => `${v.toLocaleString("ko-KR")}원`;
 const smallButton = "rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:border-brand-300 disabled:opacity-40";
 
@@ -135,6 +138,34 @@ const gen2026CopyCount = (v: string): number | null => {
   if (!GEN2026_COPY_FORMAT.test(v)) return null;
   const n = Number(v);
   return Number.isSafeInteger(n) && n >= 1 && n <= GEN2026_MAX_COPIES ? n : null;
+};
+
+/**
+ * 5세대 **다회** 건강보험 본인부담률(%) 전용 파서. 급여 통원 한 경로에서만 쓴다.
+ *
+ * ⚠ 단건(`HealthCalc5th.tsx`의 `gen2026NhisRate`)을 재사용하지 않는다. 형식 규칙이 같아도
+ *   화면·라벨·안내·게이트가 다르고, 한쪽을 고칠 때 다른 쪽이 조용히 따라 바뀌면 안 된다.
+ *   금액·횟수 파서와도 재사용하지 않는다 — 저기는 정수·쉼표를 다루고 여기는 0~100 비율이다.
+ *
+ * ⚠ 공용 `num()`을 쓰면 안 된다. 실측(기준선 `353aae4`): `-1`·`+1`→**0.01**(부호를 지운다),
+ *   `.5`→0.005, `1.`→0.01, `1e3`→**0.13**, `1,0`→**0.1**, `20만`·`20%`·` 20 `→**0.2**,
+ *   `abc`·`NaN`·`Infinity`·`1.2.3`·공백만→**0**. 그리고 `Math.min(100, …)`이 `100.1`·`101`·
+ *   `300,000`·`1e308`·매우 큰 수를 **100%로 깎아** 보험 적용이 0원이 됐다.
+ *   ⚠ 0~20 구간의 변환은 엔진의 20% 하한 때문에 결과가 같지만, **화면에 보이는 값과 계산에
+ *     쓰는 값이 다른 것** 자체가 결함이다. 결과가 갈리는 것은 20 초과 구간이다.
+ * ⚠ `Math.min`·`Math.max`로 0~100을 자동 보정하지 않는다. 범위를 벗어나면 차단한다.
+ *
+ * 유효: 0 이상 100 이하의 일반 십진수. 정수부는 필수, 소수부는 선택 —
+ *   `0`, `00`, `01`, `20`, `12.5`, `12.50`, `100`, `100.0`. **소수 자릿수는 제한하지 않는다.**
+ * 무효(null): `.5`(정수부 없음), `1.`(소수부 없음), 부호, 지수 표기, 쉼표, 문자, 공백,
+ *   `NaN`·`Infinity`, `100.1`·`101` 같은 범위 초과.
+ *   빈 문자열 `""`은 파서가 아니라 **호출부**에서 미입력으로 처리한다(→ `undefined`).
+ */
+const GEN2026_MULTI_NHIS_RATE_FORMAT = /^[0-9]+(?:\.[0-9]+)?$/;
+const gen2026MultiNhisRate = (v: string): number | null => {
+  if (!GEN2026_MULTI_NHIS_RATE_FORMAT.test(v)) return null;
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 && n <= 100 ? n : null;
 };
 
 const roomChargeAmount = (v: string): number | null => {
@@ -595,6 +626,15 @@ export default function HealthCalcMulti2026() {
   const copySourceInvalid = gen2026Amount(amounts[0] ?? "") === null;
   const copyCountNum = gen2026CopyCount(copyCount);
   const copyCountInvalid = copyCountNum === null;
+  /**
+   * 건강보험 본인부담률을 쓰는 유일한 경로 — 급여 통원.
+   *   ⚠ 급여 **입원**·비급여·특별약관에서는 위젯도 없고 전달도 하지 않는다. 숨은 원문은
+   *     상태에 남기고, 급여 통원으로 돌아오면 원문과 안내가 그대로 복원된다.
+   */
+  const usesNhisRate = coverage === "benefit" && visit === "outpatient";
+  /** 빈 값만 미입력(undefined)이다 — 엔진의 종전 PENDING 안내를 그대로 살린다. */
+  const nhisRateNum = !usesNhisRate || nhisRate === "" ? undefined : gen2026MultiNhisRate(nhisRate);
+  const nhisRateInvalid = nhisRateNum === null;
 
   // ⚠ 무효 행은 위 게이트가 엔진 호출 자체를 막는다. 0원으로 대체하거나 행을 지우지 않는다.
   //   0원으로 바꾸면 사용자가 입력하지 않은 금액을 계산기가 만들어 내는 것이고, 결과표에
@@ -713,12 +753,17 @@ export default function HealthCalcMulti2026() {
   //     만들지 않는다 — 부분합은 사용자가 입력한 총 진료비가 아니고, 무효 행이 어떤 금액이었는지
   //     계산기가 알 수 없기 때문이다. (5세대에서 진료비 0원 행은 횟수·일수를 소진하지 않는다.)
   //   ⚠ 급여는 세 금액을 쓰지 않으므로 `money`로 막지 않는다 — 비급여 분기에만 건다.
-  const plainResult = amountsIncomplete
+  //   ⚠ 본인부담률이 **무효**이면 급여 분기의 엔진 호출 자체를 막는다. 종전에는 `num()`이
+  //     무효 원문을 0이나 0.13 같은 값으로 바꿔 계산해 버려, 화면에 보이는 값과 계산에 쓰인
+  //     값이 달랐다. 빈 값(undefined)은 무효가 아니라 미입력이라 종전대로 엔진이 PENDING을 낸다.
+  const plainResult = amountsIncomplete || nhisRateInvalid
     ? null
     : coverage === "benefit"
     ? calculateMany2026({
         cause: benefitCause, coverage: "benefit", visit, tier: benefitTier,
-        nhisCoinsuranceRate: visit === "outpatient" && nhisRate !== "" ? Math.min(100, num(nhisRate)) / 100 : undefined,
+        // ⚠ 검증된 값만 넘긴다. 무효(null)이면 아래 게이트가 이 호출 자체를 막으므로
+        //   여기서 `?? 0`이나 타입 단언으로 통과시키지 않는다. 빈 값은 undefined 그대로다.
+        nhisCoinsuranceRate: nhisRateNum === undefined || nhisRateNum === null ? undefined : nhisRateNum / 100,
         amounts: amounts.map((a) => gen2026Amount(a) as number),
       })
     : money !== null && deductibles !== null && nonBenefitItem === "general" && severity !== "" && cause !== "" && !needsTier
@@ -767,7 +812,12 @@ export default function HealthCalcMulti2026() {
       {showSpecialForm && specialItem === "musculoskeletal_esw" && <label className="text-sm font-semibold">보상 승인 회차<select className="input-base mt-1" value={approvedThrough} onChange={(e) => setApprovedThrough(Number(e.target.value) as Gen2026MskApprovedThrough)}>{GEN2026_MSK_APPROVED_THROUGH_VALUES.map((v) => <option key={v} value={v}>{v}회까지</option>)}</select></label>}
     </div>
 
-    {coverage === "benefit" && visit === "outpatient" && <label className="mt-4 block max-w-sm text-sm font-semibold">건강보험 본인부담률 (%)<input className="input-base mt-1" type="number" min="0" max="100" step="0.1" value={nhisRate} onChange={(e) => setNhisRate(e.target.value)} /></label>}
+    {/* ⚠ `type="number"`가 아니라 원문 보존 입력이다. `type="number"`는 `1e3`·`-1`·`100.1`을
+           그대로 통과시키면서 화면에는 원문을 남겨, 보이는 값과 계산에 쓰는 값이 갈렸다
+           (공개 화면에서 `100.1` 입력 → 100%로 깎여 보험 적용 0원을 재현). `min`·`max`·`step`도
+           제거한다 — 브라우저 힌트일 뿐 값을 막지 못했고, `step="0.1"`은 약관이 소수 한 자리로
+           정했다는 근거가 아니다. 노출 조건은 엔진 소비 조건(`usesNhisRate`)과 같은 식을 쓴다. */}
+    {usesNhisRate && <label className="mt-4 block max-w-sm text-sm font-semibold">건강보험 본인부담률 (%)<input className="input-base mt-1" type="text" inputMode="decimal" autoComplete="off" aria-describedby="gen2026-multi-nhis-rate-help" value={nhisRate} onChange={(e) => setNhisRate(e.target.value)} placeholder="진료비 영수증·보험사 안내에서 확인" /><span id="gen2026-multi-nhis-rate-help" className="mt-2 block text-xs font-normal text-slate-500">건강보험 본인부담률은 <b>0~100 사이의 숫자</b>로 입력해 주세요(소수 가능, 예: <b>20</b> 또는 <b>12.5</b>). 부호·지수 표기·쉼표·문자는 계산기가 임의로 고치지 않습니다. 참고로 약관상 실제 적용되는 최소 자기부담률은 <b>20%</b>이며, 그보다 낮은 값을 입력해도 계산에는 20%가 적용됩니다 — 입력하신 값을 20으로 바꾸는 것은 아닙니다.</span></label>}
 
     {coverage === "non_benefit" && <div className="mt-4"><NoticeBox variant="info">5세대 비급여는 보장종목이 나뉘어 있습니다. <b>중증</b>의 근골격계 이학요법·체외충격파, 비급여 주사료(일반 주사), 비급여 MRI는 특별약관1 (3)3대비급여이고, <b>비중증</b>의 비급여 MRI는 특별약관2 (3)의 별도 보장종목입니다. 반대로 <b>비중증</b> 근골격계·주사료와 항암제·항생제(항진균제 포함)·희귀의약품을 위한 <b>중증</b> 주사료는 약관이 일반 상해·질병 비급여에서 보상합니다. <b>상급병실료 차액</b>은 같은 표의 별도 행이라 <b>차액의 50%·1일 평균 보험금 10만 원 한도</b>로 따로 계산합니다.</NoticeBox></div>}
     {isRoomCharge && <div className="mt-4"><NoticeBox variant="info">입력할 금액은 전체 병실료가 아니라 <b>실제 사용 병실과 기준병실의 비급여 차액</b>입니다(특별약관1 제2조). 약관의 입원 보상금액은 &lsquo;비급여 의료비(<b>비급여 병실료는 제외</b>합니다)&rsquo;이므로 <b>일반 입원 의료비와 합쳐 넣지 마세요</b>. <b>1행은 1회의 입원</b>이며, 보험금은 차액의 <b>50%</b>이고 <b>1일 평균 보험금 10만 원</b>이 한도입니다.</NoticeBox></div>}
@@ -884,6 +934,11 @@ export default function HealthCalcMulti2026() {
 
     <button className="btn-primary mt-6" onClick={() => setSubmitted(true)}>여러 건 계산하기</button>
     {submitted && needsItem && <div className="mt-5"><NoticeBox variant="warning">비급여는 <b>치료유형</b>에 따라 적용되는 보장종목과 산식이 다릅니다. 치료유형을 먼저 선택해 주세요. 선택 전에는 계산하지 않습니다.</NoticeBox></div>}
+    {/* ⚠ 진료비가 무효이면 그 안내가 먼저다 — 종전 우선순위를 그대로 둔다(`amountsIncomplete`가
+           같은 게이트에서 먼저 걸린다). 여기는 진료비가 유효할 때의 본인부담률 전용 안내다.
+           ⚠ 문구는 **입력 계약**만 말한다. 20% 하한은 "실제로 적용되는 최소치"로 따로 설명하고,
+           입력값을 20으로 바꿨다고 표현하지 않는다. */}
+    {submitted && nhisRateInvalid && !amountsIncomplete && <div className="mt-5"><NoticeBox variant="warning">건강보험 본인부담률은 <b>0~100 사이의 숫자</b>로 입력해 주세요(소수 가능, 예: <b>20</b> 또는 <b>12.5</b>). 부호·지수 표기(<b>1e3</b>)·쉼표·문자·공백은 계산하지 않으며, 100을 넘는 값도 100으로 깎지 않고 그대로 차단합니다. 모르면 비워 두시면 됩니다. 참고로 약관상 실제 적용되는 최소 자기부담률은 <b>20%</b>입니다.</NoticeBox></div>}
     {submitted && needsSeverity && <div className="mt-5"><NoticeBox variant="warning">비급여는 <b>중증 / 비중증</b>에 따라 자기부담률과 한도가 다릅니다. 질환 구분을 선택해 주세요. 선택 전에는 계산하지 않습니다.</NoticeBox></div>}
     {submitted && needsPurpose && <div className="mt-5"><NoticeBox variant="warning">비급여 주사료는 <b>약제 용도</b>에 따라 보상하는 보장종목이 달라집니다(특별약관1 제3조(3)제2항). 약제 용도를 선택해 주세요. 선택 전에는 계산하지 않습니다.</NoticeBox></div>}
     {submitted && rcIncomplete && <div className="mt-5"><NoticeBox variant="warning">각 입원의 <b>차액 총액</b>과 <b>총 입원일수</b>를 올바르게 입력해 주세요. 차액 총액은 <b>0 이상의 숫자</b>, 총 입원일수는 <b>1 이상의 정수</b>여야 합니다. 음수·문자가 섞인 값은 계산기가 임의로 고치지 않고, 약관에 일수 산정 방법이 정해져 있지 않아 일수도 추정하지 않습니다. 올바르게 입력하기 전에는 계산하지 않습니다.</NoticeBox></div>}

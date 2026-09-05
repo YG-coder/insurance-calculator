@@ -549,7 +549,11 @@ console.log("\n[가드] 소스·문구");
     /const ROOM_CHARGE_AMOUNT_FORMAT = \/\^\(\?:\[0-9\]\+\|\[1-9\]\[0-9\]\{0,2\}\(\?:,\[0-9\]\{3\}\)\+\)\$\//.test(uiRaw));
   check("전용 파서가 안전 정수·음수 아님을 확인",
     /Number\.isSafeInteger\(n\) && n >= 0 \? n : null/.test(uiRaw));
-  check("전용 파서가 소수를 허용하지 않는다", !/\\\.\[0-9\]/.test(uiRaw.slice(uiRaw.indexOf("ROOM_CHARGE_AMOUNT_FORMAT"), uiRaw.indexOf("export default"))));
+  // ⚠ 검사 범위를 상급병실료 파서 블록으로 좁힌다. G-13C가 같은 파일 뒤쪽에 소수를 허용하는
+  //   본인부담률 파서(`GEN2026_MULTI_NHIS_RATE_FORMAT`)를 추가했으므로, "export default까지"로
+  //   넓게 보면 그 정규식에 걸려 오탐이 난다. 상급병실료 계약 자체는 그대로다.
+  check("전용 파서가 소수를 허용하지 않는다",
+    !/\\\.\[0-9\]/.test(uiRaw.slice(uiRaw.indexOf("ROOM_CHARGE_AMOUNT_FORMAT"), uiRaw.indexOf("const VISIT_COUNT_FORMAT"))));
   const flat = uiRaw.replace(/\s+/g, " ");
   check("roomChargeTotal은 전용 파서 결과만 받는다",
     /roomChargeTotal: roomChargeAmount\(r\.amount\) as number/.test(flat)

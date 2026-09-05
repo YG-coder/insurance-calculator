@@ -392,13 +392,18 @@ console.log("\n[소스] 파서·게이트·전달 형태");
     && /<RawAmountInput id="gen2026-prior-pool" value=\{priorPool\}/.test(code)
     && !/value=\{priorDeductible\} onChange=\{\(e\) => setPriorDeductible\(e\.target\.value\)\}/.test(code)
     && !/value=\{priorPool\} onChange=\{\(e\) => setPriorPool\(e\.target\.value\)\}/.test(code));
-  // ⚠ 계약 교체(G-13A·G-13B): `num(priorCount)`(G-13A)와 `num(copyCount)`(G-13B)는 사라졌다.
-  //   각각 항목별 보상 횟수 파서와 세대별 복제 횟수 파서를 쓴다.
-  //   `nhisRate`만 아직 num()이며 G-13C 범위로 남겼다.
-  check("num()은 nhisRate 한 자리에만 남아 있다",
-    /const num = \(v: string\) => Number\(v\.replace\(\/\[\^0-9\.\]\/g, ""\)\) \|\| 0;/.test(code)
-    && /num\(nhisRate\)/.test(code)
-    && !/num\(copyCount\)/.test(code) && !/num\(priorCount\)/.test(code));
+  // ⚠ 계약 교체(G-13A·B·C): `num(priorCount)`·`num(copyCount)`·`num(nhisRate)`가 차례로
+  //   전용 파서로 바뀌면서 공용 `num()`은 마지막 사용처가 사라져 삭제됐다.
+  // ⚠ `num(` 검사는 주석을 제외하고 본다 — 주석이 "공용 num()을 쓰면 안 된다"는 근거로
+  //   그 이름을 언급한다.
+  const noComments = code
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, "").replace(/\/\*[\s\S]*?\*\//g, "")
+    .split("\n").filter((l) => !/^\s*(\/\/|\*)/.test(l)).join("\n");
+  check("공용 num()은 완전히 사라졌고 각 축이 전용 파서를 쓴다",
+    !/const num = \(v: string\) =>/.test(noComments) && !/\bnum\(/.test(noComments)
+    && /const gen2026MultiNhisRate = \(v: string\): number \| null =>/.test(code)
+    && /const gen2026CopyCount = \(v: string\): number \| null =>/.test(code)
+    && /const coveredCount = nonNegSafeInt;/.test(code));
   check("공용 위젯 파일은 그대로다",
     !/trim\(|replace\(/.test(stripComments(readFileSync("src/components/RawAmountInput.tsx", "utf8")))
     && /replace\(\/\[\^0-9\]\/g, ""\)\.slice\(0, MAX_AMOUNT_DIGITS\)/.test(readFileSync("src/components/AmountInput.tsx", "utf8")));

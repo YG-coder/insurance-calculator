@@ -341,9 +341,19 @@ console.log("\n[라벨] 단건 입력에 연결된 라벨은 정확히 하나다
 {
   // 다회 계산기의 라벨은 그대로다(범위 밖). id 충돌도 없다.
   const multiSrc = readFileSync("src/components/calculators/HealthCalcMulti2026.tsx", "utf8");
-  check("다회 라벨은 그대로 존재한다", /건강보험 본인부담률 \(%\)<input className="input-base mt-1" type="number"/.test(multiSrc));
-  check("  다회의 nhisRate 파서도 그대로다(범위 밖)",
-    /nhisCoinsuranceRate: visit === "outpatient" && nhisRate !== "" \? Math\.min\(100, num\(nhisRate\)\) \/ 100 : undefined,/.test(multiSrc));
+  // ⚠ 계약 교체(G-13C): 다회의 본인부담률도 엄격 검증으로 바뀌었다(전용 파서
+  //   `gen2026MultiNhisRate`, 원문 보존 위젯). 이 파일의 관심사는 **단건**이므로, 여기서는
+  //   다회가 단건 파서를 재사용하지 않는다는 것과 id가 겹치지 않는다는 것만 본다.
+  check("다회 라벨은 그대로 존재한다(위젯은 원문 보존으로 교체)",
+    /건강보험 본인부담률 \(%\)<input className="input-base mt-1" type="text" inputMode="decimal"/.test(multiSrc));
+  // ⚠ 주석을 제외하고 본다. 다회 소스의 주석은 "단건의 gen2026NhisRate를 재사용하지 않는다"는
+  //   근거로 그 이름을 언급하므로, 주석까지 함께 보는 검사로는 판정할 수 없다.
+  const multiBody = multiSrc
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, "").replace(/\/\*[\s\S]*?\*\//g, "")
+    .split("\n").filter((l) => !/^\s*(\/\/|\*)/.test(l)).join("\n");
+  check("  다회는 단건 파서를 재사용하지 않는다",
+    /const gen2026MultiNhisRate = \(v: string\): number \| null =>/.test(multiBody)
+    && !multiBody.includes("gen2026NhisRate"));
   const mh = mount(HealthCalcMulti2026 as unknown as Comp,
     stateNamesFrom(multiSrc));
   mh.set("submitted", true); mh.set("coverage", "benefit"); mh.set("visit", "outpatient");

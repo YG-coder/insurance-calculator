@@ -214,8 +214,12 @@ console.log("\n[범위] 다른 세대·엔진은 건드리지 않았다");
   check("4세대 다회 진료비는 전용 파서를 쓴다(공용 digits()는 삭제됨)",
     /const gen2021Amount = \(v: string\): number \| null =>/.test(g4)
     && !/const digits = \(v: string\) =>/.test(g4));
-  check("5세대 다회는 여전히 num()으로 진료비를 읽는다(범위 밖)",
-    /const num = \(v: string\) => Number\(v\.replace\(\/\[\^0-9.\]\/g, ""\)\) \|\| 0;/.test(g5));
+  // ⚠ 계약 교체(G-13C): 5세대 다회의 마지막 `num()` 사용처(본인부담률)가 전용 파서
+  //   `gen2026MultiNhisRate`로 바뀌면서 공용 `num()`도 삭제됐다. 주석 제외 실사용처를 전수로
+  //   확인한 뒤 지웠고, 다른 용도로 남겨 둘 자리는 없었다.
+  check("5세대 다회 진료비는 전용 파서를 쓴다(공용 num()은 삭제됨)",
+    /const gen2026Amount = \(v: string\): number \| null =>/.test(g5)
+    && !/const num = \(v: string\) =>/.test(g5));
   check("엔진 normalizeAmount는 그대로다",
     /return Number\.isFinite\(amount\) \? Math\.max\(0, Math\.floor\(amount\)\) : 0;/.test(settle));
   check("2·3세대 엔진은 여전히 normalizeAmount로 방어한다",

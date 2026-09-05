@@ -2917,3 +2917,118 @@ try/catch 제거(순환 throw) ③`String()` 폴백 제거 ④고정 문구 제�
   undefined`). G-14C 이전부터 있던 의도된 동작이며 주석에 근거가 있다.
 
 새 계약은 `tests/gen2026RejectedSafeDisplay.test.ts`(85건)가 본다.
+
+
+### 5.24 급여 통원 두 입력 축의 산식 전 검증 (2026-09-05, G-15)
+
+**§5.23의 후속 조사에서 가장 위험한 것으로 고른 항목이다.** 계산식·20% 하한·최소공제·반환 계약·
+급여 **입원**·비급여 전 경로·통원 가입금액 처리가 모두 그대로다. 바뀐 것은 **무효 입력이 산식에
+닿지 못하게 막은 것**뿐이다.
+
+#### 확인한 결함 (기준선 `69c8dab` 엔진 직접 호출, UI 미경유)
+
+급여 통원 분기는 두 축을 검증 없이 산식에 넣었다.
+
+```ts
+const rate = Math.max(nhis as number, floorRate);   // 타입 단언
+const deduct = md[input.tier ?? "clinic"];          // 인덱싱
+```
+
+- `nhis`가 `NaN`·`Infinity`·문자열·객체이면 `Math.max`가 **NaN**을 만든다.
+- `tier`가 `"clinic"`·`"hospital"` 밖의 값이면 `md[tier]`가 **undefined**가 되어
+  `Math.max(amount * rate, undefined)`가 역시 **NaN**이 된다.
+
+그 NaN은 `settle()`의 `Number.isFinite(ownPayRaw) ? ownPayRaw : 0` 폴백에 걸려
+**자기부담금 0원 = 보험금 전액 지급**으로 끝났다. 진료비 300,000원 청구에서 본인부담 0원·보험
+적용 300,000원이 나온다 — **보험금 과다 산출**이다. ⚠ `settle`의 불변식
+(`ownPay + insurancePay === amount`)은 그대로라 **하류의 어떤 검사도 이것을 잡지 못한다.**
+값이 이상하다는 신호가 결과 어디에도 남지 않는다.
+
+실측한 갈래는 셋이다.
+
+| 기준선 동작 | 해당 값 |
+| --- | --- |
+| 자기부담 0원 · 보험금 전액 지급(**과다**) | `rate`: `NaN`·`Infinity`·`-Infinity`·문자열·`{}`·`[0.2]`·순환 / `tier`: `"ZZZ"`·`"CLINIC"`·`""`·`0`·`1`·`true`·`false`·`{}`·`[]`·`["clinic"]`·순환·`bigint`·Symbol·`NaN` — 모두 19건 |
+| 런타임 `TypeError` 관통 | `rate`가 `bigint`·Symbol(`Math.max`가 숫자로 바꾸지 못한다) |
+| 조용히 잘못된 값으로 계산 | `rate` `20`·`100`(백분율 오인) → 자기부담 전액(**과소**) / `rate` `true` → 1로 강제 / `tier: null` → **병·의원급으로 폴백** |
+
+⚠ 공개 화면은 도달할 수 없다. 급여 통원 `의료기관` 셀렉트는 `clinic`·`hospital` 두 값뿐이고,
+본인부담률은 `gen2026MultiNhisRate`가 0~100으로 검증한 뒤 `/100`으로 넘긴다.
+**엔진 직접 호출 계약** 전용 결함이다.
+
+#### 고친 방식 — 산식 앞 검증, 기존 `pending()`으로 반환
+
+| 축 | 허용 | 거부 |
+| --- | --- | --- |
+| `nhisCoinsuranceRate` | `undefined`(종전 미제공 안내로 차단), `0 ≤ v ≤ 1`인 유한한 숫자 | `null`을 포함한 그 밖의 모든 값 |
+| `tier` | `undefined`(종전 병·의원급 기본값 유지), `"clinic"`, `"hospital"` | `null`을 포함한 그 밖의 모든 값 |
+
+⚠ **`null`은 두 축 모두 거부다.** 타입 계약은 `tier?: Tier`이므로 유효값은 `undefined`·
+`"clinic"`·`"hospital"`뿐이고, 종전 `?? "clinic"`이 `null`을 병·의원급으로 해석한 것은 의도한
+입력 계약이 아니라 **관용적 부작용**이었다. 본인부담률의 `null`은 거부하면서 종별의 `null`만
+해석하면 두 축의 엄격 검증 원칙이 어긋난다. 그래서 폴백을 `?? "clinic"`이 아니라
+`tierRaw === "hospital" ? "hospital" : "clinic"`으로 바꿔, **`undefined`만** 병·의원급으로 간다.
+
+⚠ `0`은 유효값이다 — 종전대로 20% 하한이 적용된다. 하한을 "입력값을 20%로 바꾸는 것"으로
+표현하지 않는 화면 문구도 그대로다.
+
+⚠ 두 축이 동시에 무효이면 **각각 안내한다**(`holds` 누적 그대로). 미제공 안내는 첫 줄에 남는다.
+
+⚠ 안내에 **받은 값 자체를 넣지 않고 `typeof`만** 넣는다. 무효 입력을 템플릿 리터럴에 그대로
+끼우면 Symbol이나 `toString()`이 던지는 객체에서 안내를 만드는 중에 예외가 난다.
+§5.23의 `showValue()`를 이 파일에 세 번째로 복제하는 것은 승인받은 범위를 넘으므로 하지 않았다.
+
+⚠ `settle()`의 유한성 폴백은 **그대로 둔다.** 다른 경로의 최후 방어선이므로 없애지 않고,
+여기서 NaN이 만들어지지 않게 막는다.
+
+⚠ `multiClaim2026.ts`는 **무변경**이다. 이미 `if (single.status !== "OK") return blocked(single.notes)`
+로 단건 결과를 옮기므로, 다회에서도 `totalAmount`를 보존한 채 같은 안내가 나간다.
+
+#### 차분 결과 (기준선 `69c8dab` 클론과 수정본을 각각 번들해 직접 호출, 실행 확인)
+
+| 버킷 | 건수 | 동일 | 차이 |
+| --- | --- | --- | --- |
+| 1. 급여 통원 정상 격자(rate 7종 × tier 2종 × 금액 5종) | 70 | **70** | 0 |
+| 2. 무효 `rate` → PENDING 전환 | 18 | 0 | **18**(의도) |
+| 3. 무효 `tier`(`null` 제외) → PENDING 전환 | 15 | 0 | **15**(의도) |
+| 4. **`tier: null` — 잘못된 폴백 → PENDING 전환** | 12 | 0 | **12**(의도) |
+| 5. `tier: undefined` 폴백 무회귀 | 12 | **12** | 0 |
+| 6. 범위 밖 경로 무변경(급여 입원·비급여 전 경로·통원 가입금액) | 60 | **60** | 0 |
+| 7. 다회 `blocked()` 계약 | 10 | **3** | **7**(의도) |
+
+합계 **197건 · 동일 145 · 차이 52**, 차이는 전부 버킷 2·3·4·7의 의도된 전환이다.
+⚠ 버킷 4를 버킷 5와 **분리했다.** `tier: null`은 기준선에서 `"clinic"`과 **같은 결과**를 내던
+잘못된 폴백이므로 무회귀가 아니라 전환으로 세야 한다. 무회귀에 남는 것은 `undefined`뿐이다.
+
+버킷 2·3의 33건 중 **19건이 기준선에서 자기부담 0원·보험금 전액 지급**이었고, 2건
+(`rate`가 `bigint`·Symbol)은 **런타임 `TypeError` 관통**이었다. 현재는 33건 모두 `PENDING`이고
+**잔여 예외는 0건**이다.
+
+변조 **6종을 모두 검출**했다 — ①`rate` 검사 제거 ②`tier` 검사 제거 ③무효 `rate`를 20% 하한으로
+조용히 대체 ④`0`을 거부로 바꿈 ⑤`tier`의 `undefined` 폴백을 거부로 바꿈 ⑥`pending` 대신 숫자를
+만들어 반환. 6종 모두 신규 테스트가 행위로 잡았고 FROZEN 해시도 함께 잡았다. 검사 후 원본과
+바이트 단위로 대조해 원복을 확인했다.
+
+⚠ `tests/gen2026HoldStatus.test.ts`의 FROZEN 표에 있던 `generation2026.ts` 해시를 **의도적으로**
+갱신했다(`2c019bb8…` → `4cf88895…`). 갱신 이유를 그 자리에 주석으로 남겼다. 나머지 해시는 그대로다.
+
+#### 범위 밖으로 남긴 것
+
+- **후보 A** — `priorAnnualTreatmentActCount`·`approvedThroughVisit`가 일반 전환 경로(중증 주사료
+  항암제·항생제·희귀의약품, 비중증 근골격계·주사료 7조합)에서 값 `0`을 포함해 **조용히 폐기**된다.
+  두 검사가 `route === "special_item"` 블록 **안**에 있는 것이 원인이고, 타입은
+  `priorAnnualTreatmentActCount?: never`로 봉인하고 있어 **타입·런타임이 어긋난다**.
+  5세대 대응 축이 없으므로 금액 방향은 붙이지 않는다.
+- **후보 B** — 4세대 금액 축의 관용 검증. `priorAnnualInsurancePaid`·`priorAnnualRiderPaid`의
+  무효값이 `nonNegInt`로 **0**이 되어 **과다 산출**, `annualCoverageLimit`의 무효값과 `0`이
+  **미적용**이 되어 **과다 산출**, `amounts[]`의 무효값이 **0원 행**이 되어 **과소 산출**,
+  `amounts`가 배열이 아니면 **`TypeError` 관통**. 금액 축의 미사용 축 stray는 막지 않는다.
+- **후보 B′** — `multiClaim2021.ts` 6곳·`multiClaim.ts` 4곳의 `받은 값: ${JSON.stringify(x)}`가
+  §5.23과 같은 `bigint`·순환 참조 예외를 갖는다(실측).
+- **후보 D** — `undefined` 정책의 일괄 변경. 필드별로 뜻이 다르고(0 / 미적용 / 차단 / 약관 기본값),
+  `annualCoverageLimit`·`outpatientCoverageLimit`은 약관상 계약자 선택값이라 차단으로 바꾸면
+  증권을 모르는 사용자가 계산 자체를 못 하게 된다. 제안만 기록하고 확정하지 않는다.
+- `outpatientCoverageLimit`의 미사용 축 봉인, G-14A pool 공유 범위 HOLD, 지급 0원 HOLD 3종,
+  상급병실료 HOLD — 어느 것도 건드리지 않았다.
+
+새 계약은 `tests/gen2026BenefitOutpatientInput.test.ts`(121건)가 본다.

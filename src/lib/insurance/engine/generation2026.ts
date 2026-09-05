@@ -118,14 +118,58 @@ export function calc2026(input: Gen2026ClaimInput): CalcResult {
       return ok(amount, s.ownPay, s.insurancePay, rate, 0);
     }
     // 급여 통원: Max(건보율, 20%, 최소공제). 건보율은 건별 사용자 입력값이다.
+    //
+    // ⚠ 두 축을 **산식에 쓰기 전에** 검증한다(2026-09-05 실측으로 확인한 결함).
+    //   종전에는 `Math.max(nhis as number, floorRate)`와 `md[input.tier ?? "clinic"]`이
+    //   타입 단언과 인덱싱만으로 값을 받아, 타입을 우회한 외부 입력이 그대로 산식에 닿았다.
+    //     - `nhis`가 `NaN`·`Infinity`·문자열·객체이면 `Math.max`가 **NaN**을 만들고,
+    //     - `tier`가 `"clinic"`·`"hospital"` 밖의 값이면 `md[tier]`가 **undefined**가 되어
+    //       `Math.max(amount * rate, undefined)`가 역시 **NaN**이 된다.
+    //   그 NaN은 `settle()`의 `Number.isFinite(ownPayRaw) ? ownPayRaw : 0` 폴백에 걸려
+    //   **자기부담금 0원 = 보험금 전액 지급**으로 끝났다(보험금 과다 산출). `settle`의 불변식
+    //   (`ownPay + insurancePay === amount`)은 그대로라 하류의 어떤 검사도 이것을 잡지 못한다.
+    //   ⚠ `settle`의 폴백을 없애는 것이 아니라 **여기서 NaN이 만들어지지 않게** 막는다.
+    //     그 폴백은 다른 경로의 최후 방어선이라 그대로 둔다.
+    //
+    // ⚠ 두 축의 `undefined`는 서로 다른 뜻이고, 이번에 그 의미를 바꾸지 않는다.
+    //     nhis  — "모른다". 계산이 성립하지 않으므로 종전 안내로 차단한다.
+    //     tier  — **계산기의 종전 계약**이 미지정을 병·의원급 최소공제로 계산해 왔다.
+    //             그 폴백을 그대로 둔다. ⚠ 이 폴백에 약관 근거를 붙이지 않는다 — 직접 읽은
+    //             범위에서 표준약관은 종별 미지정의 기본값을 정하지 않는다. 여기서 유지하는
+    //             것은 약관이 정한 값이 아니라 **기존 동작**이다.
+    //   ⚠ 그러나 `null`은 두 축 모두 **거부**다. 타입 계약은 `tier?: Tier`이므로 유효값은
+    //     `undefined`·`"clinic"`·`"hospital"`뿐이고, 종전에 `?? "clinic"`이 `null`을
+    //     병·의원급으로 해석한 것은 의도한 입력 계약이 아니라 관용적 부작용이었다.
+    //     한 축의 `null`만 해석하면 두 축의 엄격 검증 원칙이 어긋난다.
+    //
+    // ⚠ 산식·20% 하한·최소공제·`ok()`의 반환값은 그대로다. 바뀌는 것은 **무효 입력이
+    //   숫자를 만들지 못하게 막는 것**뿐이다. 0은 유효값이라 종전대로 20% 하한이 적용된다.
+    //
+    // ⚠ 안내에 **받은 값 자체를 넣지 않고 `typeof`만 넣는다.** 무효 입력을 템플릿 리터럴에
+    //   그대로 끼우면 Symbol이나 `toString()`이 던지는 객체에서 안내를 만드는 중에 예외가 난다.
+    //   `itemGuards`·`multiClaim2026`의 `showValue()`를 이 파일에 세 번째로 복제하는 것은
+    //   승인받은 범위(급여 통원 분기)를 넘으므로 하지 않는다. `typeof`는 어떤 값에서도
+    //   던지지 않으면서 "무엇을 잘못 넘겼는지"를 알려 준다.
     const holds: string[] = [];
     const nhis = input.nhisCoinsuranceRate;
     const md = GEN2026.benefit.outpatient.minDeductible;
     if (nhis === undefined) holds.push("급여 통원: 건강보험 본인부담률 미제공 → 계산 불가(#2 입력 필요)");
+    else if (!(typeof nhis === "number" && Number.isFinite(nhis) && nhis >= 0 && nhis <= 1)) {
+      holds.push(`급여 통원: 건강보험 본인부담률(nhisCoinsuranceRate)은 0 이상 1 이하의 유한한 숫자여야 합니다(비율이며 백분율이 아닙니다 — 20%는 0.2). 받은 값의 형식: ${typeof nhis}`);
+    }
+    const tierRaw = (input as { tier?: unknown }).tier;
+    if (tierRaw !== undefined && tierRaw !== "clinic" && tierRaw !== "hospital") {
+      holds.push(`급여 통원: 의료기관 종별(tier)은 "clinic" 또는 "hospital"이어야 합니다. 최소공제금액이 종별로 다르므로(병·의원급 ${md.clinic.toLocaleString("ko-KR")}원 / 상급종합·종합병원 ${md.hospital.toLocaleString("ko-KR")}원) 값을 확인하기 전에는 계산하지 않습니다. 받은 값의 형식: ${typeof tierRaw}`);
+    }
     if (holds.length) return pending(amount, holds);
 
     const rate = Math.max(nhis as number, GEN2026.benefit.outpatient.floorRate);
-    const tier = input.tier ?? "clinic";
+    // ⚠ 여기 오는 tierRaw는 `undefined`·"clinic"·"hospital" 셋뿐이다(위 검사가 나머지를
+    //   거부했다). `?? "clinic"`을 쓰지 않는 이유는 그것이 `null`까지 병·의원급으로
+    //   해석해 버리기 때문이고, 타입 단언을 쓰지 않는 이유는 값 목록을 여기서 다시
+    //   좁히는 편이 검사와 산식이 어긋날 여지를 남기지 않기 때문이다.
+    //   `undefined`(미지정)와 "clinic"은 같은 병·의원급 최소공제로 간다 — 종전 그대로다.
+    const tier = tierRaw === "hospital" ? "hospital" : "clinic";
     const deduct = md[tier];
     const s = settle(amount, Math.max(amount * rate, deduct));
     return ok(amount, s.ownPay, s.insurancePay, rate, deduct);

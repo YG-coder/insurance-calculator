@@ -330,7 +330,17 @@ console.log("\n[커밋 D·E] 계산·화면 무변경 (기준 30dee21)");
 {
   const FROZEN: Record<string, string> = {
     "src/lib/insurance/engine/roomCharge2026.ts": "fa3c0f00ce6966e4886f737afc26546d29567285bf0257dff6bdf1d3c11c4355",
-    "src/lib/insurance/engine/generation2026.ts": "2c019bb8fa843b59cc6a60c0f5c7dc6350b991f52c7e1026ce694329165a017a",
+    // ⚠ G-15에서 **의도적으로** 갱신했다(종전 2c019bb8…).
+    //   급여 통원 분기가 `nhisCoinsuranceRate`·`tier`를 검증 없이 산식에 넣어, 타입을 우회한
+    //   무효값이 `Math.max`/`md[tier]`에서 **NaN**이 되고 `settle()`의 유한성 폴백에 걸려
+    //   **자기부담금 0원 = 보험금 전액 지급**으로 끝났다(보험금 과다 산출, 엔진 직접 호출로 실측).
+    //   두 축을 산식 앞에서 검증해 기존 `pending()`으로 돌린다. 산식·20% 하한·최소공제·
+    //   반환 계약·급여 입원·비급여 전 경로는 그대로다.
+    //   ⚠ 같은 커밋 안에서 한 번 더 바뀌었다(4cf88895… → 9757086f…). 종별 미지정 폴백을
+    //     "약관상 …"으로 적었던 **근거 표현만** 계산기의 기존 계약으로 고친 주석 변경이고,
+    //     실행 코드는 한 글자도 다르지 않다. 그 표현이 돌아오지 않는지는
+    //     tests/gen2026BenefitOutpatientInput.test.ts의 금지형 검사가 본다.
+    "src/lib/insurance/engine/generation2026.ts": "9757086fbf940aae006c57ec031e43ab69f2f546a6ae0276192ce912d37123c4",
     "src/lib/insurance/engine/engine.ts": "da28c9f77d7d90ba1d0e18146d626c9ea7fc6a89013293a26ec50e223ee56c8e",
     "src/lib/insurance/engine/capLabels.ts": "23d0bc4b40a1b408cf74ec0189457e1a3c9f6bc75988e4bcde4e7c2c8554410d",
     // ⚠ G-14D에서 **의도적으로** 갱신했다(종전 c10d2fea…).

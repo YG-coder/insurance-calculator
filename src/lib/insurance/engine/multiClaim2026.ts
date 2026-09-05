@@ -24,6 +24,42 @@ const readCount = (o: object | undefined, key: string): unknown =>
   (o as Record<string, unknown> | undefined)?.[key];
 
 /**
+ * 별도 보장종목·상급병실료 전용 축. 이 묶음 엔진은 일반 (1)(2)와 급여만 계산하므로
+ * 아래 키는 **어느 경로에서도 소비되지 않는다.**
+ *   ⚠ `roomCharge2026`의 `UNUSED_KEYS`와 목적이 같지만 **목록을 공유하지 않는다** —
+ *     그쪽은 상급병실료가 쓰지 않는 축(통원 카운터·priorAnnualDeductible 포함)이고,
+ *     이쪽은 이 묶음이 쓰지 않는 축이다. 합치면 한쪽 변경이 다른 쪽을 조용히 바꾼다.
+ *   ⚠ `priorAnnualDeductible`은 여기 넣지 않는다. 이 묶음이 **실제로 소비하는** 축이라
+ *     아래에서 경로·값을 따로 검증한다.
+ */
+const SPECIAL_ITEM_ONLY_KEYS = [
+  "priorAnnualInpatientDeductible", "priorAnnualCoveredCount", "priorAnnualTreatmentActCount",
+  "approvedThroughVisit", "injectionPurpose", "item", "lines", "route", "stays",
+] as const;
+
+/**
+ * 안내에 "받은 값"을 실을 때 쓰는 **안전 표시**.
+ *
+ * ⚠ `JSON.stringify`는 값에 따라 **예외를 던진다** — `bigint`는 "Do not know how to
+ *   serialize a BigInt", 순환 참조 객체는 "Converting circular structure to JSON"이다.
+ *   이 파일의 검증은 **타입을 우회한 외부 입력**을 막는 것이 목적이므로, 잘못된 입력이
+ *   차단 결과가 아니라 런타임 예외로 끝나면 목적 자체가 무너진다.
+ * ⚠ 표시 실패가 검증 실패가 되어서는 안 된다. 실패하면 문자열로 낮춰 보여 주고,
+ *   그것마저 실패하면 고정 문구로 대체한다. 반환 계약(blocked)과 안내의 의미는 그대로다.
+ * ⚠ `undefined`는 `JSON.stringify`가 `undefined`를 돌려주므로 문자열로 만들어 준다.
+ */
+const showValue = (v: unknown): string => {
+  try {
+    const json = JSON.stringify(v);
+    if (json !== undefined) return json;
+  } catch { /* bigint·순환 참조 등 — 아래로 낮춘다 */ }
+  try {
+    return String(v);
+  } catch { /* Symbol·toString이 던지는 객체 등 */ }
+  return "(표시할 수 없는 값)";
+};
+
+/**
  * 두 해석의 결과가 실제로 같은지 비교하는 지문.
  *   status·합계·행별 보상 여부·금액·공제·CapCode·최상위 CapCode를 모두 넣는다.
  *   notes는 카운터와 무관하게 만들어지므로 제외한다(넣어도 항상 같다).
@@ -123,7 +159,47 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
       return blocked([
         "통원 횟수·일수 카운터는 비급여 통원 전용입니다. 급여 계산에는 쓰이지 않습니다.",
         "쓰이지 않는 입력을 조용히 버리면 한도를 반영했다고 오해할 수 있어 계산하지 않았습니다.",
-        `받은 값: ${JSON.stringify(strayVisits ?? strayDays)}`,
+        `받은 값: ${showValue(strayVisits ?? strayDays)}`,
+      ]);
+    }
+  }
+
+  // ── A군: 2·3세대 전용 레거시 필드 ─────────────────────────────────
+  //   단건 `calc2026`은 `priorAnnualPaid`의 **존재 자체를 거부**한다(2·3세대 입원 자기부담
+  //   상한 200만원 전용 축이라 5세대에서는 읽지 않는다). 그런데 다회는 그 거부를 물려받지
+  //   못했다 — 아래 preflight가 `calc2026`을 부를 때 `amount: 0`짜리 고정 인자로
+  //   `nonBenefitItem`·`visit`·`tier`만 넘기고 **원본 입력을 넘기지 않기 때문**이다.
+  //   ⚠ 여기에 금액 방향(과다·과소)을 붙이지 않는다. 5세대의 대응 축이 아니어서 "올바른 값"에
+  //     해당하는 비교 대상 계산이 없다. 위험은 금액이 아니라 **조용한 폐기**다.
+  //   ⚠ 값이 0이어도 막는다. 명시적으로 전달된 레거시 필드이므로 단건과 같은 계약이다.
+  //   ⚠ preflight보다 **앞**이다. 이 필드는 nonBenefitItem·severity가 무엇이든 쓰이지 않는다.
+  {
+    const legacy = readCount(input, "priorAnnualPaid");
+    if (legacy !== undefined) {
+      return blocked([
+        "priorAnnualPaid는 2·3세대 입원 자기부담 상한(200만원)용 필드라 5세대에서는 읽지 않습니다.",
+        "5세대 중증 입원의 500만원 상한은 약관상 공제금액을 누적하므로 priorAnnualDeductible로 넘겨 주세요(특별약관1 제5조 제5항).",
+        "쓰이지 않는 입력을 조용히 버리면 반영했다고 오해할 수 있어 계산하지 않았습니다.",
+        `받은 값: ${showValue(legacy)}`,
+      ]);
+    }
+  }
+
+  // ── B군: 별도 보장종목(3대비급여·비중증 MRI·상급병실료) 전용 키 ────
+  //   이 묶음 엔진은 일반 (1)(2)와 급여만 계산한다. 아래 키들은 `specialItem2026`·
+  //   `roomCharge2026`의 축이라 **어느 경로에서도 쓰이지 않는다.** 타입에는 선언조차 없어
+  //   리터럴은 tsc가 막지만, 변수 경유·외부 데이터는 타입을 우회한다.
+  //   ⚠ 값이 0이어도 막는다 — 통원 카운터·acts와 같은 계약이다.
+  //   ⚠ preflight보다 앞이다. `nonBenefitItem`이 무엇이든 이 키들은 쓰이지 않으므로,
+  //     "이 치료유형은 대상이 아닙니다"보다 먼저 정확한 이유를 말하는 편이 낫다.
+  {
+    const stray = SPECIAL_ITEM_ONLY_KEYS.find((k) => readCount(input, k) !== undefined);
+    if (stray !== undefined) {
+      return blocked([
+        `${stray}은(는) 별도 보장종목(3대비급여·비중증 MRI·상급병실료 차액) 전용 입력이라 이 묶음 계산에 쓰이지 않습니다.`,
+        "그 보장종목은 calculateGen2026Item으로 계산해 주세요. 공제금액·보장한도·적용 축이 모두 다릅니다(특별약관1 제5조 제1항 단서·제3항).",
+        "쓰이지 않는 입력을 조용히 버리면 반영했다고 오해할 수 있어 계산하지 않았습니다.",
+        `받은 값: ${showValue(readCount(input, stray))}`,
       ]);
     }
   }
@@ -148,7 +224,7 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
       return blocked([
         "통원 횟수·일수 카운터는 입원 계산에 쓰이지 않습니다.",
         "쓰이지 않는 입력을 조용히 버리면 한도를 반영했다고 오해할 수 있어 계산하지 않았습니다.",
-        `받은 값: ${JSON.stringify(visits ?? days)}`,
+        `받은 값: ${showValue(visits ?? days)}`,
       ]);
     }
 
@@ -183,7 +259,7 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
       if (badCount(visits)) {
         return blocked([
           "이미 사용한 통원 횟수는 0 이상의 정수여야 합니다. 음수·소수·NaN·Infinity·안전 정수 범위를 넘는 값·문자열은 계산하지 않습니다.",
-          `받은 값: ${JSON.stringify(visits)}`,
+          `받은 값: ${showValue(visits)}`,
         ]);
       }
     }
@@ -197,7 +273,54 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
       if (badCount(days)) {
         return blocked([
           "이미 사용한 통원일수는 0 이상의 정수여야 합니다. 음수·소수·NaN·Infinity·안전 정수 범위를 넘는 값·문자열은 계산하지 않습니다.",
-          `받은 값: ${JSON.stringify(days)}`,
+          `받은 값: ${showValue(days)}`,
+        ]);
+      }
+    }
+  }
+
+  // ── C군: priorAnnualDeductible — 실제 소비 경로에서만 허용 ─────────
+  //   제5조⑤ 500만원 공제금액 상한은 **상급종합병원·종합병원 입원**에만 걸린다. 엔진도
+  //   `calc2026`이 `severity === "critical" && visit === "inpatient" && tier === "hospital"`
+  //   일 때만 이 값을 쓴다(generation2026.ts). 그 밖의 조합에서는 어디에도 쓰이지 않는다.
+  //   ⚠ 이 검사는 위 preflight·통원 카운터 안내 **뒤**에 온다. `severity`·`tier`·
+  //     `nonBenefitItem`이 정해지지 않은 상태에서 먼저 거부하면, "질환 구분을 골라 주세요"·
+  //     "의료기관 종별을 골라 주세요"라고 말해야 할 자리에 "이 필드를 쓰지 마세요"가 나간다.
+  //     그래서 **미지정은 후보로 두고** 기존 안내가 제 역할을 하게 둔다.
+  //   ⚠ 합산 범위(상해·질병 및 3대비급여를 하나로 세는지)는 확정되지 않았고
+  //     (GEN2026-CRITICAL-DEDUCTIBLE-POOL-SCOPE = HOLD) 이 검증은 그것을 건드리지 않는다.
+  {
+    const deductible = readCount(input, "priorAnnualDeductible");
+    if (deductible !== undefined) {
+      // 급여 묶음에는 이 축이 없다(제5조⑤는 비급여 특별약관 조항이다).
+      if (bf) {
+        return blocked([
+          "누적 공제금액(priorAnnualDeductible)은 비급여 중증 입원의 500만원 공제금액 상한 전용입니다. 급여 계산에는 쓰이지 않습니다.",
+          "쓰이지 않는 입력을 조용히 버리면 반영했다고 오해할 수 있어 계산하지 않았습니다.",
+          `받은 값: ${showValue(deductible)}`,
+        ]);
+      }
+      // 여기부터는 비급여다. 미지정(undefined)은 위 안내가 이미 처리했거나 처리할 몫이므로
+      //   후보로 남긴다 — 확정된 값이 소비 조건과 어긋날 때만 막는다.
+      const usesDeductible = (severity === undefined || severity === "critical")
+        && nb?.visit === "inpatient"
+        && (nb.tier === undefined || nb.tier === "hospital");
+      if (!usesDeductible) {
+        return blocked([
+          "누적 공제금액(priorAnnualDeductible)은 중증 비급여 입원 중 상급종합병원·종합병원에만 적용됩니다(특별약관1 제5조 제5항).",
+          "이 조합에서는 계산에 쓰이지 않으므로, 조용히 버리지 않고 계산하지 않았습니다.",
+          `받은 값: ${showValue(deductible)}`,
+        ]);
+      }
+      // 값 검증 — 통원 카운터와 **같은 형식 규칙**을 쓴다(0 이상의 안전 정수).
+      //   ⚠ 단위와 근거 조문은 다르다. 문구·카운터는 계속 분리한다.
+      //   ⚠ 명시적 0은 유효값이고, 500만원을 넘는 값도 유효한 과거 상태라 절삭하지 않는다.
+      //     상한 처리는 `calc2026`의 `Math.max(cap - prior, 0)`이 한다.
+      if (badCount(deductible)) {
+        return blocked([
+          "이미 누적된 공제금액은 0 이상의 정수여야 합니다. 음수·소수·NaN·Infinity·안전 정수 범위를 넘는 값·문자열은 계산하지 않습니다.",
+          "500만원을 넘는 값도 유효한 과거 상태이므로 그대로 받습니다 — 상한 처리는 약관 산식이 합니다.",
+          `받은 값: ${showValue(deductible)}`,
         ]);
       }
     }

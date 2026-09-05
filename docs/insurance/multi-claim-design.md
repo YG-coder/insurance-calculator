@@ -2716,3 +2716,116 @@ preflight가 제 안내를 내고 `totalAmount`도 보존한다.
 적었다. **공제 pool 축은 그 반대**다 — 위 표가 실측 결과다. `d758bba`는 이미 푸시돼 있어 커밋
 메시지는 고칠 수 없으므로, **문서·테스트 주석만 후속 커밋에서 정정하고 그 사실을 여기 남긴다.**
 구현·테스트·차분 결과는 영향이 없다 — 거부 계약은 방향과 무관하게 두 축을 모두 막기 때문이다.
+
+---
+
+### 5.22 5세대 다회 진입점의 입력 계약 보강 (2026-09-05, G-14C)
+
+**규제 규칙 추가가 아니다.** 산식·규칙값·UI·G-14A pool 범위 HOLD·지급 0원 HOLD 3종·상급병실료
+HOLD가 모두 그대로다. `multiClaim2026.ts`의 **직접 호출 계약**만 다뤘다.
+
+#### 확인한 결함 (기준선 `d56e57f` 엔진 직접 호출, UI 미경유)
+
+이 진입점은 통원 카운터 stray와 `nonBenefitItem` 말고는 아무것도 막지 않았다.
+
+- **A군 — `priorAnnualPaid`의 조용한 폐기.** 단건 `calc2026`은 이 2·3세대 전용 필드(입원
+  자기부담 상한 200만원)의 **존재 자체를 거부**하는데 다회는 `OK`로 통과시켰다. 원인은 구조다 —
+  다회 preflight가 `calc2026`을 부를 때 `amount: 0`짜리 고정 인자로 `nonBenefitItem`·`visit`·
+  `tier`만 넘기고 **원본 입력을 넘기지 않아** 단건의 레거시 필드 거부가 상속되지 않았다.
+  ⚠ **금액 방향(과다·과소)을 붙이지 않는다.** 5세대의 대응 축이 아니어서 "올바른 값"에 해당하는
+  비교 대상 계산이 없다. 위험은 금액이 틀리는 것이 아니라 **호출자가 반영됐다고 믿는데 계산기가
+  말없이 버리는 것**이다.
+- **B군 — 별도 보장종목 전용 키 9종**(`priorAnnualInpatientDeductible`·`priorAnnualCoveredCount`·
+  `priorAnnualTreatmentActCount`·`approvedThroughVisit`·`injectionPurpose`·`item`·`lines`·
+  `route`·`stays`)이 값 `0`이든 아니든 통과했다.
+- **C군 — `priorAnnualDeductible`**이 급여·통원·비중증·병·의원급 입원처럼 **소비되지 않는
+  조합**에 실려도 통과했고, 값 검증이 없어 문자열·`null`·객체·배열·불리언·음수·`NaN`·`±Infinity`가
+  `nonNegInt()`로 조용히 **0**이 됐다. 이 축은 과거값이 클수록 보험금이 **증가**하므로
+  0으로 바뀌면 **보험금 과소 산출**이다(§5.21 정정 참조).
+- **안내 자체가 예외를 던질 수 있었다.** 기존 통원 카운터 안내 4곳이 `JSON.stringify(value)`로
+  "받은 값"을 만드는데, `bigint`는 "Do not know how to serialize a BigInt", 순환 참조 객체는
+  "Converting circular structure to JSON"으로 **TypeError를 던진다.** 타입을 우회한 입력을 막는
+  것이 목적인 코드가 차단 결과가 아니라 런타임 예외로 끝나면 목적 자체가 무너진다.
+
+#### 고친 방식
+
+**① 안전 표시 헬퍼 `showValue()`.** `JSON.stringify` → 실패하면 `String(v)` → 그것마저 실패하면
+`"(표시할 수 없는 값)"`. `undefined`도 문자열로 만들어 준다. 새 A·B·C 가드와 **기존 통원 카운터
+안내 4곳**이 모두 이 헬퍼를 쓴다(안내의 의미와 반환 계약은 바꾸지 않았다). 지문(`fingerprint`)의
+`JSON.stringify`는 표시용이 아니라 비교용이므로 그대로 뒀다.
+
+**② 검사 순서.** A·B는 **preflight보다 앞**이다 — 이 키들은 `nonBenefitItem`·`severity`가
+무엇이든 쓰이지 않으므로 먼저 정확한 이유를 말하는 편이 낫다. C는 **preflight와 통원 카운터
+안내 뒤**다 — `severity`·`tier`가 정해지지 않은 상태에서 먼저 거부하면 "질환 구분을 골라
+주세요"·"의료기관 종별을 골라 주세요"라고 말해야 할 자리에 "이 필드를 쓰지 마세요"가 나간다.
+
+```
+1) 급여 묶음의 통원 카운터 stray            (기존)
+2) A군 priorAnnualPaid                     ← 신설
+3) B군 별도 보장종목 전용 키 9종             ← 신설
+4) preflight probe (nonBenefitItem 등)     (기존)
+5) 통원 카운터 입원/축/미입력/값             (기존)
+6) C군 priorAnnualDeductible 경로 → 값     ← 신설
+7) 계산
+```
+
+**③ C군 허용 조건은 `calc2026`의 소비 조건과 같은 식**이다 —
+`(severity === undefined || "critical") && visit === "inpatient" && (tier === undefined || "hospital")`.
+**미지정을 후보로 둔다**는 점이 핵심이다. 값 검증은 통원 카운터와 같은 `badCount()`
+(0 이상의 안전 정수)를 쓰되 단위·근거 조문·안내 문구는 계속 분리한다. `undefined`는 종전
+의미(0에서 시작)를 유지하고, 명시적 `0`은 유효하며, 500만원을 넘는 안전 정수는 **절삭하지
+않는다** — 상한 처리는 `Math.max(cap - prior, 0)`이 한다.
+
+**④ 반환 계약은 이 파일의 기존 `blocked()`다** — `PENDING_UNVERIFIED`이면서 **`totalAmount`를
+보존**한다. `specialItem2026.ts`의 `rejected()`(`totalAmount: 0`, `route: "rejected"`)와 섞지
+않는다. 두 진입점의 계약이 서로 다른 것은 의도다. 거부 안내에 규제 HOLD 문구를 넣지 않는다.
+
+⚠ B군 키 목록은 `roomCharge2026`의 `UNUSED_KEYS`와 **공유하지 않는다.** 목적은 비슷하지만
+대상이 다르다 — 그쪽은 상급병실료가 쓰지 않는 축(통원 카운터·`priorAnnualDeductible` 포함),
+이쪽은 이 묶음이 쓰지 않는 축이다. 합치면 한쪽 변경이 다른 쪽을 조용히 바꾼다.
+
+#### 차분 결과 (기준선 `git archive d56e57f`, 실행 확인)
+
+| 버킷 | 건수 | 동일 | 차이 |
+| --- | --- | --- | --- |
+| 1. 허용 경로 정상 입력 | 18 | **18** | 0 |
+| 2. 허용 경로 무효값 | 14 | 0 | **14**(의도) |
+| 3. A군 레거시 stray | 4 | 0 | **4**(의도) |
+| 4. B군 전용 키 9종 × 값 2종 × 급여·비급여 | 36 | 0 | **36**(의도) |
+| 5. C군 미소비 경로 | 10 | 0 | **10**(의도) |
+| 6. `undefined`·`0`·한도 초과 안전 정수 | 5 | **5** | 0 |
+| 7. 미지정 — 기존 안내 유지 | 5 | **5** | 0 |
+| 8. 기존 가드·범위 밖 축·정상 | 15 | **15** | 0 |
+
+합계 **107건 · 동일 43 · 차이 64**, 차이는 전부 버킷 2~5의 의도된 전환이다.
+
+**버킷 9 — `bigint`·순환 참조 9건**(별도 집계): 기준선에서 **3건이 런타임 예외**였고(기존 통원
+카운터 경로 — 값 검증·급여 stray), 6건은 가드가 없어 조용히 무시됐다. **현재는 9건 모두
+`blocked()`이고 예외는 0건**이다.
+
+UI는 12개 키만 넘기므로 화면 무회귀는 구조적이며, `HealthCalcMulti2026.tsx`는 이 커밋에서
+바이트 단위로 무변경이다.
+
+변조 **20종을 모두 검출**했다 — A·B·C 가드 제거 4 / 각 군 `0`만 예외 허용 3 / 안전정수→정수 /
+C군 clamp+문자열 변환 / C군 소비 조건 완화 3(`visit`·`severity`·`tier`) / 종별 미지정을 후보에서
+제외 / 급여에도 C군 허용 / B군 목록에서 한 키 누락 / `totalAmount` 보존 파기 / 안내에 HOLD 문구
+삽입 / **안전 표시 제거(bigint·순환에서 throw)** / 기존 카운터 가드 제거 2. 검사 후 원본과
+바이트 단위로 대조해 원복을 확인했다.
+
+⚠ **검출 주체 구분** — 15종은 신규 테스트가 단독으로 잡았고, 5종은 신규 테스트와 기존 검사
+(`gen2026OutpatientCounterInput`·`gen2026NonCriticalOutpatientDays`·`gen2026CriticalOutpatientZeroPay`·tsc)가
+함께 잡았다. 신규 테스트가 놓친 변조는 없다.
+
+#### 범위 밖으로 남긴 것
+
+- **`outpatientCoverageLimit`·`nhisCoinsuranceRate`·`tier`의 전체 경로 봉인.** 정상 preflight와
+  타입 구조에 미치는 범위가 더 커서 별도 조사 대상으로 남긴다. 이번 커밋에서 이 세 축은
+  종전 그대로 통과하며, 그 사실을 검사로 고정했다.
+- **`itemGuards.rejected()`의 같은 노출(2026-09-05 확인).** `specialItem2026.ts`가 쓰는 공용
+  `rejected()`도 `JSON.stringify(got)`를 직접 부르므로 `bigint`·순환 참조에서 **똑같이 예외를
+  던진다**(G-14B가 추가한 두 축 포함). 공용 헬퍼라 다른 진입점 전부에 영향을 주므로 이번 범위에
+  넣지 않았다. **별도 승인이 필요하다.**
+- 4세대 금액 축의 관용 검증, `priorAnnualTreatmentActCount`의 일반 전환 경로 런타임 검사,
+  `undefined`를 "미입력 차단"으로 바꾸는 정책.
+
+새 계약은 `tests/gen2026MultiInputContract.test.ts`(116건)가 본다.

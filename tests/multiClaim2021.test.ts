@@ -91,12 +91,21 @@ function check(name: string, ok: boolean, detail = "") {
     mriStray.status === "PENDING_UNVERIFIED" && mriStray.lines.length === 0);
 }
 
-// 정규화 및 합계 불변식.
+// 합계 불변식.
+//   ⚠ **낡은 계약을 교체했다.** 종전에는 `[-1, NaN, 100_000.9]`가 `normalizeAmount`로
+//     `0,0,100000`이 되는 것을 "금액 정규화"로 고정했다. G-16이 그 관용을 없애고 무효
+//     진료비를 차단하므로, 같은 입력은 이제 계산되지 않는다. 불변식은 **유효한 입력**에서
+//     확인하고, 무효 입력의 새 계약은 tests/gen2021AmountEngineContract.test.ts가 본다.
 {
-  const r = calculateMany2021({ cause: "disease", coverage: "benefit", visit: "inpatient", amounts: [-1, Number.NaN, 100_000.9] });
-  check("금액 정규화", r.lines.map((x) => x.amount).join(",") === "0,0,100000");
+  const r = calculateMany2021({ cause: "disease", coverage: "benefit", visit: "inpatient", amounts: [0, 100_000, 250_000] });
+  check("유효 금액은 그대로 쓰인다", r.lines.map((x) => x.amount).join(",") === "0,100000,250000");
   check("합계 정합", (r.totalOwnPay ?? 0) + (r.totalInsurancePay ?? 0) === r.totalAmount);
   check("모든 결과 정수", r.lines.every((x) => Number.isInteger(x.ownPay) && Number.isInteger(x.insurancePay)));
+  // 종전 관용이 되살아나지 않는지 같은 자리에서 확인한다.
+  const bad = calculateMany2021({ cause: "disease", coverage: "benefit", visit: "inpatient",
+    amounts: [-1, Number.NaN, 100_000.9] } as unknown as Gen2021MultiClaimInput);
+  check("무효 금액을 0원 행으로 정규화하지 않는다",
+    bad.status === "PENDING_UNVERIFIED" && bad.lines.length === 0 && bad.totalAmount === 0);
 }
 
 console.log(`\n[multiClaim2021] 통과 ${pass} / 실패 ${fail}`);

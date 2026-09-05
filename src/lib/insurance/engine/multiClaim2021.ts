@@ -1,4 +1,7 @@
-import { normalizeAmount, settle } from "../common/settle";
+// ⚠ `normalizeAmount`를 더 이상 import하지 않는다. 진료비를 조용히 고치던 유일한
+//   호출부를 이번에 검증으로 바꿨고, 남겨 두면 "여기서도 값을 고친다"고 읽힌다.
+//   `settle()`이 내부에서 여전히 자기 인자를 정규화하며 그 동작은 그대로다.
+import { settle } from "../common/settle";
 import { GEN2021 } from "./constants";
 import { calc2021 } from "./generation2021";
 import {
@@ -69,10 +72,61 @@ function excluded(index: number, amount: number, cap: CapCode, note: string): Cl
  * 연간 가입금액은 계약자가 선택한 값이므로 입력된 경우에만 적용한다.
  */
 export function calculateMany2021(input: Gen2021MultiClaimInput): MultiClaimResult {
-  const amounts = (input.amounts ?? []).map(normalizeAmount);
+  // ── 진료비: 컨테이너 → 원소 → 합계 ──────────────────────────────────
+  //   ⚠ **어떤 검사보다 먼저**다. 종전에는 `(input.amounts ?? []).map(normalizeAmount)`가
+  //     첫 줄에서 값을 조용히 고쳐, 잘못된 금액이 **0원 행**이 되어 계산에 들어갔다.
+  //     0원 행은 4세대에서 연간 횟수를 1회 소진하고 도수 승인 회차 판정(`amounts.length`)에도
+  //     들어가므로, 금액만 틀리는 것이 아니라 **횟수와 승인까지** 틀어졌다. 실측 결과
+  //     `["abc", 300000]`은 과거 99회에서 유효한 두 행과 똑같이 2행을 한도 초과로 제외시켰다.
+  //     그래서 금액 검사가 횟수·승인 검사보다 앞에 와야 하고, 잘못된 금액이 그 안내로
+  //     가려져서도 안 된다.
+  //   ⚠ 명시적으로 입력한 숫자 `0` 행의 기존 처리(계산 포함·횟수 소진·승인 회차 산입)는
+  //     그대로다. 이번에 바꾸는 것은 **무효값이 0원 행이 되는 경로**뿐이다.
+  const rawAmounts = (input as { amounts?: unknown }).amounts;
+  /**
+   * 신뢰 가능한 총액이 없을 때의 차단.
+   *   ⚠ 아래 `blocked()`와 다르다. 진료비 자체가 무효이면 **부분합을 노출하지 않는다** —
+   *     `[300000, "abc"]`에서 `totalAmount: 300000`을 돌려주면 "무효 행을 뺀 합계"라는
+   *     새 계약이 생긴다. 총액을 만들 수 없으므로 0으로 통일한다.
+   */
+  const unusable = (notes: string[]): MultiClaimResult => ({
+    status: "PENDING_UNVERIFIED", generation: "2021", lines: [],
+    totalAmount: 0, totalOwnPay: null, totalInsurancePay: null, appliedCaps: [], notes,
+  });
+  // ⚠ 안내에 받은 값 자체를 넣지 않고 `typeof`만 넣는다. 무효 입력을 템플릿 리터럴에
+  //   그대로 끼우면 Symbol이나 `toString()`이 던지는 객체에서 안내를 만드는 중에 예외가 난다.
+  //   ⚠ 이 파일의 **기존** 안내 6곳이 쓰는 `JSON.stringify`는 이번 범위가 아니다.
+  if (!Array.isArray(rawAmounts)) {
+    return unusable([
+      "진료비 목록(amounts)은 배열이어야 합니다. 청구가 없는 묶음은 빈 배열로 넘겨 주세요.",
+      "미입력·null을 빈 묶음으로 보지 않습니다 — 넘기지 않은 것과 청구가 없다는 것은 다른 상태입니다.",
+      `받은 값의 형식: ${typeof rawAmounts}`,
+    ]);
+  }
+  for (let i = 0; i < rawAmounts.length; i++) {
+    const v: unknown = rawAmounts[i];
+    if (!(typeof v === "number" && Number.isSafeInteger(v) && v >= 0)) {
+      return unusable([
+        `${i + 1}번째 진료비는 0 이상의 안전한 정수여야 합니다. 음수·소수·NaN·Infinity·안전 정수 범위를 넘는 값·문자열·객체는 계산하지 않습니다.`,
+        "잘못된 값을 0원으로 바꾸지 않습니다 — 0원 행은 연간 횟수를 소진하므로 금액뿐 아니라 횟수와 승인 회차까지 틀어집니다.",
+        `${i + 1}번째 받은 값의 형식: ${typeof v}`,
+      ]);
+    }
+  }
+  // ⚠ 원소가 모두 안전한 정수여도 **합계**는 범위를 벗어날 수 있다([MAX_SAFE, 1]).
+  //   그 뒤의 누적(paid·한도 비교)이 정밀도를 잃으므로 계산하지 않는다.
+  const totalInput = rawAmounts.reduce((s: number, x: number) => s + x, 0);
+  if (!Number.isSafeInteger(totalInput)) {
+    return unusable([
+      "진료비 합계가 안전한 정수 범위를 벗어나 계산하지 않았습니다. 각 행이 안전한 정수여도 합계는 벗어날 수 있습니다.",
+      `받은 행 수: ${rawAmounts.length}`,
+    ]);
+  }
+  // ⚠ `normalizeAmount`를 다시 걸지 않는다. 위 검사를 통과한 값에 대해 그 함수는
+  //   항등이며(`Math.max(0, Math.floor(v))`), 다시 걸면 "여기서도 값을 고친다"고 읽힌다.
+  const amounts: number[] = rawAmounts;
   const rider = input.rider ?? "none";
   const results: ClaimLineResult[] = [];
-  const totalInput = amounts.reduce((s, x) => s + x, 0);
   /** 차단 계약 — 후보 보험금·후보 행을 노출하지 않고 진료비 합계만 유지한다. */
   const blocked = (notes: string[]): MultiClaimResult => ({
     status: "PENDING_UNVERIFIED", generation: "2021", lines: [],

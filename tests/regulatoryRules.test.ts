@@ -299,6 +299,14 @@ const VERIFIED_2026_05_06_DIRECT = new Set([
   "GEN2026-MSK-APPROVAL-COUNT-BASIS",
   "GEN2026-MSK-APPROVAL-PRIOR-ACT-COUNT",
   "GEN2026-CRITICAL-OUTPATIENT-VISITS-ZEROPAY",
+  // 2026-09-05 재직독 (G-14A) — 특약1 제5조 제5항 전문(인쇄 p.280).
+  //   종전에는 제5조②③⑤ 묶음 출처(GEN5_CRITICAL_LIMIT_TERMS)가 검색 페이지 주소를 써서
+  //   500만원 상한 규칙이 이 목록 밖에 있었다. 조항 전용 출처를 만들어 판본 직행 주소로
+  //   올렸으므로 두 규칙을 여기 등록한다.
+  //   ⚠ 5.6 판본만 근거로 삼는다. 7.15·9.10 판본은 문언 동일 여부를 대조하기만 했고
+  //     출처 주소로 쓰지 않으므로, 그 두 주소는 이 규칙들에서도 여전히 금지된다.
+  "GEN2026-CRITICAL-ANNUAL-DEDUCTIBLE-CAP",
+  "GEN2026-CRITICAL-DEDUCTIBLE-POOL-SCOPE",
 ]);
 const VERSION_5_6_URL = "https://www.law.go.kr/LSW/admRulInfoP.do?admRulSeq=2200000108697";
 const leaked = rules
@@ -358,6 +366,72 @@ check("계산에 쓰이는 5세대 확정 규칙은 2026.5.6 연혁본 출처를
     && rule.sources.some((src) => src.document.includes("별표 15")))
     .every((rule) => rule.sources.every((src) =>
       !src.document.includes("별표 15") || src.document.includes("2026. 5. 6. 연혁본"))));
+
+
+// ── G-14A — 500만원 공제금액 상한의 **적용 범위** 등록 (2026-09-05) ──────
+//   조사 결과 제5조⑤가 "상해·질병 및 3대비급여 의료비"를 한 문장에 열거하는데,
+//   현재 구현은 일반 (1)(2) 입원과 중증 MRI 입원을 서로 다른 엔진 필드로 따로 계산한다.
+//   ⚠ 이번 커밋은 **계산을 바꾸지 않는다.** 확정된 것과 확정되지 않은 것을 갈라
+//     등록부에 남기는 것이 전부다. 아래 검사는 그 경계가 다시 뭉개지지 않게 고정한다.
+{
+  const cap = REGULATORY_RULES.GEN2026_CRITICAL_ANNUAL_DEDUCTIBLE_CAP;
+  const scope = REGULATORY_RULES.GEN2026_CRITICAL_DEDUCTIBLE_POOL_SCOPE;
+  const room = REGULATORY_RULES.GEN2026_ROOM_CHARGE_DEDUCTIBLE_POOL;
+
+  check("500만원 상한은 여전히 CONFIRMED이고 값이 그대로",
+    cap.status === "CONFIRMED" && cap.value === 5_000_000);
+  check("500만원 상한 검증일이 재직독일(2026-09-05)", cap.verifiedAt === "2026-09-05", cap.verifiedAt);
+  check("500만원 상한 출처가 제5조 제5항 한 항을 특정",
+    cap.sources.length === 1 && cap.sources[0].locator.includes("제5조(보험가입금액 한도 등) 제5항")
+    && cap.sources[0].locator.includes("인쇄 p.280"));
+  check("500만원 상한 note에 근골격계·주사료 제외 괄호가 남음",
+    Boolean(cap.note?.includes("근골격계 이학요법치료·체외충격파치료 및 주사료 관련 비급여의료비는 제외")));
+  check("500만원 상한 note가 합산 범위를 확정하지 않고 HOLD를 가리킴",
+    Boolean(cap.note?.includes("확정하지 않은 것")) && Boolean(cap.note?.includes("GEN2026-CRITICAL-DEDUCTIBLE-POOL-SCOPE")));
+  check("500만원 상한 note가 세 판본 대조 사실과 기준 판본을 함께 적음",
+    Boolean(cap.note?.includes("3265643")) && Boolean(cap.note?.includes("기준 판본은 2026.5.6 시행본을 유지")));
+
+  check("공유 범위 규칙은 HOLD이고 값이 없음", scope.status === "HOLD" && scope.value === null);
+  check("공유 범위 규칙 검증일이 실제 조사일(2026-09-05)", scope.verifiedAt === "2026-09-05", scope.verifiedAt);
+  // ⚠ 조항 번호 오기 가드. 특약1 제5조는 ①~⑤뿐이고 **제6항은 존재하지 않는다**
+  //    (2026-09-05 직독: ⑤ 다음이 곧바로 제6조(보험료의 계산)다).
+  //    실제로 이 note를 원숫자 \u escape 로 적다가 ⑤(U+2464)를 ⑥(U+2465)로 한 칸 밀려
+  //    쓴 적이 있다. 등록부·테스트·문서 어디에도 없는 항을 인용하지 못하게 막는다.
+  //    ⚠ "제6항"을 통째로 금지하면 안 된다 — 제3조 (1)상해비급여 제6항 등은 실재하고
+  //      다른 규칙이 정당하게 인용한다. **제5조 뒤에 붙는 경우만** 막는다.
+  const GHOST_ART = /제5조(?:\(보험가입금액 한도 등\))?[\s\n]*(?:제6항|제7항|⑥|⑦)/;
+  const allText = rules.flatMap((r) => [r.note ?? "", ...r.sources.map((x) => x.locator)]);
+  const ghostHits = allText.filter((x) => GHOST_ART.test(x));
+  check("규칙 등록부: 특약1 제5조에 없는 항을 인용하지 않음", ghostHits.length === 0,
+    ghostHits.map((x) => (x.match(GHOST_ART) ?? [""])[0]).join(" | ").slice(0, 200));
+  check("공유 범위 규칙이 제5조⑤를 인용", Boolean(scope.note?.includes("제5조⑤ 직독")), scope.note?.slice(0, 60));
+  check("500만원 상한 규칙도 같은 항을 인용", Boolean(cap.note?.includes("제5조⑤ 문언")), cap.note?.slice(0, 60));
+  check("두 규칙이 같은 조항 출처를 공유",
+    cap.sources[0].locator === scope.sources[0].locator
+    && cap.sources[0].locator.includes("제5항"));
+
+  check("공유 범위 규칙이 확인된 근거와 막힌 이유를 나눠 적음",
+    Boolean(scope.note?.includes("확인됨")) && Boolean(scope.note?.includes("막힌 이유")));
+  check("공유 범위 규칙이 제5조① 제3항의 분배 문언 대비를 근거로 남김",
+    Boolean(scope.note?.includes("나눌 때는 나눈다고 적는다")));
+  check("공유 범위 규칙이 못 찾은 자료를 '없다'로 바꾸지 않음",
+    Boolean(scope.note?.includes("존재하지 않는다고 단정하지 않는다")));
+  // ⚠ 어느 쪽으로도 단정하지 않는 것이 이 HOLD의 존재 이유다. 문구가 한쪽으로 기울면
+  //    등록부가 확정 규칙처럼 읽히고, 다음 사람이 그대로 구현을 바꾸게 된다.
+  for (const banned of ["약관상 하나의 pool이다", "약관상 독립", "서로 독립이다", "합산이 확정"]) {
+    check(`공유 범위 규칙 note에 단정 표현 없음: ${banned}`, !scope.note?.includes(banned), scope.note);
+  }
+  check("공유 범위 규칙이 현재 구현을 사실로만 기록",
+    Boolean(scope.note?.includes("priorAnnualDeductible"))
+    && Boolean(scope.note?.includes("priorAnnualInpatientDeductible"))
+    && Boolean(scope.note?.includes("바꾸지 않는다")));
+
+  check("공유 범위 HOLD와 상급병실료 HOLD는 별도 규칙",
+    scope.ruleId !== room.ruleId && scope.note !== room.note
+    && room.status === "HOLD" && room.verifiedAt === "2026-09-03");
+  check("상급병실료 HOLD의 물음이 공유 범위 HOLD로 옮겨가지 않음",
+    Boolean(room.note?.includes("상급병실료 차액의 미지급 50%")) && !scope.note?.includes("미지급 50%"));
+}
 
 console.log(`\n[regulatoryRules] 규칙 ${rules.length}개 · 통과 ${pass} / 실패 ${fail}`);
 if (fail) process.exit(1);

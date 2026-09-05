@@ -315,6 +315,43 @@ check("H-4: 결과 안내가 1년치 견적 전제 표시", carCalc.includes("1�
   const affirmsUnchanged = auditStatus.match(/무변경(이다|임을 확인|으로 확인|이 확인)/g) ?? [];
   check("audit-status: 전체 무변경 단정 없음", affirmsUnchanged.length === 0, affirmsUnchanged.join(" / "));
   check("audit-status: 확대 해석 금지를 명시", /확대 해석하지 않(는다|습니다)/.test(auditStatus));
+  // ── G-14A — 500만 원 상한의 적용 범위 HOLD가 문서에서 사라지거나 단정으로 바뀌지 않게 ──
+  {
+    const row = current.split("\n").find((line) => line.includes("500만 원 공제금액 상한의 적용 범위")) ?? "";
+    check("audit-status §3.2: 공유 범위 HOLD 행 존재", row.length > 0);
+    check("audit-status §3.2: 확정된 것을 적음",
+      row.includes("입원 한정") && row.includes("상급종합병원·종합병원 한정")
+      && row.includes("MRI는 포함"));
+    check("audit-status §3.2: 미확정이 '합산 범위'임을 적음", row.includes("하나로 합산해"));
+    check("audit-status §3.2: 못 찾은 자료를 '없다'로 바꾸지 않음",
+      row.includes("존재하지 않는다고 단정하지 않는다"));
+    check("audit-status §3.2: 판매약관 접근 한계를 적음", row.includes("조문 전문에는 접근하지 못했다"));
+    check("audit-status §3.2: 게이트가 아님을 적음", row.includes("게이트가 아니다"));
+    for (const banned of ["약관상 하나의 pool이다", "약관상 독립", "서로 독립이다"]) {
+      check(`audit-status §3.2: 단정 표현 없음 "${banned}"`, !row.includes(banned));
+    }
+    // ⚠ 특약1 제5조는 ①~⑤뿐이다(2026-09-05 직독: ⑤ 다음이 곧바로 제6조).
+    //    없는 항을 문서가 인용하면 근거가 통째로 어긋난다.
+    //    ⚠ "제6항"을 통째로 금지하면 안 된다 — 제3조 (3)비급여 자기공명영상진단 제6항은
+    //      실재하고 문서가 정당하게 인용한다. **제5조 뒤에 붙는 경우만** 막는다.
+    //      조항명 괄호와 줄바꿈이 사이에 낄 수 있으므로 그것까지 허용해 잡는다.
+    const GHOST_ART = /제5조(?:\(보험가입금액 한도 등\))?[\s\n]*(?:제6항|제7항|⑥|⑦)/;
+    const design0 = readFileSync("docs/insurance/multi-claim-design.md", "utf8");
+    for (const [label, text] of [["audit-status", auditStatus], ["multi-claim-design", design0], ["README", readmeDoc]] as const) {
+      check(`${label}: 특약1 제5조에 없는 항을 인용하지 않음`,
+        !GHOST_ART.test(text), (text.match(GHOST_ART) ?? [""])[0]);
+    }
+    check("audit-status: 500만 원 상한 근거가 제5조⑤임을 명시", auditStatus.includes("제5조⑤(인쇄 p.280)"));
+    check("multi-claim-design: 500만 원 상한 근거가 제5조 제5항임을 명시",
+      design0.includes("제5조(보험가입금액 한도 등)\n제5항**, 인쇄 p.280"));
+    check("audit-status: 7.15 시행본 별표 식별번호 기록", auditStatus.includes("3265643"));
+    check("audit-status: 대조와 근거를 섞지 않음을 명시",
+      auditStatus.includes("규칙 출처는 5.6본 주소만"));
+    const design = readFileSync("docs/insurance/multi-claim-design.md", "utf8");
+    check("multi-claim-design: G-14A 절 존재", design.includes("### 5.20") && design.includes("G-14A"));
+    check("multi-claim-design: G-14B를 범위 밖으로 남김", design.includes("G-14B"));
+  }
+
   check("audit-status: 쪽수 1쪽 이동 사실 기록", auditStatus.includes("1쪽씩"));
 
   // 진입점은 루트 README 하나. docs/ 안에 색인 문서를 새로 만들지 않는다.

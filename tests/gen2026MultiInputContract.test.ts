@@ -232,9 +232,11 @@ console.log("\n[G-14C] 8. 소스 계약");
   // ⚠ 안내에서 JSON.stringify를 직접 쓰면 다시 던진다. 지문(fingerprint)용 1회만 남아야 한다.
   check("안내에 JSON.stringify를 직접 쓰지 않는다",
     !/받은 값: \$\{JSON\.stringify/.test(body));
-  // 기존 통원 카운터 4곳 + A군 1 + B군 1 + C군 3(급여 경로·미소비 경로·값) = 9.
+  // 통원 카운터 4곳 + A군 1 + B군 1 + C군 3(급여 경로·미소비 경로·값) + 지급보험금 1(G-20) = 10.
+  //   ⚠ 계약 갱신(G-20): 기존 지급보험금 축이 값 검증으로 옮겨지면서 안내가 한 곳 늘었다.
+  //     요지("받은 값을 싣는 안내는 예외 없이 전부 안전 표시를 쓴다")는 그대로다.
   check("'받은 값' 안내가 모두 안전 표시를 쓴다",
-    (body.match(/받은 값: \$\{showValue\(/g) ?? []).length === 9,
+    (body.match(/받은 값: \$\{showValue\(/g) ?? []).length === 10,
     String((body.match(/받은 값: \$\{showValue\(/g) ?? []).length));
   check("B군 키 목록이 9종", (body.match(/const SPECIAL_ITEM_ONLY_KEYS = \[[\s\S]*?\] as const;/) ?? [""])[0]
     .split('"').filter((x) => x.startsWith("prior") || ["approvedThroughVisit", "injectionPurpose", "item", "lines", "route", "stays"].includes(x)).length === 9);

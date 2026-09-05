@@ -285,7 +285,13 @@ console.log("\n[구조] 검증 위치");
     && /raw\.visit === "inpatient" && \(days !== undefined \|\| visits !== undefined\)/.test(router));
   check("라우터가 중증에만 '회' 축을 전달",
     /input\.severity === "critical"\s*\n?\s*\? \{ priorAnnualOutpatientVisits: input\.priorAnnualOutpatientVisits \}/.test(router));
-  check("nonNegInt는 다른 필드용으로 남아 있다", /nonNegInt\(input\.priorAnnualInsurancePaid\)/.test(eng));
+  // ⚠ **낡은 계약을 교체했다.** 이 검사는 "카운터만 엄격해지고 금액 축은 nonNegInt의 관용을
+  //   그대로 쓴다"를 기존 지급보험금 축으로 확인하고 있었다. G-20이 그 축을 badCount 검증으로
+  //   옮겼으므로, 확인 대상을 아직 관용을 쓰는 `priorAnnualDeductible`로 옮긴다.
+  //   요지(카운터와 다른 축의 계약이 다르다)는 같다.
+  check("nonNegInt는 누적 공제금액 축용으로 남아 있다", /nonNegInt\(nb\?\.priorAnnualDeductible\)/.test(eng));
+  check("기존 지급보험금 축은 카운터와 같은 형식 검증(badCount)으로 옮겨졌다",
+    /if \(paidRaw !== undefined && badCount\(paidRaw\)\) \{/.test(eng));
 }
 
 // ── UI 상태 전이 ─────────────────────────────────────────────────────

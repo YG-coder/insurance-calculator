@@ -3,6 +3,16 @@ import { GEN2026 } from "./constants";
 import { calc2026 } from "./generation2026";
 import { CapCode, ClaimLineResult, Gen2026MultiClaimInput, Gen2026NonBenefitItem, MultiClaimResult, Severity } from "./types";
 
+/**
+ * ⚠ 관용 정규화. **이 파일에 남은 사용처는 `priorAnnualDeductible` 한 곳뿐이다.**
+ *   기존 지급보험금 축은 엄격 검증으로 옮겨져 검증된 원값을 그대로 쓴다(아래 `paidRaw`).
+ *   남겨 둔 이유는 누적 공제금액 축의 정리가 이번 범위가 아니기 때문이다 — 그 축은
+ *   C군이 확정된 값만 검증하고 미입력은 `0`을 자리값으로 쓰는데, 그 정책 자체를 이번에
+ *   손대면 500만원 상한 HOLD와 얽힌 계약을 함께 건드리게 된다.
+ *   ⚠ 새 축에 이것을 다시 쓰지 않는다. 사용처 개수를 검사로 고정해 두었다.
+ *   ⚠ 2·3세대 `multiClaim.ts`, 5세대 `specialItem2026.ts`·`roomCharge2026.ts`는 각자
+ *     자기 사본을 가지며 이번 변경 범위가 아니다.
+ */
 const nonNegInt = (v: number | undefined) =>
   v !== undefined && Number.isFinite(v) ? Math.max(0, Math.floor(v)) : 0;
 
@@ -326,6 +336,46 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
     }
   }
 
+  // ── 활성 지급보험금 누적 축의 값 검증 ─────────────────────────────
+  //   종전 동작(기준선 5ce96c9 엔진 직접 호출로 실측): `nonNegInt()`가
+  //   `Number.isFinite(v) ? Math.max(0, Math.floor(v)) : 0`이라 음수·`NaN`·`±Infinity`·문자열·
+  //   빈 문자열·`null`·불리언·객체·배열·`bigint`·Symbol·순환 참조를 **조용히 0**으로 만들었다.
+  //   0이 되면 남은 한도가 실제보다 커진다 — 비중증 통원(가입금액 1천만·청구 100만·정답 기존
+  //   지급 990만)에서 정답 ins 100,000이어야 할 계산이 무효값 13종에서 ins 500,000이 됐고,
+  //   일반 전환 경로(중증 입원·가입금액 1천만·청구 200만)에서는 100,000이 1,400,000이 됐다.
+  //   소수도 조용히 내려가 같은 방향으로 어긋난다. 안전 정수 범위를 넘는 값은 검증 없이 통과했다.
+  //   ⚠ 이 축은 **런타임 예외를 내지 않았다** — `Number.isFinite`가 bigint·객체를 걸러 던지지
+  //     않기 때문이다. 문제는 예외가 아니라 조용히 틀린 금액이다.
+  //
+  //   ⚠ **읽는 축은 비급여 하나뿐이다.** 급여 묶음에는 연간 보험가입금액 축 자체가 없어
+  //     (`Gen2026MultiBenefitInput`) 이 값이 결과를 바꿀 수 없다. 그런데 종전에는 급여에서도
+  //     이름에 접근해 외부 객체의 접근자(getter)가 실행됐다. "쓰지 않는다"는 계약은 검증을
+  //     건너뛰는 것이 아니라 **읽지 않는 것**이어야 하므로 `nb`로 감싸 읽는다.
+  //     급여에 실려 온 stray 값의 조용한 폐기 동작 자체는 그대로다(후속 항목).
+  //   ⚠ **원문을 한 번만 읽는다.** 종전에는 `runBundle` 안에서 읽어, 지급 0원 HOLD의 두 해석을
+  //     비교하는 통원 경로에서 **같은 이름을 두 번** 읽었다(실측: 접근자 2회 호출). 값이 두 실행
+  //     사이에 달라지면 비교 자체가 오염된다. HOLD의 값·상태·계산 동작은 바꾸지 않는다.
+  //   ⚠ `undefined`와 명시적 숫자 `0`은 종전대로 허용한다 — 둘 다 "누적 0에서 시작"이다.
+  //   ⚠ 연간 가입금액 한도를 넘는 과거 지급액도 **유효한 상태**다. 절삭하지 않는다.
+  //   ⚠ 연간 가입금액이 없어 이 값이 결과를 바꾸지 못하는 경우에도 검증한다. "현재 산식에
+  //     영향이 없다"와 "올바른 입력이다"는 다른 말이고, 뒤에 가입금액이 입력되면 같은 값이
+  //     곧바로 금액을 바꾼다.
+  //   ⚠ 형식 규칙은 통원 카운터·누적 공제금액과 같은 `badCount`를 쓴다. 단위·근거·안내 문구는
+  //     축마다 다르며 섞지 않는다.
+  //   ⚠ 검증 위치는 C군(누적 공제금액) **뒤**다. 치료유형·질환 구분·통원 카운터·공제금액이 함께
+  //     잘못되어 있으면 그 안내가 더 앞선 안내이므로 가려지면 안 된다.
+  //   ⚠ 반환은 이 파일의 기존 `blocked()`다 — 진료비 합계(`totalAmount`)를 보존한다.
+  const paidRaw = readCount(nb, "priorAnnualInsurancePaid");
+  if (paidRaw !== undefined && badCount(paidRaw)) {
+    return blocked([
+      "기존 지급보험금(priorAnnualInsurancePaid)은 0 이상의 안전한 정수여야 합니다. 음수·소수·NaN·Infinity·안전 정수 범위를 넘는 값·문자열·객체는 계산하지 않습니다.",
+      // ⚠ 지급 방향을 단정하지 않는다. 어느 쪽으로 어긋나는지는 함께 들어온 가입금액·청구
+      //   구성이 정하므로, 안내는 "고치지 않는다"는 사실만 말한다.
+      "계산기가 잘못된 값을 임의로 고치지 않습니다 — 값을 고치면 남은 한도가 실제와 달라져 보험금이 잘못 계산될 수 있습니다. 지급받은 적이 없으면 0을 입력해 주세요.",
+      `받은 값: ${showValue(paidRaw)}`,
+    ]);
+  }
+
   // 연간 보험가입금액도 "N원 이내에서 계약자가 선택한 금액"이다(제5조①).
   // 0·음수·미입력은 미적용으로 본다. 상한선을 넘겨 입력하면 상한선으로 깎는다.
   const annualMax = severity === "critical"
@@ -352,7 +402,9 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
    *     통원이 아닌 경로(급여·입원·별도 보장종목)는 두 번째 실행 자체가 없다.
    */
   function runBundle(countZeroPay: boolean): MultiClaimResult {
-    let insurancePaid = nonNegInt(input.priorAnnualInsurancePaid);
+    // 여기 오는 값은 `undefined`이거나 0 이상의 안전한 정수다. 정규화하지 않고 그대로 쓴다.
+    //   ⚠ 위에서 **한 번만** 읽은 원값을 재사용한다. 두 해석이 같은 값에서 출발해야 한다.
+    let insurancePaid = (paidRaw as number | undefined) ?? 0;
     // 특별약관1 제5조⑤ 500만원 상한의 누적 대상은 약관상 **공제금액**이다(인쇄 p.280).
     //   ⚠ single.ownPay를 누적하면 안 된다. 연간 보험가입금액 한도로 잘려 추가 부담한 금액이
     //     섞여 pool이 과대 소진되고, 이후 건의 공제가 사라져 보험금이 과다 산출된다.

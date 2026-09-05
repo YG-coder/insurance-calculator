@@ -167,6 +167,10 @@ const goAxis = (h: H, axis: Axis, opts: { cause?: string; visit?: string } = {})
     pick(h, SEV, sev);
     if (purpose !== null) pick(h, PUR, purpose);
     h.set("priorActs", "0");
+    // ⚠ 계약 교체(G-13A): '보상한 횟수'는 항목별 상태가 되었고 초기값이 빈 값이라
+    //   입력하지 않으면 계산이 차단된다. 이 파일의 관심사는 **금액 축**이므로 두 항목 모두
+    //   확인된 0을 넣어 두고, 축 전환만 검사한다.
+    h.set("priorCountByItem", { musculoskeletal_esw: "0", injection: "0" });
     h.set("rows", [{ amount: "1000000", visit: "outpatient", tier: "" }]);
   }
   return h;

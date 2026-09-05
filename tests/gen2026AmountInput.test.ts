@@ -58,8 +58,8 @@ const AMOUNT_PATHS: [string, Record<string, unknown>, string][] = [
 ];
 /** `rows` 배열을 쓰는 경로 — 특별약관 별도 보장종목. */
 const ROW_PATHS: [string, Record<string, unknown>, string][] = [
-  ["특약 · 중증 근골격계", { coverage: "non_benefit", nonBenefitItem: "musculoskeletal_esw", severity: "critical", rows: [{ amount: "300000", visit: "outpatient", tier: "" }], priorActs: "0", priorCount: "0" }, "210,000원"],
-  ["특약 · 중증 일반 주사료", { coverage: "non_benefit", nonBenefitItem: "injection", severity: "critical", injectionPurpose: "general", rows: [{ amount: "300000", visit: "outpatient", tier: "" }], priorCount: "0" }, "210,000원"],
+  ["특약 · 중증 근골격계", { coverage: "non_benefit", nonBenefitItem: "musculoskeletal_esw", severity: "critical", rows: [{ amount: "300000", visit: "outpatient", tier: "" }], priorActs: "0", priorCountByItem: { musculoskeletal_esw: "0", injection: "" } }, "210,000원"],
+  ["특약 · 중증 일반 주사료", { coverage: "non_benefit", nonBenefitItem: "injection", severity: "critical", injectionPurpose: "general", rows: [{ amount: "300000", visit: "outpatient", tier: "" }], priorCountByItem: { musculoskeletal_esw: "", injection: "0" } }, "210,000원"],
   ["특약 · 중증 MRI", { coverage: "non_benefit", nonBenefitItem: "mri", severity: "critical", rows: [{ amount: "1000000", visit: "outpatient", tier: "" }], priorPool: "0" }, "700,000원"],
   ["특약 · 비중증 MRI", { coverage: "non_benefit", nonBenefitItem: "mri", severity: "non_critical", rows: [{ amount: "1000000", visit: "outpatient", tier: "" }] }, "500,000원"],
 ];
@@ -344,7 +344,7 @@ console.log("\n[근거] 5세대의 0원 행 동작을 실제 엔진으로 확인
   const without = screenOf(setup({ ...critOut, amounts: ["300000"], priorVisits: "99" }));
   check("중증 통원 prior=99에 0원 행을 더해도 100회째가 밀리지 않는다",
     withZero.pay === without.pay && withZero.pay === "210,000원", `${withZero.pay} vs ${without.pay}`);
-  const msk = { coverage: "non_benefit", nonBenefitItem: "musculoskeletal_esw", severity: "critical", priorCount: "0" };
+  const msk = { coverage: "non_benefit", nonBenefitItem: "musculoskeletal_esw", severity: "critical", priorCountByItem: { musculoskeletal_esw: "0", injection: "" } };
   const mskZero = screenOf(setup({ ...msk, priorActs: "9", rows: [{ amount: "0", visit: "outpatient", tier: "" }, { amount: "300000", visit: "outpatient", tier: "" }] }));
   const mskPlain = screenOf(setup({ ...msk, priorActs: "9", rows: [{ amount: "300000", visit: "outpatient", tier: "" }] }));
   check("근골격계 승인 구간도 0원 행 때문에 밀리지 않는다",
@@ -409,7 +409,7 @@ console.log("\n[전환] 급여로 바꾸면 화면·검증·계산이 모두 amo
   const hasLabel = (h: ReturnType<typeof setup>, p: string) => h.render().labels.some((l) => l.startsWith(p));
 
   for (const [what, over, back] of [
-    ["특별약관(중증 근골격계)", { coverage: "non_benefit", nonBenefitItem: "musculoskeletal_esw", severity: "critical", priorActs: "0", priorCount: "0", rows: [{ amount: "300000", visit: "outpatient", tier: "" }] }, "gen2026-row-amount-0"],
+    ["특별약관(중증 근골격계)", { coverage: "non_benefit", nonBenefitItem: "musculoskeletal_esw", severity: "critical", priorActs: "0", priorCountByItem: { musculoskeletal_esw: "0", injection: "" }, rows: [{ amount: "300000", visit: "outpatient", tier: "" }] }, "gen2026-row-amount-0"],
     ["상급병실료", { coverage: "non_benefit", nonBenefitItem: "room_charge", severity: "critical", cause: "disease", rcRows: [{ amount: "600000", days: "3" }] }, ""],
   ] as [string, Record<string, unknown>, string][]) {
     // 비급여 상태에서 amounts에는 무효값을 심어 둔다 — 급여로 바꾼 뒤 이 값이 계산되면 안 된다.
@@ -483,13 +483,16 @@ console.log("\n[무회귀] 기존 정책은 그대로다");
   const noActs = screenOf(setup({ ...msk, priorActs: "" }));
   check("근골격계 치료행위 수 미입력 → 차단 유지",
     !noActs.calculated && noActs.warns.some((w) => w.text.includes("이미 받은 치료행위 수")));
-  const acts10 = screenOf(setup({ ...msk, priorActs: "10", priorCount: "10" }));
+  const acts10 = screenOf(setup({ ...msk, priorActs: "10", priorCountByItem: { musculoskeletal_esw: "10", injection: "" } }));
   check("근골격계 승인 회차 부족 → 차단 유지", !acts10.calculated || acts10.warns.length > 0);
   check("승인 회차 축은 그대로다(approvedThroughVisit: approvedThrough)",
     /approvedThroughVisit: approvedThrough,/.test(ui));
+  // ⚠ 계약 교체(G-13A): 연 50회 카운터는 항목별 상태에서 확정된 숫자만 전달한다.
+  //   종전 `num(priorCount)`는 단일 상태 + 관용 파서였다.
   check("승인 검사와 연 50회 카운터는 여전히 분리돼 있다",
-    /priorAnnualCoveredCount: num\(priorCount\)/.test(ui)
-    && /priorAnnualTreatmentActCount: outpatientDays\(priorActs\) \?\? undefined/.test(ui));
+    /priorAnnualCoveredCount: coveredSoFar,/.test(ui)
+    && /priorAnnualTreatmentActCount: outpatientDays\(priorActs\) \?\? undefined/.test(ui)
+    && !/priorAnnualCoveredCount: num\(priorCount\)/.test(ui));
 
   const room = screenOf(setup(ROOM));
   check("상급병실료 정상 예시 무회귀", room.pay === "300,000원", String(room.pay));

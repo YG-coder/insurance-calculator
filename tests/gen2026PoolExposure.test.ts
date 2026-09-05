@@ -291,7 +291,7 @@ console.log("\n[경계] 미선택·전이·삭제·경로 이탈");
   pick(h, SEV, "non_critical");
   check("비중증 MRI로 가면 칸이 없다", !has(h, POOL));
   pick(h, ITEM, "musculoskeletal_esw"); pick(h, SEV, "critical");
-  h.set("priorActs", "0"); h.set("priorCount", "0");
+  h.set("priorActs", "0"); h.set("priorCountByItem", { musculoskeletal_esw: "0", injection: "0" });
   check("중증 근골격계에도 칸이 없다", !has(h, POOL));
   pick(h, COV, "benefit");
   check("급여에도 칸이 없다", !has(h, POOL));
@@ -408,7 +408,7 @@ console.log("\n[무회귀] 적용 대상 경로의 계산과 다른 입력들은
   // 근골격계·비중증 MRI에는 pool 칸이 원래 없다(무변경).
   const m = setup();
   pick(m, COV, "non_benefit"); pick(m, ITEM, "musculoskeletal_esw"); pick(m, SEV, "critical");
-  m.set("priorActs", "0"); m.set("priorCount", "0");
+  m.set("priorActs", "0"); m.set("priorCountByItem", { musculoskeletal_esw: "0", injection: "0" });
   check("중증 근골격계: pool 칸 없음", !has(m, POOL));
   check("  행별 의료기관 선택창도 없다(needsRowTier 계약)", rowTierSelects(m) === 0);
   const n = buildRows(setup(), [["inpatient", "hospital"]]);

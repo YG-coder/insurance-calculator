@@ -402,8 +402,12 @@ console.log("\n[커밋 D·E] 계산·화면 무변경 (기준 30dee21)");
   check("변경 의도: UI 게이트가 계산에 연결",
     /const needsPriorActs = [^;]*outpatientDays\(priorActs\) === null;/.test(ui)
     && /&& !needsPriorActs/.test(ui));
+  // ⚠ 계약 교체(G-13A): '보상한 횟수' 라벨이 **보장종목 이름과 항목별 한도**를 포함하도록
+  //   바뀌었다(연 50회는 이제 규칙값 참조라 문자열에 숫자가 없다). 두 축이 화면에서 서로
+  //   다른 라벨로 구분된다는 계약 자체는 그대로다.
   check("변경 의도: UI가 두 입력을 분리해 라벨링",
-    ui.includes("보상한 횟수</b> (연 50회 한도용)") && ui.includes("치료행위 수</b> (보상 승인 회차용)"));
+    ui.includes("로 이미 <b>보상한 횟수</b> (연 {GEN2026_COUNTED_ITEM_ANNUAL_VISITS[countedItem]}회 한도용)")
+    && ui.includes("치료행위 수</b> (보상 승인 회차용)"));
   // ── 커밋 E가 multiClaim2026.ts에 넣기로 한 변경 ──
   //   해시를 뺀 자리를 빈칸으로 두지 않는다. "무엇을 바꿨는지"를 여기서 못박아,
   //   해시 제거가 임의 수정의 통로가 되지 않게 한다.

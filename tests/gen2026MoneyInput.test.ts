@@ -112,7 +112,7 @@ const route = (h: H, item: string, sev: string, cause: string, purpose?: string)
 const item = (h: H, it: string, sev: string, purpose?: string) => {
   pick(h, COV, "benefit"); pick(h, COV, "non_benefit");
   pick(h, ITEM, it); pick(h, SEV, sev); if (purpose) pick(h, PUR, purpose);
-  h.set("priorActs", "0"); h.set("priorCount", "0");
+  h.set("priorActs", "0"); h.set("priorCountByItem", { musculoskeletal_esw: "0", injection: "0" });
   h.set("rows", [{ amount: "1000000", visit: "outpatient", tier: "" }]);
   return h;
 };
@@ -392,9 +392,12 @@ console.log("\n[소스] 파서·게이트·전달 형태");
     && /<RawAmountInput id="gen2026-prior-pool" value=\{priorPool\}/.test(code)
     && !/value=\{priorDeductible\} onChange=\{\(e\) => setPriorDeductible\(e\.target\.value\)\}/.test(code)
     && !/value=\{priorPool\} onChange=\{\(e\) => setPriorPool\(e\.target\.value\)\}/.test(code));
+  // ⚠ 계약 교체(G-13A): `num(priorCount)`는 사라졌다 — 보상 횟수는 항목별 전용 파서를 쓴다.
+  //   `nhisRate`·`copyCount`는 아직 num()이며 이번 범위가 아니다.
   check("num()은 남은 자리에서 그대로 쓰인다",
     /const num = \(v: string\) => Number\(v\.replace\(\/\[\^0-9\.\]\/g, ""\)\) \|\| 0;/.test(code)
-    && /num\(nhisRate\)/.test(code) && /num\(priorCount\)/.test(code) && /num\(copyCount\)/.test(code));
+    && /num\(nhisRate\)/.test(code) && /num\(copyCount\)/.test(code)
+    && !/num\(priorCount\)/.test(code));
   check("공용 위젯 파일은 그대로다",
     !/trim\(|replace\(/.test(stripComments(readFileSync("src/components/RawAmountInput.tsx", "utf8")))
     && /replace\(\/\[\^0-9\]\/g, ""\)\.slice\(0, MAX_AMOUNT_DIGITS\)/.test(readFileSync("src/components/AmountInput.tsx", "utf8")));

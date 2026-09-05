@@ -82,6 +82,38 @@ const outpatientDays = nonNegSafeInt;
 /** 중증 통원 '이미 사용한 통원 횟수'(연 100회 한도용). */
 const outpatientVisits = nonNegSafeInt;
 
+/**
+ * 연 50회 한도가 있는 **별도 보장종목**(3대비급여 <표1>) — 과거 '보상한 횟수'를 항목마다
+ * 따로 담는 축. MRI는 <표1>에 횟수 한도가 없어(`annualVisits: null`) 축을 만들지 않는다.
+ *
+ * ⚠ 상해·질병으로 나누지 않는다. <표1>은 각 상해·질병 치료행위를 **합산**해 한도를 정한다
+ *   (등록 규칙 GEN2026-MSK-ANNUAL-*, GEN2026-INJECTION-ANNUAL-*). 그래서 이 화면의 별도
+ *   보장종목 경로에는 원인 선택창 자체가 없다.
+ */
+const GEN2026_COUNTED_ITEMS = ["musculoskeletal_esw", "injection"] as const;
+type Gen2026CountedItem = (typeof GEN2026_COUNTED_ITEMS)[number];
+/** 항목별 연 횟수 한도. 화면에 숫자를 하드코딩하지 않고 엔진과 같은 규칙값을 쓴다. */
+const GEN2026_COUNTED_ITEM_ANNUAL_VISITS: Record<Gen2026CountedItem, number> = {
+  musculoskeletal_esw: GEN2026.specialItem.msk.annualVisits,
+  injection: GEN2026.specialItem.injection.annualVisits,
+};
+
+/**
+ * 별도 보장종목 '이미 보상한 횟수' 파서. 형식 규칙은 위 통원 카운터와 같지만 **필드를
+ * 재사용하지 않는다** — 근거 조문(<표1> 본문의 항목별 행)·라벨·안내·한도가 다르다.
+ *
+ * ⚠ 공용 `num()`을 쓰면 안 된다. 실측: `-1`→**1**(부호를 지워 양수), `1.5`→**1.5**(소수를
+ *   그대로 통과), `1e3`→**13**, `1,0`→**10**, `20만`→**20**, `abc`·빈 값·공백→**0**,
+ *   `9007199254740993`→**9007199254740992**. 0으로 바뀌면 연 50회 한도가 통째로 사라져
+ *   보험금이 과다 산출된다.
+ * ⚠ 50을 넘는 값도 유효한 과거 상태다. 절삭하지 않는다 — 절삭하면 이미 한도를 넘긴 계약이
+ *   아직 여유가 있는 것처럼 계산된다.
+ *
+ * 유효: 0 이상의 안전 정수(`0`, `00`, `50`, `51`, `100`, 안전 정수 최대값).
+ * 무효(null = 미입력·잘못된 입력): 빈 값·공백·부호·소수·지수 표기·쉼표·문자·안전 정수 초과.
+ */
+const coveredCount = nonNegSafeInt;
+
 const roomChargeAmount = (v: string): number | null => {
   if (!ROOM_CHARGE_AMOUNT_FORMAT.test(v)) return null;
   const n = Number(v.replace(/,/g, ""));
@@ -290,7 +322,24 @@ export default function HealthCalcMulti2026() {
   const [approvedThrough, setApprovedThrough] = useState<Gen2026MskApprovedThrough>(
     GEN2026_MSK_APPROVED_THROUGH_VALUES[0],
   );
-  const [priorCount, setPriorCount] = useState("0");
+  /**
+   * 별도 보장종목의 '이미 보상한 횟수' — **항목마다 따로** 담는다.
+   *
+   * ⚠ 종전에는 상태가 하나뿐이라 근골격계에 넣은 값이 주사료로 그대로 넘어갔다. 실측:
+   *   근골격계에 50을 넣고 주사료로 바꾸면 주사료도 50회를 쓴 것으로 계산돼 보험 적용이
+   *   0원이 됐고, 반대로 주사료에 10을 넣고 근골격계로 돌아오면 원래 50이 사라져 한도가
+   *   남아 있는 것처럼 420,000원이 나왔다. 뒤쪽이 더 위험하다 — 보험금이 **더 나오는**
+   *   방향이라 사용자가 눈치채기 어렵다.
+   * ⚠ 등록 규칙이 두 항목의 금액·횟수 한도를 <표1>의 서로 다른 행으로 각각 등록하고
+   *   (350만·50회 / 250만·50회), 엔진도 `annualVisits`·`visitsCap`을 항목별로 고른다.
+   *   한 번의 엔진 호출 = 한 항목이므로 두 축을 섞던 곳은 이 화면의 단일 상태뿐이었다.
+   *   같은 파일의 `priorInsuranceByAxis`(G-8)와 같은 형태로 맞춘다.
+   * ⚠ 초기값은 빈 문자열이다. 종전 `"0"`은 사용자가 확인하지 않은 "보상 이력 없음"을
+   *   화면이 대신 만들어 내는 것이라 연 50회 한도가 통째로 사라졌다. 0은 직접 입력해야 한다.
+   */
+  const [priorCountByItem, setPriorCountByItem] = useState<Record<Gen2026CountedItem, string>>(
+    () => Object.fromEntries(GEN2026_COUNTED_ITEMS.map((k) => [k, ""])) as Record<Gen2026CountedItem, string>,
+  );
   // ⚠ 기본값 없음. 승인 구간은 '치료횟수' 축이고 '보상한 횟수'로 대신 셀 수 없다.
   //   미입력을 0으로 추정하면 승인 경계를 넘겼는지 모르는 채 보험금을 계산하게 된다.
   const [priorActs, setPriorActs] = useState("");
@@ -330,6 +379,26 @@ export default function HealthCalcMulti2026() {
   //   일수: 0·음수·소수·빈 값은 불완전.
   const rcIncomplete = showRoomChargeForm
     && rcRows.some((r) => roomChargeAmount(r.amount) === null || positiveDays(r.days) === null);
+  /**
+   * 연 50회 한도의 '보상한 횟수' 축을 **지금 쓰는 항목**. 없으면 null.
+   *
+   * ⚠ `specialItem`만 보면 안 된다. 항암제·항생제·희귀의약품 목적의 주사료는
+   *   `routeOfGen2026Item`이 **일반 (1)(2) 경로**로 돌려보내므로(특별약관1 제3조(3)제2항)
+   *   이 축을 쓰지 않는다. 그래서 `showSpecialForm`(= route === "special_item")과 중증까지
+   *   함께 본다. 화면·검증·전달이 모두 이 하나의 판정을 쓴다.
+   * ⚠ MRI는 <표1>에 횟수 한도가 없어 이 축에 들어오지 않는다.
+   */
+  const countedItem: Gen2026CountedItem | null = showSpecialForm && severity === "critical"
+    && (specialItem === "musculoskeletal_esw" || specialItem === "injection")
+    ? specialItem
+    : null;
+  /** 활성 항목의 원문. 숨은 항목의 값은 상태에 남지만 여기서 읽지 않는다. */
+  const priorCountRaw = countedItem === null ? "" : priorCountByItem[countedItem];
+  /** 활성 항목의 확정된 숫자. null이면 미입력·잘못된 입력이라 계산하지 않는다. */
+  const priorCountNum = countedItem === null ? null : coveredCount(priorCountRaw);
+  //   빈 값을 0으로 추정하지 않는다 — 연 50회 한도가 통째로 사라져 보험금이 과다 산출된다.
+  //   ⚠ 미입력(빈 값)과 확인 결과 0은 다른 상태다. 0은 유효값이다.
+  const needsPriorCount = countedItem !== null && priorCountNum === null;
   // 중증 근골격계는 보상 승인 회차 판정에 '과거 치료행위 수'가 필요하다(<표1> 주)).
   //   확인된 0회와 미입력을 구분한다 — 0은 유효값이고 빈 값이면 계산하지 않는다.
   const needsPriorActs = coverage === "non_benefit" && severity === "critical"
@@ -519,7 +588,7 @@ export default function HealthCalcMulti2026() {
   if (money !== null && deductibles !== null
       && coverage === "non_benefit" && specialItem !== null && severity !== "" && !rowsIncomplete
       && !rowAmountsIncomplete
-      && !needsPriorActs
+      && !needsPriorActs && !needsPriorCount
       && !(route === "general" && (cause === "" || (visit === "inpatient" && nbInpatientTier === "")
         || needsOutDays || needsOutVisits || amountsIncomplete))) {
     const generalCommon = {
@@ -537,6 +606,14 @@ export default function HealthCalcMulti2026() {
     //   각 분기에서 쓰는 쪽만 실어 보낸다.
     const outVisits = visit === "outpatient" ? outpatientVisits(priorVisits) ?? undefined : undefined; // 중증 = 회
     const outDays = visit === "outpatient" ? outpatientDays(priorOutDays) ?? undefined : undefined; // 비중증 = 일
+    /**
+     * 활성 항목의 확정된 '보상한 횟수'. 위 게이트가 `needsPriorCount`로 무효를 이미
+     * 배제했으므로 아래 두 분기에서는 숫자다.
+     *   ⚠ 타입 단언(`as number`)이나 `?? 0`으로 통과시키지 않는다 — `?? 0`은 미입력을
+     *     "보상 이력 없음"으로 만들어 한도를 지운다. null이면 전달 자체를 하지 않는다.
+     *   ⚠ 활성 항목이 아닌 쪽의 상태는 여기서 읽지 않는다(숨은 값 미전달).
+     */
+    const coveredSoFar = priorCountNum === null ? undefined : priorCountNum;
     if (severity === "critical") {
       if (specialItem === "musculoskeletal_esw") {
         itemResult = calculateGen2026Item({
@@ -544,7 +621,7 @@ export default function HealthCalcMulti2026() {
           item: "musculoskeletal_esw", lines: specialLines,
           approvedThroughVisit: approvedThrough,
           // ⚠ 두 축을 서로 대신 쓰지 않는다. 위는 연 50회 한도, 아래는 승인 구간용이다.
-          priorAnnualCoveredCount: num(priorCount),
+          priorAnnualCoveredCount: coveredSoFar,
           priorAnnualTreatmentActCount: outpatientDays(priorActs) ?? undefined,
           priorAnnualInsurancePaid: money.prior,
         });
@@ -563,7 +640,7 @@ export default function HealthCalcMulti2026() {
         itemResult = calculateGen2026Item({
           route: "special_item", coverage: "non_benefit", severity: "critical",
           item: "injection", injectionPurpose: "general", lines: specialLines,
-          priorAnnualCoveredCount: num(priorCount),
+          priorAnnualCoveredCount: coveredSoFar,
           priorAnnualInsurancePaid: money.prior,
         });
       } else if (injectionPurpose !== "") {
@@ -756,7 +833,17 @@ export default function HealthCalcMulti2026() {
     {showSpecialForm && <div className="mt-5 grid gap-3 sm:grid-cols-2">
       <label className="text-sm font-semibold">계약해당일 기준 1년간 이 보장종목의 기존 지급보험금 ({itemAxis === null ? "" : GEN2026_ITEM_AXIS_LABEL[itemAxis]})<div className="mt-1"><RawAmountInput id="gen2026-prior-insurance" value={priorInsurance}
         onChange={setPriorInsurance} ariaLabel={`계약해당일 기준 1년간 이 보장종목의 기존 지급보험금 (${itemAxis === null ? "" : GEN2026_ITEM_AXIS_LABEL[itemAxis]})`} /></div><span className="mt-2 block text-xs font-normal text-slate-500">이 보장종목의 연간 보장한도에 이미 지급된 보험금만 넣어 주세요. 약관은 <b>각 비급여의료비별 보장한도</b>로 정하고(제5조①단서·③) <b>상해·질병을 합산</b>하므로(&lt;표1&gt;), 원인을 나누지 않고 이 항목 하나로 누적합니다. 일반 (1)(2)의 입원·통원·상급병실료 지급액은 여기에 넣지 않습니다.</span></label>
-      {(specialItem === "musculoskeletal_esw" || specialItem === "injection") && <label className="text-sm font-semibold">계약해당일 기준 1년간 이미 <b>보상한 횟수</b> (연 50회 한도용)<input className="input-base mt-1" type="number" min="0" value={priorCount} onChange={(e) => setPriorCount(e.target.value)} /></label>}
+      {/* ⚠ 노출·검증·전달이 모두 같은 `countedItem` 판정을 쓴다. 종전에는 `specialItem`만 보아
+             항암제 등 일반 (1)(2) 경로로 넘어가는 주사료에도 칸이 남았고, 상태가 하나뿐이라
+             근골격계에 넣은 횟수가 주사료로 그대로 넘어갔다.
+             ⚠ 라벨에 보장종목 이름을 넣는다 — 어느 종목의 과거 횟수인지 화면에서 구분돼야 한다.
+             ⚠ 안내 문구는 **계산기가 이 입력을 어떻게 쓰는지**만 말한다. 확인한 범위는 등록된
+                항목별 한도(<표1>의 서로 다른 행)와 엔진의 항목별 비교까지이고, 두 보장종목의
+                횟수가 약관상 서로 독립적으로 소진된다는 문장은 원문에서 직접 읽어 확인하지
+                않았다. 화면에서 그보다 강하게 단정하지 않는다.
+             ⚠ `type="number"`가 아니라 원문 보존 입력이다. `type="number"`는 `1e3`·`-1`을
+                그대로 통과시키면서 화면에는 원문을 남겨, 보이는 값과 계산에 쓰는 값이 갈렸다. */}
+      {countedItem !== null && <label className="text-sm font-semibold">계약해당일 기준 1년간 <b>{GEN2026_SPECIAL_ITEM_LABEL[countedItem]}</b>로 이미 <b>보상한 횟수</b> (연 {GEN2026_COUNTED_ITEM_ANNUAL_VISITS[countedItem]}회 한도용)<input className="input-base mt-1" inputMode="numeric" autoComplete="off" value={priorCountRaw} onChange={(e) => setPriorCountByItem((old) => ({ ...old, [countedItem]: e.target.value }))} placeholder="보상받은 적이 없으면 0" aria-label={`${GEN2026_SPECIAL_ITEM_LABEL[countedItem]}로 이미 보상한 횟수`} /><span className="mt-2 block text-xs font-normal text-slate-500">이 칸은 <b>보장종목마다 따로</b> 입력받습니다. 계산기는 지금 고른 보장종목의 값만 그 종목의 연 {GEN2026_COUNTED_ITEM_ANNUAL_VISITS[countedItem]}회 한도에 적용하고 다른 보장종목의 값을 대신 쓰지 않으며, 종목을 바꾸면 각자 입력한 값이 그대로 남습니다.</span></label>}
       {specialItem === "musculoskeletal_esw" && <label className="text-sm font-semibold">계약해당일 기준 1년간 이미 받은 <b>치료행위 수</b> (보상 승인 회차용)<input className="input-base mt-1" inputMode="numeric" value={priorActs} onChange={(e) => setPriorActs(e.target.value)} placeholder="받은 치료가 없으면 0" /><span className="mt-2 block text-xs font-normal text-slate-500">약관은 보상 승인 회차를 <b>&lsquo;각 치료횟수&rsquo;</b>로 셉니다(&lt;표1&gt; 주)). 위의 <b>보상한 횟수</b>는 보험금이 지급된 횟수라, 공제금액에 못 미쳐 <b>0원이 지급된 치료</b>가 있으면 두 값이 달라집니다. 보험사에서 확인한 값을 입력해 주세요.</span></label>}
       {/* ⚠ `needsRowTier`가 아니라 `usesPriorPool`을 쓴다. 종별 선택창과 미선택 차단은
              `needsRowTier` 그대로이고, 이 입력만 실제 소진 대상 행이 있을 때 노출한다. */}
@@ -773,6 +860,7 @@ export default function HealthCalcMulti2026() {
     {submitted && amountsIncomplete && <div className="mt-5"><NoticeBox variant="warning">{badAmountRows.join("·")}번째 행의 <b>진료비</b>를 올바르게 입력해 주세요. <b>0 이상의 정수</b>만 받습니다 — <b>300000</b> 또는 <b>300,000</b> 형식입니다. 진료비가 실제로 0원이면 <b>0</b>을 입력하세요. 빈 값이나 잘못된 입력(음수·소수·문자·지수 표기·잘못된 쉼표)을 계산기가 <b>임의로 다른 금액으로 바꾸지 않으며</b>, 빈 값을 0원으로 보지도 않습니다. <b>모든 행에 올바른 진료비를 입력해야 계산할 수 있습니다.</b> 유효한 행만 모아 부분합을 내지도 않습니다.</NoticeBox></div>}
     {submitted && rowAmountsIncomplete && <div className="mt-5"><NoticeBox variant="warning">{badRowAmounts.join("·")}번째 행의 <b>{specialItem === "injection" ? "1회 주사료 합산액" : "행위 진료비"}</b>을(를) 올바르게 입력해 주세요. <b>0 이상의 정수</b>만 받습니다 — <b>300000</b> 또는 <b>300,000</b> 형식입니다. 실제로 0원이면 <b>0</b>을 입력하세요. 빈 값이나 잘못된 입력(음수·소수·문자·지수 표기·잘못된 쉼표)을 계산기가 <b>임의로 다른 금액으로 바꾸지 않으며</b>, 빈 값을 0원으로 보지도 않습니다. <b>모든 행에 올바른 진료비를 입력해야 계산할 수 있습니다.</b> 유효한 행만 모아 부분합을 내지도 않습니다.</NoticeBox></div>}
     {submitted && needsTier && <div className="mt-5"><NoticeBox variant="warning">비급여 <b>입원</b>은 <b>의료기관 종별</b>에 따라 보험금이 달라집니다. 중증은 공제금액 상한 500만 원이 상급종합·종합병원 입원에만 적용되고(특별약관1 제5조 제5항), 비중증은 1회당 300만 원 한도가 병·의원급에만 적용됩니다(특별약관2 제3조 (1)제1항·(2)제1항). <b>입원 의료기관</b>을 선택해 주세요. 선택 전에는 계산하지 않습니다.</NoticeBox></div>}
+    {submitted && needsPriorCount && countedItem !== null && <div className="mt-5"><NoticeBox variant="warning">계약해당일 기준 1년간 <b>{GEN2026_SPECIAL_ITEM_LABEL[countedItem]}</b>로 <b>이미 보상한 횟수</b>를 입력해 주세요. 보상받은 적이 없으면 <b>0</b>을 입력하세요. 이 보장종목은 연 {GEN2026_COUNTED_ITEM_ANNUAL_VISITS[countedItem]}회가 한도라 이 값이 있어야 계산할 수 있고, 계산기가 0으로 추정하지 않습니다. 0 이상의 정수만 받으며 음수·소수·지수 표기·쉼표·문자는 계산하지 않습니다. 한도를 넘긴 과거 값도 그대로 받습니다.</NoticeBox></div>}
     {submitted && needsPriorActs && <div className="mt-5"><NoticeBox variant="warning">근골격계 이학요법·체외충격파는 최초 10회 이후 증상의 개선·병변호전이 확인된 경우에 한하여 10회 단위로 보상합니다(특별약관1 제3조(3)제1항 &lt;표1&gt; 주)). 승인 회차는 약관상 <b>&lsquo;각 치료횟수&rsquo;</b>로 세므로, 계약해당일 기준 1년간 <b>이미 받은 치료행위 수</b>를 입력해 주세요. 받은 치료가 없으면 <b>0</b>을 입력하시면 됩니다. <b>보상한 횟수</b>는 보험금이 지급된 횟수라 대신 쓰지 않으며, 입력 전에는 계산하지 않습니다.</NoticeBox></div>}
     {submitted && needsOutDays && <div className="mt-5"><NoticeBox variant="warning">계약해당일 기준 1년간 <b>이미 사용한 통원일수</b>를 입력해 주세요. 이전 통원이 없으면 <b>0</b>을 입력하세요. 비중증 통원은 연 {GEN2026.nonBenefit.nonCritical.outpatientAnnualDays}일이 한도라 이 값이 있어야 계산할 수 있고, 계산기가 0으로 추정하지 않습니다. 0 이상의 정수만 받으며 음수·소수는 계산하지 않습니다.</NoticeBox></div>}
     {submitted && needsOutVisits && <div className="mt-5"><NoticeBox variant="warning">계약해당일 기준 1년간 <b>이미 사용한 통원 횟수</b>를 입력해 주세요. 이전 통원이 없으면 <b>0</b>을 입력하세요. 중증 통원은 연 {GEN2026.nonBenefit.critical.outpatientAnnualVisits}회가 한도라 이 값이 있어야 계산할 수 있고, 계산기가 0으로 추정하지 않습니다. 0 이상의 정수만 받으며 음수·소수는 계산하지 않습니다.</NoticeBox></div>}

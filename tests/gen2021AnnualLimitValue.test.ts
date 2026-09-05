@@ -363,9 +363,15 @@ console.log("\n[G-18] 7. 소스 계약 — nonNegInt 완전 제거와 검증 위
     iAmt > 0 && iAmt < iCnt && iCnt < iApr && iApr < iPaid && iPaid < iLim && iLim < iLoop,
     `${iAmt}/${iCnt}/${iApr}/${iPaid}/${iLim}/${iLoop}`);
   // 범위 밖이 그대로인지.
-  check("기존 안내 6곳의 JSON.stringify는 그대로",
-    (body.match(/받은 값: \$\{JSON\.stringify\(/g) ?? []).length === 6,
-    String((body.match(/받은 값: \$\{JSON\.stringify\(/g) ?? []).length));
+  // ⚠ **낡은 계약을 교체했다.** 이 검사는 "기존 안내 6곳의 JSON.stringify는 이번 범위 밖"을
+  //   고정하고 있었다. G-19가 그 6곳을 지역 `showValue()`로 낮췄으므로(bigint·순환 참조·
+  //   `toJSON()` 예외에서 안내를 만들다 죽던 것을 고쳤다), 확인 대상을 새 표시로 옮긴다.
+  //   요지(이 커밋이 그 자리를 건드리지 않았다)는 같다. 새 계약은
+  //   tests/multiClaimNoteSafeDisplay.test.ts가 본다.
+  check("다른 안내 6곳은 안전 표시(showValue)를 쓴다",
+    (body.match(/받은 값: \$\{showValue\(/g) ?? []).length === 6
+    && !/받은 값: \$\{JSON\.stringify/.test(body),
+    String((body.match(/받은 값: \$\{showValue\(/g) ?? []).length));
   check("G-16 금액 계약이 그대로",
     /if \(!Array\.isArray\(rawAmounts\)\)/.test(body) && /if \(!Number\.isSafeInteger\(totalInput\)\)/.test(body)
     && /const unusable = \(notes: string\[\]\): MultiClaimResult => \(\{/.test(body));
@@ -377,8 +383,9 @@ console.log("\n[G-18] 7. 소스 계약 — nonNegInt 완전 제거와 검증 위
   // 다른 세대는 각자 사본을 가지며 손대지 않았다.
   const std = readFileSync("src/lib/insurance/engine/multiClaim.ts", "utf8");
   check("2·3세대 엔진은 자기 nonNegInt를 그대로 가진다", /const nonNegInt =/.test(std));
-  check("2·3세대 엔진의 안전 표시 4곳도 그대로",
-    (std.match(/받은 값: \$\{JSON\.stringify\(/g) ?? []).length === 4);
+  check("2·3세대 엔진의 안내 4곳도 안전 표시로 바뀌었다(G-19)",
+    (std.match(/받은 값: \$\{showValue\(/g) ?? []).length === 4
+    && !/받은 값: \$\{JSON\.stringify/.test(std));
   const g5 = readFileSync("src/lib/insurance/engine/multiClaim2026.ts", "utf8");
   check("5세대 엔진은 자기 nonNegInt를 그대로 가진다", /const nonNegInt =/.test(g5));
   check("5세대 엔진 계산은 손대지 않았다", /const consumes = amount > 0 &&/.test(g5));

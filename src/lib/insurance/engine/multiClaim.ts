@@ -39,6 +39,38 @@ const nonNegInt = (v: number | undefined) =>
   v !== undefined && Number.isFinite(v) ? Math.max(0, Math.floor(v)) : 0;
 
 /**
+ * 안내에 "받은 값"을 실을 때 쓰는 **안전 표시**. **계산에는 쓰지 않는다.**
+ *
+ * ⚠ `JSON.stringify`는 값에 따라 **예외를 던진다** — `bigint`("Do not know how to serialize
+ *   a BigInt"), 순환 참조("Converting circular structure to JSON"), `toJSON()`이 던지는 객체다.
+ *   이 파일의 검증은 **타입을 우회한 외부 입력**을 막는 자리인데, 그 입력이 차단 결과가 아니라
+ *   런타임 예외로 끝나면 막는 의미가 없다. 실측으로 세 종류 모두 예외가 확인됐다.
+ * ⚠ 표시 실패가 검증 실패가 되어서는 안 된다. 실패하면 `String()`으로 낮추고, 그것마저
+ *   실패하면 고정 문구로 대체한다. 반환 계약(`blocked`)과 안내의 의미·순서는 그대로다.
+ * ⚠ **정상적으로 직렬화되는 값의 표시는 종전과 한 글자도 같다.** 낮추는 것은 예외가 났을 때뿐이다.
+ *   `undefined`도 종전과 같다 — 종전에는 `JSON.stringify(undefined)`가 돌려준 `undefined`가
+ *   템플릿에서 "undefined"로 찍혔고, 여기서는 `String(undefined)`가 같은 문자열을 만든다.
+ *   ⚠ 다만 `JSON.stringify`가 **정상적으로** `undefined`를 돌려주는 그 밖의 값(Symbol·함수)은
+ *     종전에 "undefined"로 찍혀 미입력과 구분되지 않았다. 이제 `String()`의 결과가 찍힌다
+ *     (예: `Symbol(s)`). 잘못된 값을 미입력처럼 보이게 하던 표시를 고친 **의도된 변경**이다.
+ * ⚠ 두 번째 catch는 `JSON.stringify`와 `String()`이 **모두** 실패하는 값에서만 쓰인다
+ *   (예: `Object.create(null)`에 `bigint` 필드를 넣은 값). `toString()`만 던지는 보통의
+ *   객체는 JSON 직렬화가 성공하므로 여기까지 오지 않는다.
+ * ⚠ 공용 모듈로 빼지 않는다. 세대별 엔진은 각자 자기 사본을 가진다 — 이 표시 헬퍼를 공용화하면
+ *   세대마다 다른 안내 계약이 한 파일에 묶여, 한쪽을 고칠 때 다른 쪽이 함께 움직인다.
+ */
+const showValue = (v: unknown): string => {
+  try {
+    const json = JSON.stringify(v);
+    if (json !== undefined) return json;
+  } catch { /* bigint·순환 참조·toJSON 예외 */ }
+  try {
+    return String(v);
+  } catch { /* toString·[Symbol.toPrimitive]가 던지거나 없는 객체 */ }
+  return "(표시할 수 없는 값)";
+};
+
+/**
  * 이미 사용한 횟수·건수 축 검증(2·3세대 전용).
  *
  * ⚠ 금액 축이 쓰는 nonNegInt()의 관용(음수→0, NaN·Infinity→0, 소수 내림)을 물려받지 않는다.
@@ -122,7 +154,7 @@ export function calculateMany(
       usesPrescriptions
         ? "이 묶음에는 약국 처방조제 행만 있습니다. 처방전 건수(priorAnnualPrescriptions)로 넘겨 주세요. 두 축은 단위가 회와 건으로 달라 서로 대신 쓰지 않습니다."
         : "이 묶음에는 해당하는 통원 행이 없습니다. 쓰이지 않는 입력을 조용히 버리면 한도를 반영했다고 오해할 수 있어 계산하지 않았습니다.",
-      `받은 값: ${JSON.stringify(visitsRaw)}`,
+      `받은 값: ${showValue(visitsRaw)}`,
     ]);
   }
   if (!usesPrescriptions && prescriptionsRaw !== undefined) {
@@ -131,7 +163,7 @@ export function calculateMany(
       usesVisits
         ? "이 묶음에는 약국 처방조제 행이 없습니다. 외래 방문 횟수(priorAnnualOutpatientVisits)로 넘겨 주세요. 두 축은 단위가 회와 건으로 달라 서로 대신 쓰지 않습니다."
         : "이 묶음에는 통원 행이 없습니다. 쓰이지 않는 입력을 조용히 버리면 한도를 반영했다고 오해할 수 있어 계산하지 않았습니다.",
-      `받은 값: ${JSON.stringify(prescriptionsRaw)}`,
+      `받은 값: ${showValue(prescriptionsRaw)}`,
     ]);
   }
   // 미입력은 0으로 추정하지 않는다 — 과거 사용량을 모르면 한도를 반영할 수 없다.
@@ -147,7 +179,7 @@ export function calculateMany(
     if (badCount(visitsRaw)) {
       return blocked([
         "이미 사용한 외래 방문 횟수는 0 이상의 정수여야 합니다. 음수·소수·NaN·Infinity·안전 정수 범위를 넘는 값·문자열은 계산하지 않습니다.",
-        `받은 값: ${JSON.stringify(visitsRaw)}`,
+        `받은 값: ${showValue(visitsRaw)}`,
       ]);
     }
   }
@@ -161,7 +193,7 @@ export function calculateMany(
     if (badCount(prescriptionsRaw)) {
       return blocked([
         "이미 사용한 처방전 건수는 0 이상의 정수여야 합니다. 음수·소수·NaN·Infinity·안전 정수 범위를 넘는 값·문자열은 계산하지 않습니다.",
-        `받은 값: ${JSON.stringify(prescriptionsRaw)}`,
+        `받은 값: ${showValue(prescriptionsRaw)}`,
       ]);
     }
   }

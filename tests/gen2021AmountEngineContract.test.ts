@@ -247,10 +247,15 @@ console.log("\n[G-16] 7. 소스 계약");
     /받은 값의 형식: \$\{typeof rawAmounts\}/.test(body) && /받은 값의 형식: \$\{typeof v\}/.test(body));
   check("새 안내에 JSON.stringify를 쓰지 않는다",
     !/받은 값의 형식: \$\{JSON\.stringify/.test(body));
-  // 이번 범위 밖: 기존 안내 6곳의 JSON.stringify는 그대로 둔다.
-  check("기존 안내 6곳의 JSON.stringify는 그대로",
-    (body.match(/받은 값: \$\{JSON\.stringify\(/g) ?? []).length === 6,
-    String((body.match(/받은 값: \$\{JSON\.stringify\(/g) ?? []).length));
+  // ⚠ **낡은 계약을 교체했다.** 이 검사는 "기존 안내 6곳의 JSON.stringify는 이번 범위 밖"을
+  //   고정하고 있었다. G-19가 그 6곳을 지역 `showValue()`로 낮췄으므로(bigint·순환 참조·
+  //   `toJSON()` 예외에서 안내를 만들다 죽던 것을 고쳤다), 확인 대상을 새 표시로 옮긴다.
+  //   요지(이 커밋이 그 자리를 건드리지 않았다)는 같다. 새 계약은
+  //   tests/multiClaimNoteSafeDisplay.test.ts가 본다.
+  check("다른 안내 6곳은 안전 표시(showValue)를 쓴다",
+    (body.match(/받은 값: \$\{showValue\(/g) ?? []).length === 6
+    && !/받은 값: \$\{JSON\.stringify/.test(body),
+    String((body.match(/받은 값: \$\{showValue\(/g) ?? []).length));
   // ⚠ **낡은 계약을 교체했다.** G-16 시점에는 금액 누적 3축이 모두 nonNegInt의 관용을
   //   쓰고 있어 그 사실을 한 줄로 고정했다. G-17이 **활성 지급보험금 2축**을 검증으로
   //   바꿨으므로(무효값 → blocked), 그 부분은 새 계약으로 옮기고 여기서는
@@ -272,8 +277,9 @@ console.log("\n[G-16] 7. 소스 계약");
   const multi26 = readFileSync("src/lib/insurance/engine/multiClaim2026.ts", "utf8");
   check("5세대 엔진은 손대지 않았다", /const consumes = amount > 0 &&/.test(multi26));
   const std = readFileSync("src/lib/insurance/engine/multiClaim.ts", "utf8");
-  check("2·3세대 엔진은 손대지 않았다",
-    (std.match(/받은 값: \$\{JSON\.stringify\(/g) ?? []).length === 4);
+  check("2·3세대 엔진은 이 커밋이 손대지 않았다(안내 4곳은 G-19의 안전 표시)",
+    (std.match(/받은 값: \$\{showValue\(/g) ?? []).length === 4
+    && !/받은 값: \$\{JSON\.stringify/.test(std));
 }
 
 console.log(`\n[G-16 4세대 진료비 입력 계약] ✅ ${pass} / ❌ ${fail}`);

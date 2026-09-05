@@ -352,6 +352,41 @@ check("H-4: 결과 안내가 1년치 견적 전제 표시", carCalc.includes("1�
     check("multi-claim-design: G-14B를 범위 밖으로 남김", design.includes("G-14B"));
   }
 
+  // ── G-14B 정정(2026-09-05) — 두 축의 위험 방향이 다시 뭉개지지 않게 ──
+  //   초판은 "둘 다 과다 산출"이라고 적었다. 공제 pool 축은 반대(과소 산출)다.
+  //   d758bba는 이미 푸시돼 커밋 메시지를 고칠 수 없으므로 문서에 정정 이력을 남겼다.
+  {
+    const design1 = readFileSync("docs/insurance/multi-claim-design.md", "utf8");
+    const g14b = design1.slice(design1.indexOf("### 5.21"));
+    const row = (label: string) => (g14b.split("\n").find((l) => l.includes(label)) ?? "");
+    const poolRow = row("`priorAnnualInpatientDeductible` (500만 원 pool)");
+    const countRow = row("`priorAnnualCoveredCount` (연 50회)");
+    check("§5.21: pool 행이 '증가 → 과소 산출'로 적힘",
+      poolRow.includes("보험금 **증가**") && poolRow.includes("**과소 산출**")
+      && !poolRow.includes("**과다 산출**"), poolRow.slice(0, 120));
+    check("§5.21: 횟수 행이 '감소 → 과다 산출'로 적힘",
+      countRow.includes("보험금 **감소**") && countRow.includes("**과다 산출**")
+      && !countRow.includes("**과소 산출**"), countRow.slice(0, 120));
+    check("§5.21: 두 행의 방향이 서로 다름",
+      poolRow.includes("**증가**") !== countRow.includes("**증가**"));
+    check("§5.21: 두 축의 방향이 반대임을 명시", g14b.includes("위험 방향은 서로 반대"));
+    check("§5.21: 초판을 '둘 다 과다'로 되돌리지 않음",
+      !g14b.includes('"이미 4,900,000 썼다"·"이미 50회 썼다" → \n  "한 번도 안 썼다"라 **보험금 과다 산출** 쪽이다'));
+    check("§5.21: 정정 이력을 남김",
+      g14b.includes("정정 이력") && g14b.includes("d758bba") && g14b.includes("커밋\n메시지는 고칠 수 없으므로"));
+    check("§5.21: priorAnnualPaid를 금액 방향 없이 기록",
+      g14b.includes("priorAnnualPaid`의 조용한 폐기")
+      && g14b.includes("금액 방향(과다·과소)을 붙이지 않는다")
+      && g14b.includes("아무 말 없이 버리는 것"));
+    const auditG14b = auditStatus.slice(auditStatus.indexOf("### 별도 보장종목 진입점의 두 입력 축"));
+    check("audit-status G-14B: 두 축의 방향이 반대임을 명시", auditG14b.includes("위험 방향은 서로 반대"));
+    check("audit-status G-14B: 정정 이력을 남김",
+      auditG14b.includes("정정 이력(2026-09-05)") && auditG14b.includes("d758bba"));
+    check("audit-status G-14B: priorAnnualPaid를 금액 방향 없이 기록",
+      auditG14b.includes("priorAnnualPaid`의 조용한 폐기")
+      && auditG14b.includes("금액 방향을 단정하지 않는다"));
+  }
+
   check("audit-status: 쪽수 1쪽 이동 사실 기록", auditStatus.includes("1쪽씩"));
 
   // 진입점은 루트 README 하나. docs/ 안에 색인 문서를 새로 만들지 않는다.

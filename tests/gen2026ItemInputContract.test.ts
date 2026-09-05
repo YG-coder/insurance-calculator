@@ -4,7 +4,11 @@
 // 종전 동작(기준선 ecf990d 직접 호출로 실측):
 //   두 필드 모두 진입점 검증이 없어 `nonNegInt()`가 문자열·null·객체·배열·불리언·음수·
 //   NaN·±Infinity를 **조용히 0**으로 만들고, 소수는 floor하며, 안전 정수 초과를 그대로 썼다.
-//   방향이 "이미 4,900,000 썼다"·"이미 50회 썼다" → "한 번도 안 썼다"라 **보험금 과다 산출**이다.
+//   ⚠ 두 축의 위험 방향은 **서로 반대**다(2026-09-05 실측). 무효값이 0이 되면
+//     priorAnnualCoveredCount는 한도가 지워져 보험금 **과다 산출**(50 → 0원이 0 → 210,000원),
+//     priorAnnualInpatientDeductible은 남은 공제 여력이 최대로 열려 보험금 **과소 산출**
+//     (4,900,000 → 1,900,000원이 0 → 1,400,000원). 방향은 반대지만 둘 다 계산이 틀린다는
+//     점은 같고, 아래 거부 계약은 방향과 무관하게 두 축을 모두 막는다.
 //   또 쓰이지 않는 보장종목·경로에 실려도 값이 0이든 아니든 그대로 통과했다.
 //   같은 파일의 priorAnnualTreatmentActCount·통원 카운터·4세대 riderVisits는 이미 전부 막고
 //   있었고, 상급병실료만 UNUSED_KEYS로 막고 있어 **한 파일 안에서 계약이 갈려 있었다.**
@@ -106,6 +110,25 @@ console.log("\n[G-14B] 1. 허용 경로 정상 입력 (무회귀)");
   check("count 50: 한도 소진 → 보상 제외", call(msk({ priorAnnualCoveredCount: 50 })).totalInsurancePay === 0);
   check("주사료 count 0", call(inj({ priorAnnualCoveredCount: 0 })).totalInsurancePay === 210_000);
   check("주사료 count 50", call(inj({ priorAnnualCoveredCount: 50 })).totalInsurancePay === 0);
+}
+
+// ── 1b. 두 축의 위험 방향 — 주석이 아니라 동작으로 고정한다 ──────────
+//   ⚠ 초판 문서가 두 축을 "둘 다 과다 산출"이라고 적었다가 정정됐다. 산문은 다시 틀릴 수
+//     있으므로 방향 자체를 검사로 못박는다. 이 검사가 뒤집히면 산식이 바뀐 것이다.
+console.log("\n[G-14B] 1b. 두 축의 위험 방향");
+{
+  const poolZero = call(cMri({ priorAnnualInpatientDeductible: 0 })).totalInsurancePay;
+  const poolHigh = call(cMri({ priorAnnualInpatientDeductible: 4_900_000 })).totalInsurancePay;
+  check("pool: 과거값이 클수록 보험금이 **증가**한다 → 0으로 바뀌면 과소 산출",
+    poolZero === 1_400_000 && poolHigh === 1_900_000 && (poolHigh as number) > (poolZero as number),
+    `${poolZero} → ${poolHigh}`);
+  const cntZero = call(msk({ priorAnnualCoveredCount: 0 })).totalInsurancePay;
+  const cntHigh = call(msk({ priorAnnualCoveredCount: 50 })).totalInsurancePay;
+  check("count: 과거값이 클수록 보험금이 **감소**한다 → 0으로 바뀌면 과다 산출",
+    cntZero === 210_000 && cntHigh === 0 && (cntHigh as number) < (cntZero as number),
+    `${cntZero} → ${cntHigh}`);
+  check("두 축의 방향이 서로 반대임을 고정",
+    ((poolHigh as number) - (poolZero as number)) * ((cntHigh as number) - (cntZero as number)) < 0);
 }
 
 // ── 2. 한도 초과 유효값은 절삭하지 않는다 ────────────────────────────

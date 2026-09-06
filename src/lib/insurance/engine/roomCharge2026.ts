@@ -40,7 +40,13 @@ const UNUSED_KEYS = [
   "priorAnnualOutpatientDays",
 ] as const;
 
-function validate(input: Gen2026RoomChargeInput): Gen2026RejectedResult | null {
+/**
+ * 검증을 통과한 두 금액 축. `undefined`는 미입력이고, 그 밖은 0 이상의 안전한 정수다.
+ *   ⚠ 본체가 입력을 **다시 읽지 않도록** 값을 그대로 돌려준다.
+ */
+type CheckedMoney = { paid: number | undefined; limit: number | undefined };
+
+function validate(input: Gen2026RoomChargeInput): Gen2026RejectedResult | CheckedMoney {
   const raw = input as unknown as Record<string, unknown>;
   if (raw.route !== "room_charge") return rejected("경로(route)", raw.route);
   if (raw.coverage !== "non_benefit") return rejected("급여 구분(coverage)", raw.coverage);
@@ -63,26 +69,73 @@ function validate(input: Gen2026RoomChargeInput): Gen2026RejectedResult | null {
       return rejected(`${i + 1}번째 입원의 총 입원일수(inpatientDays)`, stay.inpatientDays);
     }
   }
-  if (raw.priorAnnualInsurancePaid !== undefined && !isNum(raw.priorAnnualInsurancePaid)) {
-    return rejected("기존 지급보험금(priorAnnualInsurancePaid)", raw.priorAnnualInsurancePaid);
+  // ── 두 금액 축의 값 검증 ──────────────────────────────────────────
+  //   종전에는 공용 `isNum()`(= 유한한 숫자)만 봤다. 그래서 **음수와 소수가 통과했고**,
+  //   통과한 뒤 하류에서 조용히 다른 값이 됐다(기준선 e0b3db9 엔진 직접 호출로 실측).
+  //     - 기존 지급보험금 `-400,000` → `nonNegInt`가 **0**으로 만들어, 정답 지급액 600,000이
+  //       ins 1,000,000이 됐다(누적이 사라져 남은 한도가 커졌다).
+  //     - 연간 가입금액 `0.5` → `annualLimitOf`의 `Math.floor`가 **한도 0원**을 만들어 적용해
+  //       ins **0**이 됐다. 같은 격자에서 명시적 `0`은 미적용이라 1,000,000이다.
+  //     - 연간 가입금액 `400,000.9` → 내림 400,000으로 조용히 바뀌었다.
+  //   ⚠ 두 축 모두 **런타임 예외는 내지 않았다.** 조용히 틀린 금액이 문제다.
+  //
+  //   ⚠ 공용 `isNum()`을 강화하지 않는다. 나머지 호출부는 **계약이 다르다** —
+  //     `roomChargeTotal`과 `line.amount`(진료비)는 `undefined`를 거부하고 `0`이 유효한
+  //     청구 행이며 하류 `normalizeAmount`의 계약을 따른다. 한 가드가 "유한한 숫자"와
+  //     "0 이상의 안전한 정수"를 동시에 뜻하게 만들면 어느 축을 고칠 때 다른 축이 함께 움직인다.
+  //     그래서 이 파일 안에 **이름이 분명한 전용 가드**를 두고 이 두 축만 바꾼다.
+  //   ⚠ 두 축은 **각각 한 번만** 읽는다. 종전에는 존재 검사·가드 인자·`rejected()` 인자·본체에서
+  //     같은 이름을 **3회** 읽었다(실측). 외부 객체의 접근자가 여러 번 실행되면 값이 실행 사이에
+  //     달라질 수 있다. 검증한 값을 그대로 돌려주어 본체가 다시 읽지 않게 한다.
+  //   ⚠ 허용 범위는 축마다 그대로다 — 기존 지급보험금은 한도를 넘는 과거 상태도 유효하고,
+  //     연간 가입금액은 상한을 넘으면 종전대로 상한으로 깎는다. `undefined`와 숫자 `0`의
+  //     계산도 종전 그대로다. 이 커밋은 **무효값을 막을 뿐 계산을 바꾸지 않는다.**
+  //   ⚠ 안내는 기존 `rejected()`를 그대로 쓴다. 문구는 한 글자도 바꾸지 않았다 —
+  //     바뀐 것은 그 안내에 **도달하는 값의 범위**뿐이다.
+  const paidRaw: unknown = (raw as Record<string, unknown>).priorAnnualInsurancePaid;
+  if (paidRaw !== undefined && !nonNegSafeInt(paidRaw)) {
+    return rejected("기존 지급보험금(priorAnnualInsurancePaid)", paidRaw);
   }
-  if (raw.annualCoverageLimit !== undefined && !isNum(raw.annualCoverageLimit)) {
-    return rejected("연간 보험가입금액(annualCoverageLimit)", raw.annualCoverageLimit);
+  const limitRaw: unknown = (raw as Record<string, unknown>).annualCoverageLimit;
+  if (limitRaw !== undefined && !nonNegSafeInt(limitRaw)) {
+    return rejected("연간 보험가입금액(annualCoverageLimit)", limitRaw);
   }
-  return null;
+  return { paid: paidRaw as number | undefined, limit: limitRaw as number | undefined };
 }
 
-const nonNegInt = (v: number | undefined) =>
-  v !== undefined && Number.isFinite(v) ? Math.max(0, Math.floor(v)) : 0;
+// ⚠ 관용 파서 `nonNegInt()`를 이 파일에서 **삭제했다.** 유일한 사용처였던 기존 지급보험금이
+//   엄격 검증으로 바뀌어, 이제 검증을 통과한 원값(`undefined` 또는 0 이상의 안전한 정수)만 쓴다.
+//   파서를 남겨 두면 다음에 추가되는 축이 다시 조용히 변형될 자리가 생긴다.
+//   ⚠ 다른 엔진(`multiClaim.ts`·`multiClaim2026.ts`·`specialItem2026.ts`)은 각자 자기 사본을
+//     가지며 이번 변경 범위가 아니다.
 
-function annualLimitOf(severity: Severity, raw: number | undefined): number | undefined {
-  // 계약자가 "N원 이내에서 선택한 금액"이다(제5조①). 0·음수·미입력은 미적용으로 본다.
-  if (raw === undefined || !Number.isFinite(raw) || raw <= 0) return undefined;
+function annualLimitOf(severity: Severity, limit: number | undefined): number | undefined {
+  // 계약자가 "N원 이내에서 선택한 금액"이다(제5조①). 미입력과 `0`은 미적용으로 본다.
+  //   ⚠ 여기 오는 값은 검증을 통과했다 — `undefined`이거나 0 이상의 안전한 정수다.
+  //     그래서 `Number.isFinite`·`Math.floor`가 필요 없다. 내림은 값을 조용히 바꾸는 자리였다.
+  //   ⚠ `0`을 미적용으로 보는 것은 **이 계산기의 정책**이고 종전 그대로다. 0원 가입이 실제로
+  //     선택 가능한 계약값인지는 원문에서 확인하지 않았고 이 커밋에서 단정하지 않는다.
+  //   ⚠ 상한을 넘는 값의 절삭은 제5조①에 근거가 있는 정당한 계산이다. 종전 그대로 둔다.
+  if (limit === undefined || limit === 0) return undefined;
   const max = severity === "critical"
     ? GEN2026.nonBenefit.critical.annualLimitMax
     : GEN2026.nonBenefit.nonCritical.annualLimitMax;
-  return Math.min(Math.floor(raw), max);
+  return Math.min(limit, max);
 }
+
+/**
+ * 0 이상의 안전한 정수인지만 보는 **형식 검증**. 상급병실료의 **두 금액 축 전용**이다
+ * (기존 지급보험금·연간 보험가입금액).
+ *
+ * ⚠ 공용 `isNum()`(= 유한한 숫자)과 **다른 계약**이다. `isNum()`은 이 파일의 진료비
+ *   (`roomChargeTotal`)와 `specialItem2026`의 `line.amount`도 쓰는데, 그 두 축은
+ *   `undefined`를 거부하고 `0`이 유효한 청구 행이며 하류 `normalizeAmount`를 따른다.
+ *   공용 가드를 강화하면 승인 범위 밖의 두 축이 함께 움직인다. 그래서 여기 따로 둔다.
+ * ⚠ 이 가드는 **형식만** 본다. 한도 초과 허용 여부·`0`의 의미·상한 절삭은 축마다 다르고
+ *   각자의 자리에서 정한다.
+ */
+const nonNegSafeInt = (v: unknown): boolean =>
+  typeof v === "number" && Number.isSafeInteger(v) && v >= 0;
 
 const CAUSE_LABEL = { injury: "상해", disease: "질병" } as const;
 
@@ -108,11 +161,12 @@ function buildNotes(input: Gen2026RoomChargeInput, annualLimit: number | undefin
 export function calculateRoomCharge2026(
   input: Gen2026RoomChargeInput,
 ): Gen2026RoomChargeResult | Gen2026RejectedResult {
-  const invalid = validate(input);
-  if (invalid !== null) return invalid;
+  const checked = validate(input);
+  if ("route" in checked) return checked;
 
-  const annualLimit = annualLimitOf(input.severity, input.annualCoverageLimit);
-  let paid = nonNegInt(input.priorAnnualInsurancePaid);
+  // 검증을 통과한 원값을 그대로 쓴다. 정규화하지 않고, 입력을 다시 읽지도 않는다.
+  const annualLimit = annualLimitOf(input.severity, checked.limit);
+  let paid = checked.paid ?? 0;
   const lines: Gen2026RoomChargeLineResult[] = [];
 
   for (let index = 0; index < input.stays.length; index++) {

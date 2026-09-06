@@ -293,10 +293,15 @@ console.log("\n[G-20] 10. 다른 진입점·다른 축·HOLD 무변경");
   const room = (v: unknown) => wrap(() => calculateRoomCharge2026({ route: "room_charge", coverage: "non_benefit",
     cause: "disease", severity: "non_critical", stays: [{ roomChargeTotal: 2_000_000, inpatientDays: 10 }],
     annualCoverageLimit: 1_000_000, priorAnnualInsurancePaid: v } as never));
-  check("상급병실료: 음수가 종전대로 통과한다(후속 과제)",
-    statusOf(room(-9_900_000)) === "OK", shape(room(-9_900_000)));
-  check("상급병실료: 문자열은 종전대로 isNum이 막는다",
+  // ⚠ **낡은 계약을 교체했다.** G-20 시점에는 상급병실료가 음수 지급보험금을 통과시켜 그
+  //   사실을 후속 과제 표지로 고정했다. G-22가 그 진입점을 막았으므로 확인 대상을 옮긴다.
+  //   그 진입점의 새 계약은 tests/gen2026RoomChargeMoneyValue.test.ts가 본다.
+  check("상급병실료: 음수도 이제 막힌다(G-22)",
+    statusOf(room(-9_900_000)) === "PENDING_UNVERIFIED", shape(room(-9_900_000)));
+  check("상급병실료: 문자열도 종전대로 막힌다",
     statusOf(room("9900000")) === "PENDING_UNVERIFIED", shape(room("9900000")));
+  check("상급병실료: 정상값·undefined·0은 그대로 계산된다",
+    statusOf(room(400_000)) === "OK" && statusOf(room(0)) === "OK" && statusOf(room(undefined)) === "OK");
   const item = (v: unknown) => wrap(() => calculateGen2026Item({ route: "special_item", coverage: "non_benefit",
     severity: "critical", item: "injection", injectionPurpose: "general",
     lines: [{ amount: AMT, visit: "outpatient", tier: "clinic" }], priorAnnualCoveredCount: 0,
@@ -366,7 +371,9 @@ console.log("\n[G-20] 11. 소스 계약");
   const si = readFileSync("src/lib/insurance/engine/specialItem2026.ts", "utf8");
   check("specialItem2026은 자기 nonNegInt를 그대로 쓴다", /let paid = nonNegInt\(input\.priorAnnualInsurancePaid\);/.test(si));
   const rc = readFileSync("src/lib/insurance/engine/roomCharge2026.ts", "utf8");
-  check("roomCharge2026도 그대로", /let paid = nonNegInt\(input\.priorAnnualInsurancePaid\);/.test(rc));
+  // ⚠ 계약 갱신(G-22): 상급병실료도 검증된 원값을 쓰게 바뀌었다. 이 커밋이 손대지 않았다는
+  //   요지는 같으므로 확인 대상을 새 모양으로 옮긴다.
+  check("roomCharge2026은 이 커밋이 손대지 않았다(G-22의 모양)", /let paid = checked\.paid \?\? 0;/.test(rc));
   const g21 = readFileSync("src/lib/insurance/engine/multiClaim2021.ts", "utf8");
   check("4세대 엔진은 손대지 않았다", /const paidKey = rider === "none" \? "priorAnnualInsurancePaid" : "priorAnnualRiderPaid";/.test(g21));
   const ui = readFileSync("src/components/calculators/HealthCalcMulti2026.tsx", "utf8");

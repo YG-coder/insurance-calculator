@@ -310,8 +310,15 @@ console.log("\n[G-14D] 7. 소스 계약");
   const hold = readFileSync("tests/gen2026HoldStatus.test.ts", "utf8");
   check("FROZEN 표에 갱신 이유가 적혀 있다",
     /G-14D에서 \*\*의도적으로\*\* 갱신했다\(종전 c10d2fea…\)/.test(hold));
-  check("FROZEN 표의 roomCharge2026 해시는 그대로다",
-    /"src\/lib\/insurance\/engine\/roomCharge2026\.ts": "fa3c0f00ce6966e4886f737afc26546d29567285bf0257dff6bdf1d3c11c4355"/.test(hold));
+  // ⚠ **낡은 계약을 교체했다.** G-14D 시점에는 roomCharge2026을 손대지 않아 그 해시가
+  //   유지된다는 사실을 고정했다. G-22가 그 파일의 두 금액 축을 값 검증으로 바꾸면서
+  //   해시가 의도적으로 갱신됐다(이유는 FROZEN 표 옆에 적혀 있다). 이 절이 지켜야 할 것은
+  //   특정 해시값이 아니라 **G-14D가 그 파일을 건드리지 않았다**는 사실이므로,
+  //   그 파일이 여전히 공용 rejected()를 쓰고 자기 showValue 사본을 두지 않았음으로 확인한다.
+  check("roomCharge2026의 해시 갱신에 이유가 적혀 있다",
+    /G-22에서 \*\*의도적으로\*\* 갱신했다\(종전 fa3c0f00…\)/.test(hold));
+  check("itemGuards.ts 해시는 그대로다(공용 가드를 강화하지 않았다)",
+    /"src\/lib\/insurance\/engine\/itemGuards\.ts": "ad08c2d9640544c5dc7faf9e328cac805ed9c2dfdd73409a05207e48d5ae110f"/.test(hold));
 }
 
 console.log(`\n[G-14D rejected 안전 표시] ✅ ${pass} / ❌ ${fail}`);

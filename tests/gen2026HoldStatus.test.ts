@@ -329,7 +329,22 @@ console.log("\n[커밋 D] 문서");
 console.log("\n[커밋 D·E] 계산·화면 무변경 (기준 30dee21)");
 {
   const FROZEN: Record<string, string> = {
-    "src/lib/insurance/engine/roomCharge2026.ts": "fa3c0f00ce6966e4886f737afc26546d29567285bf0257dff6bdf1d3c11c4355",
+    // ⚠ G-22에서 **의도적으로** 갱신했다(종전 fa3c0f00…).
+    //   두 금액 축(`priorAnnualInsurancePaid`·`annualCoverageLimit`)이 공용 `isNum()`
+    //   (= 유한한 숫자)만 통과하면 됐다. 그래서 **음수와 소수가 통과한 뒤 하류에서 조용히
+    //   다른 값이 됐다**(엔진 직접 호출로 실측) — 음수 지급보험금 -400,000은 `nonNegInt`가 0으로
+    //   만들어 정답 ins 600,000이 1,000,000이 됐고, 가입금액 `0.5`는 `Math.floor`가 **한도 0원**을
+    //   만들어 적용해 ins가 **0**이 됐다(같은 격자에서 명시적 `0`은 미적용이라 1,000,000이다).
+    //   `400,000.9`는 내림 400,000으로 조용히 바뀌었다. 런타임 예외는 나지 않았다.
+    //   이 파일 안에 전용 가드 `nonNegSafeInt`를 두어 그 **두 축만** 0 이상의 안전한 정수로 막고,
+    //   검증한 값을 그대로 써서 같은 이름을 3회 읽던 것을 1회로 줄였다(관용 파서 `nonNegInt`는
+    //   마지막 사용처가 사라져 삭제).
+    //   ⚠ 공용 `isNum()`은 **강화하지 않았다** — 나머지 호출부(이 파일의 진료비
+    //     `roomChargeTotal`, `specialItem2026`의 `line.amount`)는 `undefined`를 거부하고 `0`이
+    //     유효한 청구 행이라 계약이 다르다. 그래서 itemGuards.ts의 해시는 아래처럼 그대로다.
+    //   ⚠ 계산식·상한 절삭·`undefined`와 숫자 `0`의 계약·안내 문구·반환 객체는 그대로다.
+    //     바뀐 것은 그 안내에 **도달하는 값의 범위**와 읽는 횟수뿐이다.
+    "src/lib/insurance/engine/roomCharge2026.ts": "b363517ce7a7efa53f59afbbfba4c9a4aa4df2719ce2ee4f31aa4b44f20ff0e3",
     // ⚠ G-15에서 **의도적으로** 갱신했다(종전 2c019bb8…).
     //   급여 통원 분기가 `nhisCoinsuranceRate`·`tier`를 검증 없이 산식에 넣어, 타입을 우회한
     //   무효값이 `Math.max`/`md[tier]`에서 **NaN**이 되고 `settle()`의 유한성 폴백에 걸려

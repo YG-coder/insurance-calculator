@@ -265,9 +265,15 @@ console.log("\n[G-21] 9. G-20·다른 진입점·HOLD 무변경");
   const room = (v: unknown) => wrap(() => calculateRoomCharge2026({ route: "room_charge", coverage: "non_benefit",
     cause: "disease", severity: "non_critical", stays: [{ roomChargeTotal: 2_000_000, inpatientDays: 10 }],
     priorAnnualInsurancePaid: 0, annualCoverageLimit: v } as never));
-  check("상급병실료: 음수가 종전대로 통과(후속 과제)", statusOf(room(-400_000)) === "OK", shape(room(-400_000)));
-  check("상급병실료: 소수 0.5가 종전대로 한도 0원(후속 과제)", ins(room(0.5)) === "0", ins(room(0.5)));
-  check("상급병실료: 문자열은 종전대로 isNum이 막는다", statusOf(room("400000")) === "PENDING_UNVERIFIED");
+  // ⚠ **낡은 계약을 교체했다.** G-21 시점에는 상급병실료가 음수·소수를 통과시켜 그 사실을
+  //   후속 과제 표지로 고정했다. G-22가 그 진입점의 두 금액 축을 전용 가드로 막았으므로,
+  //   확인 대상을 "이제 두 진입점이 같은 방향으로 막는다"로 옮긴다.
+  //   그 진입점의 새 계약은 tests/gen2026RoomChargeMoneyValue.test.ts가 본다.
+  check("상급병실료: 음수도 이제 막힌다(G-22)", statusOf(room(-400_000)) === "PENDING_UNVERIFIED", shape(room(-400_000)));
+  check("상급병실료: 소수 0.5도 이제 막힌다(G-22)", statusOf(room(0.5)) === "PENDING_UNVERIFIED", shape(room(0.5)));
+  check("상급병실료: 문자열은 종전대로 막힌다", statusOf(room("400000")) === "PENDING_UNVERIFIED");
+  check("상급병실료: 정상값·undefined·0은 그대로 계산된다",
+    statusOf(room(400_000)) === "OK" && statusOf(room(0)) === "OK" && statusOf(room(undefined)) === "OK");
   const item = (v: unknown) => wrap(() => calculateGen2026Item({ route: "special_item", coverage: "non_benefit",
     severity: "critical", item: "injection", injectionPurpose: "general",
     lines: [{ amount: 1_000_000, visit: "outpatient", tier: "clinic" }], priorAnnualCoveredCount: 0,
@@ -322,8 +328,10 @@ console.log("\n[G-21] 10. 소스 계약");
     && (body.match(/nonNegInt\([^)]*\)/g) ?? [])[0] === "nonNegInt(nb?.priorAnnualDeductible)");
   // 범위 밖 파일은 그대로다.
   const rc = readFileSync("src/lib/insurance/engine/roomCharge2026.ts", "utf8");
-  check("roomCharge2026의 annualLimitOf가 그대로",
-    /if \(raw === undefined \|\| !Number\.isFinite\(raw\) \|\| raw <= 0\) return undefined;/.test(rc));
+  // ⚠ 계약 갱신(G-22): 그 함수도 검증된 원값만 받게 바뀌었다. 이 커밋이 손대지 않았다는
+  //   요지는 같으므로 확인 대상을 새 모양으로 옮긴다.
+  check("roomCharge2026의 annualLimitOf는 이 커밋이 손대지 않았다(G-22의 모양)",
+    /if \(limit === undefined \|\| limit === 0\) return undefined;/.test(rc));
   const g21 = readFileSync("src/lib/insurance/engine/multiClaim2021.ts", "utf8");
   check("4세대 엔진은 손대지 않았다", /const limitRaw = rider === "none" \? readCount\(input, "annualCoverageLimit"\) : undefined;/.test(g21));
   const ui = readFileSync("src/components/calculators/HealthCalcMulti2026.tsx", "utf8");

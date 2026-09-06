@@ -123,9 +123,12 @@ console.log("\n[연간 보험가입금액]");
 {
   const none = one(2_000_000, 10);
   check("미입력이면 미적용 안내", none.notes.some((x) => x.includes("입력하지 않아 적용하지 않았습니다")));
-  check("0·음수는 미입력 처리",
-    one(2_000_000, 10, { annualCoverageLimit: 0 }).totalInsurancePay === 1_000_000
-    && one(2_000_000, 10, { annualCoverageLimit: -1 }).totalInsurancePay === 1_000_000);
+  // ⚠ **낡은 계약을 교체했다.** 종전에는 `0`과 음수를 함께 "미입력 처리"로 묶었다.
+  //   G-22가 음수를 **거부**로 바꿨다(공용 isNum이 유한한 숫자만 봐서 통과한 뒤 하류에서
+  //   조용히 미적용이 됐다). 숫자 `0`의 미적용 계약은 그대로다.
+  //   음수·소수의 새 계약은 tests/gen2026RoomChargeMoneyValue.test.ts가 본다.
+  check("숫자 0은 종전대로 미입력 처리",
+    one(2_000_000, 10, { annualCoverageLimit: 0 }).totalInsurancePay === 1_000_000);
   const critOver = one(200_000_000, 1000, { annualCoverageLimit: 90_000_000 });
   check("중증 상한선 5천만으로 절삭", critOver.totalInsurancePay === 50_000_000, JSON.stringify(critOver.totalInsurancePay));
   const ncOver = one(200_000_000, 1000, { severity: "non_critical", annualCoverageLimit: 90_000_000 });

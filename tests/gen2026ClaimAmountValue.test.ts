@@ -395,7 +395,9 @@ console.log("\n[G-26] 13. 반환 객체와 소스 계약");
     && /Array\.isArray\(raw\.amounts\)[\s\S]{0,700}isClaimAmount\(amount\)[\s\S]{0,700}Number\.isSafeInteger\(generalSum\)/.test(itemCode));
   check("검증한 값을 본체에 넘긴다(다시 읽지 않는다)",
     /stayTotals: number\[\];/.test(room) && /const total = checked\.stayTotals\[index\];/.test(roomCode)
-    && /type CheckedAmounts = \{ amounts: number\[\] \};/.test(item)
+    // ⚠ **낡은 앵커를 교체했다(G-28).** `CheckedAmounts`에 승인 구간 축(`acts`)이 더해져
+    //   여러 줄이 됐다. 진료비를 그대로 돌려준다는 G-26의 계약은 그대로다.
+    && /type CheckedAmounts = \{\n\s*amounts: number\[\];/.test(item)
     && /const amount = amounts\[index\];/.test(itemCode)
     && /const totalAmount = amounts\.reduce\(\(a, b\) => a \+ b, 0\);/.test(itemCode));
   check("세 자리에서 normalizeAmount 호출이 사라졌다",

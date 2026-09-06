@@ -385,7 +385,18 @@ console.log("\n[커밋 D·E] 계산·화면 무변경 (기준 30dee21)");
     //     GEN2026-ROOM-CHARGE-DEDUCTIBLE-POOL HOLD.
     //   ⚠ 공용 `normalizeAmount`는 **한 글자도 바꾸지 않았다.** 이 파일에서 사용처가
     //     사라져 import만 제거했다. 다른 엔진의 사용처는 이번 범위가 아니다.
-    "src/lib/insurance/engine/roomCharge2026.ts": "cf65a585183eee174760184ef022df4e7e5692ac0e8ede28ca02329d63dfa0e6",
+    // ⚠ G-28에서 **의도적으로** 갱신했다(종전 cf65a585…).
+    //   ①`UNUSED_KEYS`에 `priorAnnualTreatmentActCount`를 추가했다. 이 키가 빠져 있어
+    //     상급병실료 경로가 승인 구간 전용 축을 **조용히 폐기**했다(실측: 값 `0`·`5` 모두
+    //     결과가 미제공과 완전히 같았고 **접근자 호출 0회** — 반영돼서가 아니라 읽히지
+    //     않아서다). 타입은 이미 `?: never`였으므로 타입과 런타임이 어긋난 상태였다.
+    //     **목록 맨 끝**에 넣어 기존 13개 키의 안내 우선순위를 그대로 두었다.
+    //   ②같은 루프가 존재 검사와 `rejected()` 인자에서 같은 이름을 **2회** 읽던 것을
+    //     1회로 줄였다. 결과·안내는 그대로이고 읽는 횟수만 줄었다.
+    //   ⚠ **유지한 계약**: 진료비·일수·두 금액 축의 검증과 안내(G-22·G-25·G-26),
+    //     산식·1일 평균 한도·연간 한도·상한 절삭·0원 안내, 기존 13개 키의 거부와 순서,
+    //     GEN2026-ROOM-CHARGE-DEDUCTIBLE-POOL HOLD.
+    "src/lib/insurance/engine/roomCharge2026.ts": "cc45f2d7ea3c29ddfa462e5d21d8b3d50a6d8b5b70b78a8ee96d8eb11035e58f",
     // ⚠ G-15에서 **의도적으로** 갱신했다(종전 2c019bb8…).
     //   급여 통원 분기가 `nhisCoinsuranceRate`·`tier`를 검증 없이 산식에 넣어, 타입을 우회한
     //   무효값이 `Math.max`/`md[tier]`에서 **NaN**이 되고 `settle()`의 유한성 폴백에 걸려

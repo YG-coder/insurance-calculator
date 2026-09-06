@@ -362,7 +362,8 @@ console.log("\n[G-20] 11. 소스 계약");
     uses.length === 1 && uses[0] === "nonNegInt(nb?.priorAnnualDeductible)", uses.join(" | "));
   // 순서: 급여 stray → 레거시 → 별도 키 → 치료유형 → 통원 카운터 → 공제금액 → 지급보험금 → 가입금액 → 계산
   const iLegacy = body.indexOf('readCount(input, "priorAnnualPaid")');
-  const iStray = body.indexOf("SPECIAL_ITEM_ONLY_KEYS.find(");
+  // ⚠ **낡은 앵커를 교체했다(G-28).** 위와 같은 이유다(단일 읽기 for 루프).
+  const iStray = body.indexOf("for (const stray of SPECIAL_ITEM_ONLY_KEYS)");
   const iProbe = body.indexOf("const probe = calc2026(");
   const iDays = body.indexOf("if (badCount(days))");
   const iDeduct = body.indexOf('readCount(input, "priorAnnualDeductible")');

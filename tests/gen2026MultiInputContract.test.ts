@@ -254,7 +254,9 @@ console.log("\n[G-14C] 8. 소스 계약");
   check("반환은 blocked()이며 rejected()를 쓰지 않는다", !/rejected\(/.test(body));
   // A·B가 preflight보다 앞, C가 뒤라는 **순서**를 소스로도 고정한다.
   const iA = body.indexOf("priorAnnualPaid는 2·3세대");
-  const iB = body.indexOf("SPECIAL_ITEM_ONLY_KEYS.find");
+  // ⚠ **낡은 앵커를 교체했다(G-28).** stray 검사가 `find` + 별도 `readCount`(2회 읽기)에서
+  //   **각 키를 한 번만 읽는 for 루프**로 바뀌었다. 순서·안내·반환 계약은 그대로다.
+  const iB = body.indexOf("for (const stray of SPECIAL_ITEM_ONLY_KEYS)");
   const iP = body.indexOf("const probe = calc2026(");
   const iC = body.indexOf("const deductible = readCount(input,");
   check("순서: A군 < preflight", iA > 0 && iA < iP);

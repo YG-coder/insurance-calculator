@@ -149,7 +149,18 @@ const PURPOSE_VALUES: readonly string[] = Object.keys(GEN2026_INJECTION_PURPOSE_
  *   쓰는 값이 갈리고 **두 해석이 서로 다른 값에서 출발한다**(실측: 검증 300,000 →
  *   계산 900,000). G-23이 지급보험금에 세운 계약과 같다.
  */
-type CheckedAmounts = { amounts: number[] };
+type CheckedAmounts = {
+  amounts: number[];
+  /**
+   * 검증을 통과한 **과거 치료행위 수**(근골격계 승인 구간 전용). 소비 경로가 아니면 `undefined`다.
+   *
+   * ⚠ 본체가 원본을 **다시 읽지 않도록** 값을 그대로 돌려준다(G-28). 종전에는 검증(`acts`)과
+   *   승인 preflight(`priorActs`)가 각각 읽어 **2회**였고, 값이 달라지는 접근자에서
+   *   **검증한 값과 승인 판정에 쓰는 값이 갈렸다**(실측: 검증 5 → 판정 20으로 차단).
+   *   G-23이 지급보험금에, G-26이 진료비에 세운 계약과 같다.
+   */
+  acts?: number;
+};
 
 function validateItemInput(
   input: Exclude<Gen2026ItemClaimInput, Gen2026RoomChargeInput>,
@@ -285,6 +296,8 @@ function validateItemInput(
       && !(typeof acts === "number" && Number.isSafeInteger(acts) && acts >= 0)) {
       return rejected("과거 치료행위 수(priorAnnualTreatmentActCount)는 0 이상의 정수여야 합니다 —", acts);
     }
+    // ⚠ 여기서 확정한 값을 본체에 넘긴다. 승인 preflight가 입력을 다시 읽지 않는다(G-28).
+    const checkedActs = acts as number | undefined;
     const approved = raw.approvedThroughVisit;
     if (approved !== undefined && !(typeof approved === "number" && (GEN2026_MSK_APPROVED_THROUGH_VALUES as readonly number[]).includes(approved))) {
       return rejected("보상 승인 회차(approvedThroughVisit)", approved);
@@ -294,7 +307,7 @@ function validateItemInput(
     //   `calculateSpecialItem2026`의 preflight를 통과한 뒤에만 소비되므로, 검증도 그 뒤에서
     //   한다. 여기서 읽으면 preflight가 이미 결과를 정한 입력에서까지 접근자가 실행되어
     //   종전에 안전하게 차단되던 입력에 새 런타임 예외가 생긴다.
-    return { amounts: lineAmounts };
+    return { amounts: lineAmounts, acts: checkedActs };
   }
 
   if (!oneOf(raw.cause, CAUSE_VALUES)) return rejected("원인(cause)", raw.cause);
@@ -497,6 +510,7 @@ const fingerprint = (r: Gen2026SpecialItemResult) => JSON.stringify(
 function calculateSpecialItem2026(
   input: Gen2026SpecialItemInput,
   amounts: number[],
+  priorActs: number | undefined,
 ): Gen2026SpecialItemResult | Gen2026RejectedResult {
   const lines = input.lines ?? [];
   // ⚠ 검증을 통과한 값으로 합계를 만든다. `normalizeAmount`를 다시 걸지 않는다 —
@@ -536,7 +550,8 @@ function calculateSpecialItem2026(
     //   과소 집계된 채 OK와 보험금을 돌려주게 되므로 안전하지 않다.
     // ⚠ 미입력을 0으로 추정하지도 않는다. "확인 결과 0회"와 "모른다"는 다른 상태다.
     //   모르는 상태에서는 승인 경계를 넘겼는지 판정할 수 없으므로 **묶음 전체를 막는다.**
-    const priorActs = (input as { priorAnnualTreatmentActCount?: number }).priorAnnualTreatmentActCount;
+    // ⚠ 검증된 원값을 인자로 받는다(G-28). 여기서 input을 다시 읽으면 검증한 값과 승인
+    //   판정에 쓰는 값이 갈릴 수 있다(값이 달라지는 접근자). 미입력은 종전대로 차단한다.
     if (priorActs === undefined) {
       return blocked(totalAmount, [
         `근골격계 이학요법·체외충격파는 최초 ${S.msk.initialApprovedVisits}회 이후에는 증상의 개선·병변호전 등이 확인된 경우에 한하여 ${S.msk.approvalStep}회 단위로 보상합니다(특별약관1 제3조(3)제1항 <표1> 주)).`,
@@ -668,8 +683,33 @@ export function calculateGen2026Item(input: Gen2026ItemClaimInput): Gen2026ItemC
     );
   }
 
-  // 3) 계산.
+  // 3) 승인 구간 전용 축의 stray 차단 (G-28).
+  //   ⚠ 종전에는 이 경로가 `priorAnnualTreatmentActCount`를 **조용히 폐기**했다. 검사가
+  //     `special_item` 분기 안에만 있어서 `route: "general"`에는 닿지 않았다(실측: 값 `0`·`5`
+  //     모두 결과가 미제공과 완전히 같았고 접근자 호출도 0회였다 — 결과가 같았던 이유는
+  //     반영돼서가 아니라 **읽히지 않아서**다). 타입은 이미 `?: never`로 닫혀 있어
+  //     리터럴 호출은 막혔지만, 변수 경유·외부 데이터는 타입을 우회한다.
+  //   ⚠ 승인 구간은 (3)3대비급여의 **중증 근골격계에만** 있다. 일반 (1)(2)로 되돌아온 조합은
+  //     일반 비급여 산식으로 계산하며 이 축을 소비하지 않는다. 값이 `0`이어도 막는다 —
+  //     명시적으로 전달된 축이므로 형제 축(통원 카운터·`priorAnnualCoveredCount`)과 같은 계약이다.
+  //   ⚠ **위치가 계약이다.** `validateItemInput`의 일반 분기 끝이 아니라 **2)의 경로 대조
+  //     뒤**다. 처음에는 분기 끝에 두었는데, 그러면 `route: "general"`인데 실제로는 별도
+  //     보장종목인 조합(예: 중증 `musculoskeletal_esw`)에서 기존 경로 불일치 안내보다
+  //     이 안내가 먼저 나가고, 경로 불일치가 이미 확정된 입력에서 접근자까지 실행됐다.
+  //     경로가 확정된 뒤에 읽으면 두 문제가 함께 사라진다 — 지급보험금(G-23)·진료비(G-26)이
+  //     "그 축이 실제로 쓰이는 자리 앞에서 읽는다"로 세운 원칙과 같다.
+  //   ⚠ 값을 **한 번만** 읽는다. 여기까지 오지 못한 입력에서는 읽지 않는다(접근자 0회 유지).
+  //   ⚠ 안내는 올바른 입력 경로와 필드 역할만 말한다. 약관상 독립 소진 여부는 단정하지 않는다
+  //     (GEN2026-SPECIAL-ITEM-COUNT-ZEROPAY는 HOLD 그대로다).
+  if (rest.route === "general") {
+    const strayActs: unknown = (rest as { priorAnnualTreatmentActCount?: unknown }).priorAnnualTreatmentActCount;
+    if (strayActs !== undefined) {
+      return rejected("과거 치료행위 수(priorAnnualTreatmentActCount)는 중증 근골격계 이학요법·체외충격파의 보상 승인 구간 전용입니다. 이 조합은 일반 상해·질병 비급여 산식으로 계산하므로 쓰이지 않습니다 —", strayActs);
+    }
+  }
+
+  // 4) 계산.
   return rest.route === "special_item"
-    ? calculateSpecialItem2026(rest, checked.amounts)
+    ? calculateSpecialItem2026(rest, checked.amounts, checked.acts)
     : calculateRoutedGeneral2026(rest, checked.amounts);
 }

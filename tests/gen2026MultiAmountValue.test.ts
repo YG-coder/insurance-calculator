@@ -303,7 +303,8 @@ console.log("\n[G-27] 16. 구조 계약");
   check("컨테이너 → 원소 → 합계 순이다",
     /Array\.isArray\(rawAmounts\)[\s\S]{0,900}isClaimAmount\(v\)[\s\S]{0,900}Number\.isSafeInteger\(totalAmount\)/.test(code));
   check("검증이 모든 preflight보다 앞이다",
-    code.indexOf("Array.isArray(rawAmounts)") < code.indexOf("SPECIAL_ITEM_ONLY_KEYS.find")
+    // ⚠ **낡은 앵커를 교체했다(G-28).** stray 검사가 단일 읽기 for 루프로 바뀌었다.
+    code.indexOf("Array.isArray(rawAmounts)") < code.indexOf("for (const stray of SPECIAL_ITEM_ONLY_KEYS)")
     && code.indexOf("Number.isSafeInteger(totalAmount)") < code.indexOf("const probe = calc2026("));
   check("각 원소를 한 번만 읽어 지역 배열에 담는다",
     /const v: unknown = rawAmounts\[i\];/.test(code) && (code.match(/rawAmounts\[/g) ?? []).length === 1

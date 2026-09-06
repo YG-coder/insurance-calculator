@@ -318,13 +318,17 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
   //   ⚠ preflight보다 앞이다. `nonBenefitItem`이 무엇이든 이 키들은 쓰이지 않으므로,
   //     "이 치료유형은 대상이 아닙니다"보다 먼저 정확한 이유를 말하는 편이 낫다.
   {
-    const stray = SPECIAL_ITEM_ONLY_KEYS.find((k) => readCount(input, k) !== undefined);
-    if (stray !== undefined) {
+    // ⚠ 각 키를 **한 번만** 읽는다(G-28). 종전에는 `find`의 존재 검사와 안내의
+    //   `readCount`가 같은 이름을 2회 읽어, 값이 달라지는 접근자에서 검사한 값과 안내에
+    //   실리는 값이 갈릴 수 있었다. 먼저 찾은 키에서 반환하는 계약과 안내 문구는 그대로다.
+    for (const stray of SPECIAL_ITEM_ONLY_KEYS) {
+      const got = readCount(input, stray);
+      if (got === undefined) continue;
       return blocked([
         `${stray}은(는) 별도 보장종목(3대비급여·비중증 MRI·상급병실료 차액) 전용 입력이라 이 묶음 계산에 쓰이지 않습니다.`,
         "그 보장종목은 calculateGen2026Item으로 계산해 주세요. 공제금액·보장한도·적용 축이 모두 다릅니다(특별약관1 제5조 제1항 단서·제3항).",
         "쓰이지 않는 입력을 조용히 버리면 반영했다고 오해할 수 있어 계산하지 않았습니다.",
-        `받은 값: ${showValue(readCount(input, stray))}`,
+        `받은 값: ${showValue(got)}`,
       ]);
     }
   }

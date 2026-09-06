@@ -444,7 +444,9 @@ console.log("\n[G-23] 10. 소스 계약");
   check("진입점의 검증 계약은 종전 그대로다(검증 → 거부면 반환 → 아니면 계산)",
     /const checked = validateItemInput\(rest\);/.test(body)
     && /if \("route" in checked\) return checked;/.test(body)
-    && /\? calculateSpecialItem2026\(rest, checked\.amounts\)/.test(body));
+    // ⚠ **낡은 앵커를 교체했다(G-28).** 검증된 승인 구간 축(`checked.acts`)도 함께 넘긴다.
+    //   G-23이 세운 계약(검증 → 거부면 반환 → 아니면 계산)은 그대로다.
+    && /\? calculateSpecialItem2026\(rest, checked\.amounts, checked\.acts\)/.test(body));
   check("이 파일에서 이 속성을 정확히 두 번만 읽는다(special_item 검증 1 + 일반 전환 전달 1)",
     (body.match(/\.priorAnnualInsurancePaid/g) ?? []).length === 2,
     String((body.match(/\.priorAnnualInsurancePaid/g) ?? []).length));

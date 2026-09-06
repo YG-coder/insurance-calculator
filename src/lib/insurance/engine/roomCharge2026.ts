@@ -37,6 +37,13 @@ const UNUSED_KEYS = [
   "approvedThroughVisit", "priorAnnualCoveredCount", "priorAnnualInpatientDeductible",
   "priorAnnualDeductible", "outpatientCoverageLimit", "priorAnnualOutpatientVisits",
   "priorAnnualOutpatientDays",
+  // ⚠ G-28에서 추가했다. 이 키가 빠져 있어 상급병실료 경로가 승인 구간 전용 축
+  //   `priorAnnualTreatmentActCount`를 **조용히 폐기**했다(실측: 값 `0`·`5` 모두 결과가
+  //   미제공과 완전히 같았고 접근자 호출 0회 — 반영돼서가 아니라 읽히지 않아서다).
+  //   타입은 이미 `?: never`로 닫혀 있었으므로 타입과 런타임이 어긋난 상태였다.
+  //   ⚠ **목록의 맨 끝**에 넣는다. 이 루프는 먼저 찾은 키에서 반환하므로, 뒤에 붙이면
+  //     기존 13개 키의 안내 우선순위가 그대로 유지된다.
+  "priorAnnualTreatmentActCount",
 ] as const;
 
 /**
@@ -61,8 +68,12 @@ function validate(input: Gen2026RoomChargeInput): Gen2026RejectedResult | Checke
   if (raw.coverage !== "non_benefit") return rejected("급여 구분(coverage)", raw.coverage);
   if (!oneOf(raw.cause, CAUSE_VALUES)) return rejected("원인(cause)", raw.cause);
   if (!oneOf(raw.severity, SEVERITY_VALUES)) return rejected("질환 구분(severity)", raw.severity);
+  // ⚠ 각 키를 **한 번만** 읽는다(G-28). 종전에는 존재 검사와 `rejected()` 인자에서 같은
+  //   이름을 2회 읽어, 값이 달라지는 접근자에서 검사한 값과 안내에 실리는 값이 갈릴 수
+  //   있었다. 결과는 종전과 같고 읽는 횟수만 줄었다.
   for (const key of UNUSED_KEYS) {
-    if (raw[key] !== undefined) return rejected(`상급병실료 차액 계산에 쓰이지 않는 입력(${key})`, raw[key]);
+    const got: unknown = raw[key];
+    if (got !== undefined) return rejected(`상급병실료 차액 계산에 쓰이지 않는 입력(${key})`, got);
   }
   if (!Array.isArray(raw.stays)) return rejected("입원 목록(stays)", raw.stays);
   // ── 진료비: 컨테이너 → 원소 → 합계 (G-26) ────────────────────────

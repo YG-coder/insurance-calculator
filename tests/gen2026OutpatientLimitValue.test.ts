@@ -344,10 +344,15 @@ console.log("\n[G-24] 8. 다른 축·다른 경로·HOLD 무회귀");
     stays: [{ roomChargeTotal: 2_000_000, inpatientDays: 10 }], ...extra } as never));
   check("상급병실료: 정상 계산 그대로", ins(RC()) === "1000000");
   check("상급병실료: annualCoverageLimit 0의 계산이 그대로(미적용)", shape(RC({ annualCoverageLimit: 0 })) === shape(RC()));
-  // ⚠ 0원 전용 안내를 **신설하지 않았다.** 다른 필드·다른 엔진이라 G-24 범위 밖이다.
-  check("상급병실료: 0원 전용 안내를 신설하지 않았다(범위 밖)",
-    notes(RC({ annualCoverageLimit: 0 })) === notes(RC())
-    && !notes(RC({ annualCoverageLimit: 0 })).includes("0원으로 입력하셔서"));
+  // ⚠ **낡은 계약을 교체했다(G-25).** 종전 이 자리는 "상급병실료에 0원 전용 안내를
+  //   신설하지 않았다"를 고정했다 — G-24는 통원 가입금액 축만 다뤘고 상급병실료의
+  //   `annualCoverageLimit`은 다른 필드·다른 엔진이라 범위 밖이었기 때문이다.
+  //   G-25가 그 축의 0원 전용 안내를 신설했으므로, 이제 **계산은 그대로이고 안내만 갈린다**를
+  //   고정한다. G-24가 지킨 계산 무변경은 위 줄이 그대로 본다.
+  check("상급병실료: 0원의 안내가 미제공과 갈린다(G-25)",
+    notes(RC({ annualCoverageLimit: 0 })) !== notes(RC())
+    && notes(RC({ annualCoverageLimit: 0 })).includes("0원으로 입력하셔서")
+    && !notes(RC({ annualCoverageLimit: 0 })).includes("입력하지 않아 적용하지 않았습니다"));
   check("상급병실료: 통원 가입금액은 종전대로 쓰이지 않는 입력으로 거부",
     statusOf(RC({ outpatientCoverageLimit: 150_000 })) === "PENDING_UNVERIFIED");
   // 별도 보장종목(G-23)·미사용 축 stray 거부는 그대로다.
@@ -427,7 +432,10 @@ console.log("\n[G-24] 9. 소스 계약");
 
   // 범위 밖 파일은 그대로다.
   const room = readFileSync("src/lib/insurance/engine/roomCharge2026.ts", "utf8");
-  check("상급병실료 엔진에 0원 안내를 넣지 않았다(범위 밖)", !/0원으로 입력하셔서/.test(room));
+  // ⚠ **낡은 계약을 교체했다(G-25).** G-24 시점에는 상급병실료 엔진에 0원 안내가 없어야 했다.
+  //   G-25가 그 안내를 신설했다. 통원 가입금액 축(이 파일의 대상)까지 번지지 않았는지만 본다.
+  check("상급병실료 엔진의 0원 안내는 연간 가입금액 축의 것이다(통원 축으로 번지지 않았다)",
+    /연간 보험가입금액을 0원으로 입력하셔서/.test(room) && !/통원 가입금액을 0원으로 입력하셔서/.test(room));
   check("상급병실료의 미입력 안내가 그대로", /연간 보험가입금액을 입력하지 않아 적용하지 않았습니다\./.test(room));
   const item = readFileSync("src/lib/insurance/engine/specialItem2026.ts", "utf8");
   check("별도 보장종목은 이 축을 전달만 한다(읽기 1회)",

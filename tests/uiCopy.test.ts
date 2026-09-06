@@ -9,7 +9,9 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ZeroLimitPolicy } from "../src/components/calculators/HealthCalcMulti2026";
+import {
+  GeneralAnnualLimitHelp, RoomChargeMoneyHelp, ZeroLimitPolicy,
+} from "../src/components/calculators/HealthCalcMulti2026";
 
 let pass = 0, fail = 0;
 function check(name: string, cond: boolean, detail = "") {
@@ -217,8 +219,10 @@ const countOf = (hay: string, needle: string) => hay.split(needle).length - 1;
 check("5세대 단건 UI: 도움말과 무효 안내가 **둘 다** 빈 값과 0원을 함께 설명",
   countOf(gen5Text, ZERO_OR_EMPTY) === 2 && countOf(gen5Text, ZERO_SHOWN) === 2,
   `${countOf(gen5Text, ZERO_OR_EMPTY)} / ${countOf(gen5Text, ZERO_SHOWN)}`);
-check("5세대 다회 UI: 통원 가입금액 무효 안내가 같은 설명을 쓴다",
-  gen5MultiText.includes(ZERO_OR_EMPTY) && gen5MultiText.includes(ZERO_SHOWN));
+// ⚠ 이 자리는 아래 [G-25] 절의 **실제 렌더 검사**가 본다. 문구가 `ZeroLimitPolicy` 안으로
+//   들어가 소스에는 통 문장이 남아 있지 않으므로, 소스 검사로는 확인할 수 없다.
+check("5세대 다회 UI: 통원 가입금액 무효 안내가 정책 컴포넌트를 쓴다",
+  /통원 가입금액[\s\S]{0,400}<ZeroLimitPolicy strong \/>/.test(gen5Multi));
 // 옛 두 표현이 다시 등장하면 결과 안내와 어긋난다.
 check("5세대 단건 UI: '0원을 입력해도 미입력으로 처리' 문구가 없다",
   !gen5Text.includes("0원을 입력해도 미입력으로 처리"));
@@ -260,28 +264,50 @@ check("4세대 다회 UI: 연간 가입금액 **도움말**이 빈 값과 0원�
   gen4MultiText.includes(`${HELP_ANCHOR}${ZERO_OR_EMPTY} ${ZERO_SHOWN}`));
 check("4세대 다회 UI: 연간 가입금액 **무효 안내**가 빈 값과 0원을 함께 설명",
   gen4MultiText.includes(`${INVALID_ANCHOR}${ZERO_OR_EMPTY} ${ZERO_SHOWN}`));
-check("5세대 다회 UI: 일반 폼 **도움말**이 빈 값과 0원을 함께 설명",
-  gen5MultiText.includes(`${HELP_ANCHOR}${ZERO_OR_EMPTY} ${ZERO_SHOWN}`));
-// ⚠ **실제 렌더로 본다.** 이 자리는 경로에 따라 문장이 갈리므로 소스 문자열 검사로는
-//   "무엇이 화면에 나오는지"를 확인할 수 없다(G-24b 리뷰 지적). 두 상태를 각각 렌더한다.
-const renderText = (withZeroNotice: boolean) =>
-  renderToStaticMarkup(createElement(ZeroLimitPolicy, { withZeroNotice }))
-    .replace(/<\/?b>/g, "").replace(/\s+/g, " ").trim();
-const generalRendered = renderText(true);   // 일반 폼 — multiClaim2026이 0원 안내를 낸다
-const roomRendered = renderText(false);     // 상급병실료 폼 — roomCharge2026은 아직 내지 않는다
-check("5세대 다회 렌더: 일반 폼 무효 안내에 **두 문장 모두** 나온다",
-  generalRendered === `${ZERO_OR_EMPTY} ${ZERO_SHOWN}`, generalRendered);
-check("5세대 다회 렌더: 상급병실료 폼 무효 안내에는 **첫 문장만** 나온다",
-  roomRendered === ZERO_OR_EMPTY, roomRendered);
-check("5세대 다회 렌더: 상급병실료 폼은 0원 결과 안내를 약속하지 않는다",
-  !roomRendered.includes(ZERO_SHOWN) && !roomRendered.includes("결과 안내"), roomRendered);
-check("5세대 다회 렌더: 두 상태 모두 배타 표현이 없다",
-  !/완전히 비워|비우면/.test(generalRendered) && !/완전히 비워|비우면/.test(roomRendered));
-// 화면이 그 컴포넌트를 **실제로** 두 경로에 맞게 쓰는지도 고정한다.
-check("5세대 다회: 연간 가입금액 무효 안내가 경로에 따라 갈린다",
-  /<ZeroLimitPolicy withZeroNotice=\{!showRoomChargeForm\} \/>/.test(gen5Multi));
-check("5세대 다회: 통원 가입금액 무효 안내는 항상 두 문장이다",
-  /<ZeroLimitPolicy withZeroNotice \/>/.test(gen5Multi));
+// ── 5세대 다회의 네 자리는 **실제 렌더**로 본다 (G-25) ───────────────
+//   ⚠ **낡은 계약 3건을 교체했다.** ①일반 폼 도움말의 소스 앵커 검사(`HELP_ANCHOR` +
+//     두 문장)는 그 문구가 컴포넌트로 빠지면서 근거가 사라졌다 — 아래 렌더 검사가 대신한다.
+//     ②G-24b에서는 `ZeroLimitPolicy`가 `withZeroNotice`로 갈려 일반 폼은 두 문장,
+//     상급병실료 폼은 첫 문장만 냈다. `roomCharge2026`에 0원 전용 결과 안내가 없어
+//     **없는 표시를 약속하지 않으려는** 임시 조치였고, G-25가 그 안내를 신설해 조건이
+//     사라졌다. ③따라서 "상급병실료 폼은 첫 문장만"이라는 고정도 폐기한다.
+//   ⚠ 소스 문자열 검사는 **실제 렌더 검사가 아니다.** 아래에서 renderOf로 만든 값만 실제
+//     렌더이고, 그 뒤 정규식 검사는 "화면이 그 컴포넌트를 쓰는가"를 보는 **구조 검사**다.
+const renderOf = <P extends object>(
+  component: (props: P) => ReturnType<typeof createElement>, props: P,
+) => renderToStaticMarkup(createElement(component, props))
+  .replace(/<\/?b>/g, "").replace(/\s+/g, " ").trim();
+const policyStrong = renderOf(ZeroLimitPolicy, { strong: true });
+const policyPlain = renderOf(ZeroLimitPolicy, {});
+check("5세대 다회 렌더: 0원 정책 문장이 두 문장 모두 나온다",
+  policyStrong === `${ZERO_OR_EMPTY} ${ZERO_SHOWN}`, policyStrong);
+check("5세대 다회 렌더: strong 프롭은 표시 강조일 뿐 문장을 바꾸지 않는다",
+  policyPlain === policyStrong, `${policyPlain} ||| ${policyStrong}`);
+// 경로별 도움말을 **각각 렌더해** 두 문장이 모두 나오는지 본다.
+const generalHelp = renderOf(GeneralAnnualLimitHelp, { maxLabel: "1천만", axisLabel: "질병비급여" });
+const roomHelp = renderOf(RoomChargeMoneyHelp, { maxLabel: "1천만" });
+check("5세대 다회 렌더: 일반 폼 도움말에 **두 문장 모두** 나온다",
+  generalHelp.includes(`${HELP_ANCHOR}${ZERO_OR_EMPTY} ${ZERO_SHOWN}`), generalHelp);
+check("5세대 다회 렌더: 상급병실료 폼 도움말에도 **두 문장 모두** 나온다",
+  roomHelp.includes(`${ZERO_OR_EMPTY} ${ZERO_SHOWN}`), roomHelp);
+check("5세대 다회 렌더: 상급병실료 도움말이 첫 문장만 내던 옛 형태가 아니다",
+  !roomHelp.includes(`${ZERO_OR_EMPTY} 상급병실료 차액은`), roomHelp);
+check("5세대 다회 렌더: 상급병실료 도움말의 나머지 설명은 그대로다",
+  roomHelp.startsWith("약관은 1천만 원 이내에서 계약 시 정한 금액으로 규정합니다.")
+  && roomHelp.includes("상급병실료 차액은 (1)(2) 표 안의 한 행이라 일반 입원·통원과 같은 연간 보험가입금액을 공유합니다."), roomHelp);
+check("5세대 다회 렌더: 세 자리 모두 배타 표현이 없다",
+  ![policyStrong, generalHelp, roomHelp].some((t) => /완전히 비워|비우면/.test(t)));
+// 구조 검사 — 화면이 그 컴포넌트를 네 자리에서 실제로 쓰는가, 경로 조건이 남아 있지 않은가.
+check("5세대 다회 구조: 두 도움말이 각자의 컴포넌트를 쓴다",
+  /<GeneralAnnualLimitHelp maxLabel=\{severity === "critical" \? "5천만" : "1천만"\} axisLabel=\{generalAxisLabel\(generalAxis\)\} \/>/.test(gen5Multi)
+  && /<RoomChargeMoneyHelp maxLabel=\{severity === "critical" \? "5천만" : "1천만"\} \/>/.test(gen5Multi));
+check("5세대 다회 구조: 두 무효 안내가 같은 정책 컴포넌트를 쓴다",
+  (gen5Multi.match(/<ZeroLimitPolicy strong \/>/g) ?? []).length === 2);
+// ⚠ 주석이 옛 프롭 이름을 **설명으로** 인용하는 것은 정상이다. 주석을 걷어낸 코드에서 본다.
+const gen5MultiCode = gen5Multi
+  .replace(/\{\/\*[\s\S]*?\*\/\}/g, " ").replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
+check("5세대 다회 구조: 0원 문장을 경로로 끄는 조건이 남아 있지 않다",
+  !/withZeroNotice/.test(gen5MultiCode) && !/ZeroLimitPolicy[^/]*showRoomChargeForm/.test(gen5MultiCode));
 for (const [label, txt] of [["5세대 다회", gen5MultiText],
   ["4세대 다회", gen4MultiText]] as [string, string][]) {
   // 옛 배타 표현이 이 필드 주변에 없다.
@@ -292,9 +318,12 @@ for (const [label, txt] of [["5세대 다회", gen5MultiText],
     spots.length > 0 && !spots.some((i) => /완전히 비워|비우면/.test(txt.slice(i, i + 400))),
     spots.filter((i) => /완전히 비워|비우면/.test(txt.slice(i, i + 400))).map((i) => txt.slice(i, i + 80)).join(" ||| "));
 }
-// 상급병실료 경로에서는 0원 표시 문장을 말하지 않는다(엔진에 그 안내가 없다).
-check("5세대 다회 UI: 상급병실료 도움말은 0원 표시를 약속하지 않는다",
-  gen5MultiText.includes("완전히 비우거나 0원을 입력하면 계산기에서는 이 한도를 적용하지 않습니다. 상급병실료 차액은"));
+// 화면이 "결과 안내에 따로 표시한다"고 말하는 근거는 **엔진에 그 안내가 있다는 사실**이다.
+const engRoom = readFileSync("src/lib/insurance/engine/roomCharge2026.ts", "utf8");
+check("상급병실료 엔진: 0원 전용 결과 안내가 있다(화면 문구의 근거)",
+  engRoom.includes("연간 보험가입금액을 0원으로 입력하셔서 계산기에서는 연간 지급 한도를 적용하지 않았습니다. 실제 가입금액이 있으면 증권의 금액을 입력해 주세요."));
+check("상급병실료 엔진: 미입력 안내가 그대로 남아 있다",
+  engRoom.includes("연간 보험가입금액을 입력하지 않아 적용하지 않았습니다. 증권에서 확인한 값을 입력하면 지급 한도로 반영됩니다."));
 // 엔진의 0원 전용 결과 안내가 그대로 있어야 화면 설명이 참이 된다.
 const eng2026 = readFileSync("src/lib/insurance/engine/multiClaim2026.ts", "utf8");
 const eng2021 = readFileSync("src/lib/insurance/engine/multiClaim2021.ts", "utf8");
@@ -312,8 +341,8 @@ for (const banned of ["0원 가입은 무효", "0원 가입도 유효", "약관�
   check(`4세대 다회 UI: 0원의 약관상 의미 단정 "${banned}" 없음`, !gen4MultiText.includes(banned));
 }
 // 다른 축의 문구는 건드리지 않았다.
-check("5세대 다회 UI: 통원 가입금액 설명은 G-24a 그대로",
-  gen5MultiText.includes(ZERO_OR_EMPTY) && gen5MultiText.includes(ZERO_SHOWN));
+check("5세대 다회 UI: 통원 가입금액 설명은 G-24a 그대로(같은 정책 문장을 쓴다)",
+  policyStrong === `${ZERO_OR_EMPTY} ${ZERO_SHOWN}`);
 check("5세대 단건 UI: 급여 본인부담률 안내는 그대로다(0%가 유효값이라 배타 표현이 맞다)",
   gen5Text.includes("건강보험 본인부담률을 올바르게 입력해 주세요") && gen5Text.includes("모르면 완전히 비워 두세요"));
 

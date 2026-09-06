@@ -139,7 +139,20 @@ const nonNegSafeInt = (v: unknown): boolean =>
 
 const CAUSE_LABEL = { injury: "상해", disease: "질병" } as const;
 
-function buildNotes(input: Gen2026RoomChargeInput, annualLimit: number | undefined): string[] {
+/**
+ * 연간 보험가입금액의 상태.
+ *   "applied" = 한도로 적용됨 / "unset" = 미입력 / "zero" = 명시적 0원.
+ *
+ * ⚠ "unset"과 "zero"는 **계산이 같고 안내만 다르다.** `annualLimitOf()`는 둘 다 `undefined`로
+ *   접어 버리므로, 접힌 뒤의 값만으로는 두 상태를 구분할 수 없다. 종전에는 `buildNotes()`가
+ *   접힌 값(`annualLimit === undefined`)만 보아 **0원을 넣은 사용자에게도** "입력하지 않아
+ *   적용하지 않았습니다"라고 말했다(공개 화면·엔진 직접 호출 모두에서 실측).
+ * ⚠ 이 판정은 **이미 한 번 읽어 검증한 값**(`CheckedMoney.limit`)에서 만든다. 입력을 다시
+ *   읽지 않는다 — 접근자 호출 횟수는 종전 그대로 정상 경로 1회, 선행 preflight 차단 0회다.
+ */
+type AnnualLimitState = "applied" | "unset" | "zero";
+
+function buildNotes(input: Gen2026RoomChargeInput, limitState: AnnualLimitState): string[] {
   const max = input.severity === "critical"
     ? GEN2026.nonBenefit.critical.annualLimitMax
     : GEN2026.nonBenefit.nonCritical.annualLimitMax;
@@ -152,8 +165,20 @@ function buildNotes(input: Gen2026RoomChargeInput, annualLimit: number | undefin
     "보험계약이 종료된 뒤에도 계속 중인 입원은 종료일 다음 날부터 180일까지 보상되지만(특별약관1 제3조 (1)제3항), 이 계산에는 반영하지 않았습니다.",
     "공제금액 상한 500만 원(특별약관1 제5조 제5항)은 상급병실료 차액에 적용한다는 명시적 근거를 찾지 못해 반영하지 않았습니다.",
   ];
-  if (annualLimit === undefined) {
+  // ⚠ 미입력 안내의 문구는 한 글자도 바꾸지 않았다. 바뀐 것은 **이 안내에 도달하는 상태**다 —
+  //   종전에는 명시적 `0`도 여기로 왔다.
+  if (limitState === "unset") {
     notes.push("연간 보험가입금액을 입력하지 않아 적용하지 않았습니다. 증권에서 확인한 값을 입력하면 지급 한도로 반영됩니다.");
+  }
+  // ⚠ 명시적 `0`은 미입력과 **다른 상태**다. 계산 결과는 종전 그대로 미적용이지만, 값을
+  //   넘겼는데 "입력하지 않아"라고 말하면 사실과 다르다.
+  // ⚠ 이 문장은 **계산기가 0원을 어떻게 다뤘는지**만 말한다. 0원 가입이 약관상 유효한 계약인지,
+  //   무효인지, 실제 계약 한도가 0원인지, 0원이 미입력과 법적으로 같은지는 원문에서 확인하지
+  //   않았고 여기서 단정하지 않는다.
+  // ⚠ 문구는 일반 다회(G-21, multiClaim2026.ts)의 같은 축 안내와 한 글자도 다르지 않다.
+  //   같은 축(연간 보험가입금액)을 같은 방식으로 다뤘으므로 화면마다 다르게 말하지 않는다.
+  if (limitState === "zero") {
+    notes.push("연간 보험가입금액을 0원으로 입력하셔서 계산기에서는 연간 지급 한도를 적용하지 않았습니다. 실제 가입금액이 있으면 증권의 금액을 입력해 주세요.");
   }
   return notes;
 }
@@ -165,7 +190,11 @@ export function calculateRoomCharge2026(
   if ("route" in checked) return checked;
 
   // 검증을 통과한 원값을 그대로 쓴다. 정규화하지 않고, 입력을 다시 읽지도 않는다.
+  //   ⚠ 계산에 쓰는 한도와 안내에 쓰는 상태를 **같은 원값 하나**에서 만든다. 계산은 종전 그대로
+  //     `annualLimitOf()`가 정하고, 상태는 접히기 전의 값에서 읽는다.
   const annualLimit = annualLimitOf(input.severity, checked.limit);
+  const limitState: AnnualLimitState =
+    checked.limit === undefined ? "unset" : checked.limit === 0 ? "zero" : "applied";
   let paid = checked.paid ?? 0;
   const lines: Gen2026RoomChargeLineResult[] = [];
 
@@ -213,6 +242,6 @@ export function calculateRoomCharge2026(
     totalOwnPay: lines.reduce((a, l) => a + (l.ownPay ?? 0), 0),
     totalInsurancePay: lines.reduce((a, l) => a + (l.insurancePay ?? 0), 0),
     appliedCaps: [...new Set(lines.flatMap((l) => l.appliedCaps))],
-    notes: buildNotes(input, annualLimit),
+    notes: buildNotes(input, limitState),
   };
 }

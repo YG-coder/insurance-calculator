@@ -104,9 +104,13 @@ console.log("\n[G-22] 2. undefined·숫자 0의 축별 기존 계약");
     ins(rc()) === "1000000" && notes(base).includes("연간 보험가입금액을 입력하지 않아 적용하지 않았습니다"));
   check("가입금액 0 → 종전대로 미적용(계산 동일)",
     shape(rc({ annualCoverageLimit: 0 })) === shape(base), shape(rc({ annualCoverageLimit: 0 })));
-  // ⚠ 0원 전용 안내는 이 진입점에 **없다**(다회 엔진에만 있다). 이번에 신설하지 않았다.
-  check("가입금액 0의 안내도 종전 그대로다(0원 전용 안내를 신설하지 않았다)",
-    notes(rc({ annualCoverageLimit: 0 })) === notes(base));
+  // ⚠ **낡은 계약을 교체했다(G-25).** G-22 시점에는 0원 전용 안내가 이 진입점에 없었고
+  //   (다회 엔진에만 있었다), G-22가 신설하지 않았음을 고정했다. G-25가 신설했으므로
+  //   이제 **계산은 미제공과 같고 안내만 다르다**를 고정한다. 계산 동일성은 위 줄이 본다.
+  check("가입금액 0의 안내는 미제공과 다르다(G-25가 0원 전용 안내를 신설)",
+    notes(rc({ annualCoverageLimit: 0 })) !== notes(base)
+    && notes(rc({ annualCoverageLimit: 0 })).includes("연간 보험가입금액을 0원으로 입력하셔서 계산기에서는 연간 지급 한도를 적용하지 않았습니다.")
+    && !notes(rc({ annualCoverageLimit: 0 })).includes("입력하지 않아 적용하지 않았습니다"));
 }
 
 console.log("\n[G-22] 3. 한도 경계·한도 초과값");

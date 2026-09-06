@@ -89,11 +89,17 @@ for (const c of CASES) {
 
 // ── 3. 2세대와 3세대 기본형 산식 동일성 ──────────────────────────────
 // 근거 약관은 다르지만 산식은 같다. 한쪽만 바뀌면 즉시 드러나야 한다.
+// ⚠ G-34A 이전에는 `facility`를 **입원 행에도** 실었다. 종전 의미는 "종별 축을 고정한 채
+//   두 세대 산식을 비교한다"였고, 입원에서 그 축이 결과를 가르지 않아 우연히 통과했다.
+//   G-34A가 제네릭 진입점에서 "그 경로가 읽지 않는 축"을 막으면서 입원 64케이스가 전부
+//   PENDING이 되어 **비교 자체가 사라진다**(실측: 128 중 64). 검사 의미를 지키려고
+//   경로에 맞는 입력으로 바꾼다 — 비교 대상은 종전과 같은 128케이스다.
 let sameCount = 0, sameFail = 0;
 for (const plan of PLANS) for (const visit of VISITS) for (const facility of FACILITIES) {
+  const fac = visit === "outpatient" ? facility : undefined;
   for (const amount of [0, 1, 7, 9_999, 50_000, 300_000, 1_000_000, 15_000_000]) {
-    const a = calculate("2009", { amount, coverage: "benefit", visit, facility, plan });
-    const b = calculate("2017", { amount, coverage: "benefit", visit, facility, plan });
+    const a = calculate("2009", { amount, coverage: "benefit", visit, facility: fac, plan });
+    const b = calculate("2017", { amount, coverage: "benefit", visit, facility: fac, plan });
     sameCount++;
     if (a.ownPay !== b.ownPay || a.insurancePay !== b.insurancePay) sameFail++;
   }
@@ -112,7 +118,15 @@ let matrix = 0;
 for (const gen of GENS) for (const plan of PLANS) for (const visit of VISITS) for (const facility of FACILITIES) {
   for (const amount of [0, 1, 3, 7, 9_999, 10_000, 10_001, 50_000, 50_001, 100_001, 300_000, 999_999, 1_000_000, 9_999_999, 15_000_000]) {
     for (const prior of [undefined, 0, 500_000, 2_000_000, 5_000_000]) {
-      const r: CalcResult = calculate(gen, { amount, coverage: "benefit", visit, facility, plan, priorAnnualPaid: prior });
+      // ⚠ G-34A 이전에는 `facility`와 `priorAnnualPaid`를 **두 경로 모두에** 실었다. 종전
+      //   의미는 "전 조합에서 불변식을 확인한다"였는데, G-34A가 경로별 소유권을 세우면서
+      //   그 형태로는 2400 중 2160이 PENDING이 되어 불변식이 **240건에서만** 확인된다.
+      //   축을 경로에 맞게 실어 종전과 같은 2400건을 그대로 확인한다.
+      const r: CalcResult = calculate(gen, {
+        amount, coverage: "benefit", visit, plan,
+        facility: visit === "outpatient" ? facility : undefined,
+        priorAnnualPaid: visit === "inpatient" ? prior : undefined,
+      });
       matrix++;
       if (r.status !== "OK") continue;
       const own = r.ownPay as number, ins = r.insurancePay as number;
@@ -149,8 +163,13 @@ for (const gen of GENS) {
 // ── 7. coverage가 요율을 가르지 않는다 (4세대와 다른 지점) ────────────
 let coverageDiff = 0;
 for (const gen of GENS) for (const plan of PLANS) for (const visit of VISITS) {
-  const a = calculate(gen, { amount: 300_000, coverage: "benefit", visit, facility: "clinic", plan });
-  const b = calculate(gen, { amount: 300_000, coverage: "non_benefit", visit, facility: "clinic", plan });
+  // ⚠ G-34A 이전에는 입원에도 `facility`를 실어 8건 중 4건이 이제 PENDING이 된다. 이 검사가
+  //   지키려는 것은 "coverage가 요율을 가르지 않는다"이므로, 종별 축은 경로에 맞게 싣는다.
+  //   두 결과가 **PENDING으로 같아지는 것**은 이 검사의 통과 근거가 될 수 없다.
+  const fac = visit === "outpatient" ? ("clinic" as const) : undefined;
+  const a = calculate(gen, { amount: 300_000, coverage: "benefit", visit, facility: fac, plan });
+  const b = calculate(gen, { amount: 300_000, coverage: "non_benefit", visit, facility: fac, plan });
+  if (a.status !== "OK" || b.status !== "OK") { coverageDiff++; continue; }
   if (a.ownPay !== b.ownPay) coverageDiff++;
 }
 check("급여/비급여로 자기부담이 갈리지 않음", coverageDiff === 0, `차이 ${coverageDiff}건`);

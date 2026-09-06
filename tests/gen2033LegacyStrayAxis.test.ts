@@ -254,26 +254,38 @@ console.log("\n[G-33] 9. 구조 — 위치·목록·순서");
 {
   const src = readFileSync("src/lib/insurance/engine/engine.ts", "utf8");
   const code = src.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
-  check("네 축 목록이 상수로 분리돼 있다",
-    /const LEGACY_UNUSED_GEN2026_KEYS = \[\n\s*"nhisCoinsuranceRate", "severity", "nonBenefitItem", "priorAnnualDeductible",\n\] as const;/.test(src));
+  // ⚠ 아래 여섯 앵커는 G-34A에서 **기존 의미를 유지한 채 대상만 바꿨다.** 종전에는 상수 이름
+  //   `LEGACY_UNUSED_GEN2026_KEYS`·`STANDARDIZED_INPATIENT_UNUSED_KEY`와 함수 이름
+  //   `rejectUnusedGen2026Keys`를 직접 잡았고, "2026 경로는 stray 검사를 거치지 않는다"까지
+  //   단언했다. G-34A가 이름 목록을 **세대·경로별 소유권 표**로 일반화하면서
+  //     · 다섯 축 목록은 `GEN2026_ONLY_AXES`(같은 네 축·같은 순서) + 경로별 소유권으로 나뉘고,
+  //     · perVisit은 "2·3세대 통원이 소비"라는 사실이 `outpatientOnly`로 옮겨 갔으며,
+  //     · 2026 경로도 **다른 세대·다른 진입점의 축**은 검사하게 됐다(자기 축은 여전히 안 본다).
+  //   낡은 앵커를 지우지 않고, 지키려던 성질을 새 구조 위에서 다시 잡는다.
+  check("5세대 전용 네 축이 같은 순서로 상수 분리돼 있다",
+    /const GEN2026_ONLY_AXES = \[\n\s*"nhisCoinsuranceRate", "severity", "nonBenefitItem", "priorAnnualDeductible",\n\] as const;/.test(src));
   check("perVisitCoverageLimit을 그 목록에 합치지 않았다",
-    !/LEGACY_UNUSED_GEN2026_KEYS = \[[\s\S]*?perVisitCoverageLimit[\s\S]*?\] as const;/.test(src));
-  check("2·3세대는 통원에서 perVisit을 목록에 넣지 않는다",
-    /input\.visit === "outpatient"\n\s*\? LEGACY_UNUSED_GEN2026_KEYS\n\s*: \[\.\.\.LEGACY_UNUSED_GEN2026_KEYS, STANDARDIZED_INPATIENT_UNUSED_KEY\];/.test(src));
-  check("2021은 전 경로에서 perVisit을 넣는다",
-    /if \(generation === "2021"\) return \[\.\.\.LEGACY_UNUSED_GEN2026_KEYS, STANDARDIZED_INPATIENT_UNUSED_KEY\];/.test(src));
-  check("위임 결과가 OK일 때만 stray를 본다",
-    (code.match(/if \(r\.status !== "OK"\) return r;/g) ?? []).length === 2);
+    // ⚠ `[^\]]*`로 **선언 블록 안만** 본다. `[\s\S]*?`를 쓰면 뒤쪽 ROUTER_AXES의
+    //   "perVisitCoverageLimit"까지 건너뛰어 매치돼 검사가 거짓으로 실패한다.
+    !/GEN2026_ONLY_AXES = \[[^\]]*perVisitCoverageLimit[^\]]*\] as const;/.test(src));
+  check("2·3세대는 통원에서 perVisit을 소비 축으로 둔다",
+    /outpatientOnly: \["facility", "perVisitCoverageLimit"\],/.test(code));
+  check("2021은 전 경로에서 perVisit을 소비 축에 넣지 않는다",
+    /const GEN2021_OWNERSHIP: Ownership = \{[\s\S]*?\};/.exec(code)?.[0].includes("perVisitCoverageLimit") === false);
+  check("위임 결과가 OK일 때만 stray를 본다 (세 세대 경로 모두)",
+    (code.match(/if \(r\.status !== "OK"\) return r;/g) ?? []).length === 3);
   check("stray 거부가 위임 뒤에 온다",
-    code.indexOf("calcStandardized(generation, input)") < code.indexOf("rejectUnusedGen2026Keys(generation, input, r)"));
-  check("2026 경로는 stray 검사를 거치지 않는다",
-    /case "2026": return calc2026\(input as Gen2026ClaimInput\);/.test(code));
+    code.indexOf("calcStandardized(generation, input)") < code.indexOf("rejectUnusedAxes(generation, input, r)"));
+  check("2026 경로도 위임 뒤에 stray 검사를 거친다",
+    /const r = calc2026\(input as Gen2026ClaimInput\);\n\s*if \(r\.status !== "OK"\) return r;\n\s*return rejectUnusedAxes\(generation, input, r\) \?\? r;/.test(code));
+  check("2026의 자기 축(급여·비급여 경로 판정)은 라우터가 다시 보지 않는다",
+    /const GEN2026_OWNERSHIP: Ownership = \{[\s\S]*?\};/.exec(code)?.[0].includes('"severity"') === true);
   check("각 키를 한 번만 읽는다",
     /const got: unknown = \(input as unknown as Record<string, unknown>\)\[key\];\n\s*if \(got === undefined\) continue;/.test(src));
   check("in 연산자가 아니라 !== undefined로 본다", !/"(severity|nonBenefitItem|nhisCoinsuranceRate|priorAnnualDeductible)" in /.test(code));
   check("반환이 위임 결과의 amount를 그대로 쓴다", /amount: ok\.amount,/.test(src));
-  check("priorAnnualPaid를 목록에 넣지 않았다(2·3세대가 소비하는 축)",
-    !/LEGACY_UNUSED_GEN2026_KEYS = \[[\s\S]*?priorAnnualPaid[\s\S]*?\] as const;/.test(src));
+  check("priorAnnualPaid는 2·3세대 입원의 소비 축으로 남아 있다",
+    /inpatientOnly: \["priorAnnualPaid"\],/.test(code));
 }
 
 console.log("\n[G-33] 10. 타입 — 이전 세대 오버로드가 네 축을 봉인한다");
@@ -289,8 +301,14 @@ console.log("\n[G-33] 10. 타입 — 이전 세대 오버로드가 네 축을 �
   check("LegacyClaimInput: perVisitCoverageLimit은 봉인하지 않는다", !sealed<LegacyClaimInput, "perVisitCoverageLimit">(false));
   check("ClaimInput(5세대 통로)은 네 축을 봉인하지 않는다", !sealed<ClaimInput, "severity">(false));
   const src = readFileSync("src/lib/insurance/engine/engine.ts", "utf8");
-  check("이전 세대 오버로드가 선언돼 있다",
-    /export function calculate\(generation: "2009" \| "2017" \| "2021", input: LegacyClaimInput\): CalcResult;/.test(src));
+  // ⚠ 종전 앵커는 `"2009" | "2017" | "2021"` 한 오버로드가 `LegacyClaimInput`을 받는 모양을
+  //   잡았다. G-34A에서 2021의 봉인 목록이 `plan`·`facility`·`priorAnnualPaid`·
+  //   `perVisitCoverageLimit`만큼 넓어져 2·3세대와 계약이 달라졌으므로 오버로드를 세대별로
+  //   나눴다. 지키려던 성질(제네릭 호출이 세대별 입력 타입으로 봉인된다)은 그대로다.
+  check("2·3세대 오버로드가 LegacyClaimInput을 받는다",
+    /export function calculate\(generation: "2009" \| "2017", input: LegacyClaimInput\): CalcResult;/.test(src));
+  check("2021 오버로드가 따로 선언돼 있다",
+    /export function calculate\(generation: "2021", input: Gen2021ClaimInput\): CalcResult;/.test(src));
   check("perVisit을 타입으로 닫지 못한 이유가 기록돼 있다",
     src.includes("`visit`으로 유니온을 쪼개면 호출부가 `visit`을 변수로 넘기는 자리에서 `as` 없이"));
 }

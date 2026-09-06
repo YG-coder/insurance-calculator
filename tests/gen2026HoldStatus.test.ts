@@ -470,7 +470,7 @@ console.log("\n[커밋 D·E] 계산·화면 무변경 (기준 30dee21)");
     //     돌려주며 stray 이름을 읽지도 않는다.
     //   ⚠ `perVisitCoverageLimit`은 2·3세대 **통원**이 실제로 소비하므로 그 경로에서는
     //     막지 않는다(실측: 접근자 1회, 값 200,000에서 결과가 달라진다).
-    "src/lib/insurance/engine/engine.ts": "3b2a628301d0c6de4236040edcecff6ee37da8ece04a47bda51176f07b2ebf10",
+    "src/lib/insurance/engine/engine.ts": "3caac78f0e8c36cfde0f2d9b175dd6f38b61cd9fbe4660188dbfc6da1c8a59ff",
     "src/lib/insurance/engine/capLabels.ts": "23d0bc4b40a1b408cf74ec0189457e1a3c9f6bc75988e4bcde4e7c2c8554410d",
     // ⚠ G-14D에서 **의도적으로** 갱신했다(종전 c10d2fea…).
     //   `rejected()`의 '받은 값' 표시가 `JSON.stringify(got) ?? String(got)`이라

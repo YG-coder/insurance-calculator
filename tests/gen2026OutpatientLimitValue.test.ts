@@ -446,17 +446,23 @@ console.log("\n[G-24] 9. 소스 계약");
     String((mul.match(/\.outpatientCoverageLimit/g) ?? []).length));
   check("행마다 읽지 않고 읽은 값을 넘긴다",
     /perVisitCoverageLimit: outpatientLimitRaw as number \| undefined,/.test(mul));
+  // ⚠ 앵커 갱신(G-32): 검증된 중증도가 인자로 하나 더 붙었다. 요지("buildNotes가 원본을
+  //   다시 읽지 않고 상태를 인자로 받는다")는 그대로이고, G-32는 그 요지를 `severity`까지
+  //   넓혔다 — 아래 검사가 그 사실도 함께 본다.
   check("buildNotes가 input을 다시 읽지 않고 상태를 받는다",
     /outpatientLimitState: "applied" \| "unset" \| "zero" \| "other",/.test(mul)
-    && /notes: buildNotes\(input, limitState, outpatientLimitState\),/.test(mul)
-    && !/input\.outpatientCoverageLimit/.test(mul));
+    && /notes: buildNotes\(input, limitState, outpatientLimitState, severity\),/.test(mul)
+    && !/input\.outpatientCoverageLimit/.test(mul)
+    && !/input\.severity/.test(mul));
   check("읽기가 두 runBundle 호출보다 위에 있다(두 해석이 같은 값을 쓴다)",
     mul.indexOf("const outpatientLimitRaw") < mul.indexOf("const countedA = runBundle(true);")
     && mul.indexOf("const outpatientLimitRaw") < mul.indexOf("function runBundle("));
   check("다회에 두 번째 가드를 만들지 않았다(검증은 calc2026 한 곳)",
     !/outpatientLimitRaw !== undefined && !\(/.test(mul) && !/isSafeInteger\(outpatientLimitRaw\)/.test(mul));
+  // ⚠ 앵커 갱신(G-32): 같은 문장이 `input.severity` 재읽기 대신 **검증된 인자**를 쓴다.
+  //   문구와 보장종목별 단위 구분은 한 글자도 바뀌지 않았다.
   check("다회의 0원 안내가 보장종목별 단위를 쓴다",
-    /통원 \$\{input\.severity === "critical" \? "1회당" : "1일당"\} 지급 한도를 적용하지 않았습니다/.test(mul));
+    /통원 \$\{severity === "critical" \? "1회당" : "1일당"\} 지급 한도를 적용하지 않았습니다/.test(mul));
 
   // 범위 밖 파일은 그대로다.
   const room = readFileSync("src/lib/insurance/engine/roomCharge2026.ts", "utf8");

@@ -454,7 +454,13 @@ console.log("\n[커밋 D·E] 계산·화면 무변경 (기준 30dee21)");
     //     `nhisCoinsuranceRate`(같은 조용한 폐기). 산식·상한·`ok()`/`pending()`의 반환값과
     //     기존 안내 문구는 그대로이고, 비급여의 새 검사는 **종별 미지정을 후보로 남겨**
     //     종별 preflight 안내가 종전대로 먼저 나간다.
-    "src/lib/insurance/engine/generation2026.ts": "72bd9b30b5d5936a9604ef12e3955b8e2bc47d017bfdb3bfbef51fc480df2759",
+    //   ⚠ G-32에서 다시 갱신했다(종전 72bd9b30…). 비급여 중증도(`severity`)를 열거값으로
+    //     검증한다 — 종전 `if (!input.severity)`는 falsy만 막고 그 밖의 truthy를 전부
+    //     **비중증으로 조용히 계산**했다(실측: 통원 30만원에서 중증 90,000이어야 할
+    //     자기부담금이 150,000). `undefined`의 "미지정" 안내와 문구는 그대로 두고,
+    //     `undefined`가 아닌 무효값만 새 안내로 분리했다. 값을 한 번만 읽어 아래 판정·
+    //     안내·산식이 그 값을 쓴다. 산식·상한·`ok()`/`pending()`의 반환값은 그대로다.
+    "src/lib/insurance/engine/generation2026.ts": "c08a59b72f663bf16020d8afefc24ccb3663fbaa4fd5a27fffdb43f199ef5171",
     "src/lib/insurance/engine/engine.ts": "da28c9f77d7d90ba1d0e18146d626c9ea7fc6a89013293a26ec50e223ee56c8e",
     "src/lib/insurance/engine/capLabels.ts": "23d0bc4b40a1b408cf74ec0189457e1a3c9f6bc75988e4bcde4e7c2c8554410d",
     // ⚠ G-14D에서 **의도적으로** 갱신했다(종전 c10d2fea…).

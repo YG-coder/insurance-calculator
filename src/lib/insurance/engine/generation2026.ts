@@ -14,7 +14,7 @@
 // 2026-08-24: 전 경로의 금액 종결을 공통 settle()에 위임한다.
 //   - R-2: 원 단위 정수로 확정 → 표시 계층에서 합계가 어긋나지 않는다.
 //   - 급여 통원 경로의 클램프 누락(잠복 결함)도 함께 해소된다. HOLD 해제 시 재발하지 않는다.
-import { CapCode, CalcResult, Gen2026ClaimInput, Gen2026NonBenefitItem } from "./types";
+import { CapCode, CalcResult, Gen2026ClaimInput, Gen2026NonBenefitItem, Severity } from "./types";
 import { GEN2026 } from "./constants";
 import { settle, normalizeAmount } from "../common/settle";
 import { topic } from "../common/korean";
@@ -327,9 +327,37 @@ export function calc2026(input: Gen2026ClaimInput): CalcResult {
       BLOCKED_ITEM_REASON[item],
     ]);
   }
-  if (!input.severity) {
+  // ── 중증/비중증은 열거값만 받는다 (G-32) ────────────────────────────
+  //   ⚠ 종전 검사는 `if (!input.severity)`였다. falsy(`undefined`·`""`·`null`·`0`·`false`·
+  //     `NaN`)만 막고, 그 밖의 **어떤 truthy 값이든 통과시킨 뒤** 아래 판정이
+  //     `severity === "critical"`이라 전부 **비중증으로 계산**했다. 실측(비급여 통원 30만원):
+  //     `"critical"` → 자기부담 90,000 / `"mild"`·`"x"`·`"CRITICAL"`·`1`·`true`·`{}`·`[]`·
+  //     `bigint`·`Symbol`·함수·순환 참조 → 전부 150,000. 오타 하나가 조용한 오분류로
+  //     **금액을 바꿨다.** 항목·상급병실료 진입점은 이미 `oneOf()`로 검증하고 있어
+  //     **두 진입점의 계약이 갈려 있었다** — 이 커밋이 그 어긋남을 없앤다.
+  //   ⚠ `undefined`의 기존 의미는 그대로다 — "미지정"이고 종전 안내를 한 글자도 바꾸지 않았다.
+  //     화면은 이 상태에서만 계산을 미루므로 정상 경로가 바뀌지 않는다.
+  //   ⚠ `undefined`가 아닌 무효값은 **미지정이 아니라 잘못된 값**이다. 종전에는 falsy 다섯
+  //     가지가 "미지정" 안내를 받았는데, 사용자가 명시적으로 넘긴 값을 "고르지 않았다"고
+  //     말하면 사실과 다르다. G-24·G-25가 `0`원을 미입력과 분리한 것과 같은 이유로 나눈다.
+  //   ⚠ **한 번만 읽는다.** 아래 판정·안내·산식이 모두 이 값 하나를 쓴다. 종전에는 같은
+  //     이름을 2~3회 읽어(게이트 1 + `=== "critical"` 1~2), 값이 달라지는 접근자에서
+  //     게이트를 통과한 값과 계산에 쓰는 값이 갈릴 수 있었다.
+  //   ⚠ 안내에 받은 값 자체를 넣지 않고 `typeof`만 넣는다(이 파일의 G-15 계약).
+  //   ⚠ 자리는 종전 게이트 그대로다 — 치료유형 안내가 먼저이고, 아래 종별 preflight와
+  //     G-30·G-31 stray 검사는 이 뒤에 온다.
+  const rawSeverity: unknown = (input as { severity?: unknown }).severity;
+  if (rawSeverity === undefined) {
     return pending(amount, ["비급여: 중증/비중증(severity) 미지정 → 계산 불가"]);
   }
+  if (rawSeverity !== "critical" && rawSeverity !== "non_critical") {
+    return pending(amount, [
+      "비급여: 중증/비중증(severity)은 \"critical\"(중증) 또는 \"non_critical\"(비중증) 두 값만 받습니다. 두 값은 특별약관1·2가 서로 다른 자기부담률과 한도를 정하므로, 확인하기 전에는 계산하지 않습니다.",
+      "값이 그 둘이 아니면 비중증으로 추정하지 않습니다 — 추정하면 중증 청구가 조용히 비중증으로 계산됩니다.",
+      `받은 값의 형식: ${typeof rawSeverity}`,
+    ]);
+  }
+  const severity: Severity = rawSeverity;
   // ── 통원 가입금액은 통원에서만 소비한다 (G-30) ──────────────────────
   //   특별약관1·2 제3조 (1)①·(2)① 표의 **통원 행**에만 있는 한도다(중증 1회당, 비중증 1일당).
   //   입원 행에는 이 축이 없다.
@@ -343,7 +371,7 @@ export function calc2026(input: Gen2026ClaimInput): CalcResult {
   //     내야 하는 자리다. 형제 축(`priorAnnualDeductible`)과 같은 계약이고, 종별을 고른 뒤
   //     같은 입력을 다시 넣으면 이 안내가 나온다. 기존 선행 안내 순서를 그대로 둔다.
   if (input.visit === "inpatient"
-    && !(input.severity === "critical" && input.tier !== "clinic" && input.tier !== "hospital")) {
+    && !(severity === "critical" && input.tier !== "clinic" && input.tier !== "hospital")) {
     const strayPerVisit: unknown = (input as { perVisitCoverageLimit?: unknown }).perVisitCoverageLimit;
     if (strayPerVisit !== undefined) {
       return pending(amount, [
@@ -370,7 +398,7 @@ export function calc2026(input: Gen2026ClaimInput): CalcResult {
   //   ⚠ 치료유형·중증 구분 안내 **뒤**다. 그 셋이 정해지기 전에는 그 안내가 우선한다.
   const rawDeductible: unknown = (input as { priorAnnualDeductible?: unknown }).priorAnnualDeductible;
   if (rawDeductible !== undefined
-    && !(input.severity === "critical" && input.visit === "inpatient"
+    && !(severity === "critical" && input.visit === "inpatient"
       && (input.tier === undefined || input.tier === "hospital"))) {
     return pending(amount, [
       "누적 공제금액(priorAnnualDeductible)은 중증 비급여 입원 중 상급종합병원·종합병원에만 적용됩니다(특별약관1 제5조 제5항).",
@@ -410,7 +438,7 @@ export function calc2026(input: Gen2026ClaimInput): CalcResult {
   }
   const priorDeductible = Math.max(0, (rawDeductible as number | undefined) ?? 0);
 
-  if (input.severity === "critical") {
+  if (severity === "critical") {
     const c = GEN2026.nonBenefit.critical;
     notes.push(`연간 보험가입금액(약관상 ${c.annualLimitMax.toLocaleString("ko-KR")}원 이내에서 계약 시 정한 금액, 상해·질병 각각)은 1건 계산에 반영되지 않습니다.`);
     if (input.visit === "inpatient") {

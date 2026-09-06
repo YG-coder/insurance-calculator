@@ -235,11 +235,11 @@ console.log("\n[G-14C] 8. 소스 계약");
   // 통원 카운터 4곳 + A군 1 + B군 1 + C군 3 + 지급보험금 1(G-20) + 연간 가입금액 1(G-21)
   //   + 급여 미사용 금액 축 1(G-30) + 입원의 통원 가입금액 1(G-30)
   //   + 급여 미사용 비금액 축 1(G-31) + 급여 입원의 본인부담률 1(G-31)
-  //   + E군 비급여의 본인부담률 1(G-31) = 16.
-  //   ⚠ 계약 갱신(G-20·G-21 → G-30 → G-31). 요지("받은 값을 싣는 안내는 예외 없이 전부
+  //   + E군 비급여의 본인부담률 1(G-31) + 중증도 열거값 검증 1(G-32) = 17.
+  //   ⚠ 계약 갱신(G-20·G-21 → G-30 → G-31 → G-32). 요지("받은 값을 싣는 안내는 예외 없이 전부
   //     안전 표시를 쓴다")는 그대로이고, 바뀐 것은 그 안내의 **개수**뿐이다.
   check("'받은 값' 안내가 모두 안전 표시를 쓴다",
-    (body.match(/받은 값: \$\{showValue\(/g) ?? []).length === 16,
+    (body.match(/받은 값: \$\{showValue\(/g) ?? []).length === 17,
     String((body.match(/받은 값: \$\{showValue\(/g) ?? []).length));
   check("B군 키 목록이 9종", (body.match(/const SPECIAL_ITEM_ONLY_KEYS = \[[\s\S]*?\] as const;/) ?? [""])[0]
     .split('"').filter((x) => x.startsWith("prior") || ["approvedThroughVisit", "injectionPurpose", "item", "lines", "route", "stays"].includes(x)).length === 9);

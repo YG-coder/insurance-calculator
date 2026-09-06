@@ -171,6 +171,10 @@ function buildNotes(
   input: Gen2026MultiClaimInput,
   limitState: "applied" | "unset" | "zero",
   outpatientLimitState: "applied" | "unset" | "zero" | "other",
+  // ⚠ 호출부가 **한 번 읽고 검증한** 중증도를 넘긴다(G-32). 종전에는 이 함수가
+  //   `input.severity`를 두 번 더 읽어, 값이 달라지는 접근자에서 계산에 쓴 중증도와
+  //   안내에 실리는 중증도가 갈릴 수 있었다. 급여 묶음에서는 `undefined`다.
+  severity: Severity | undefined,
 ): string[] {
   const causeLabel = input.cause === "injury" ? "상해" : "질병";
   const coverageLabel = input.coverage === "benefit" ? "급여" : "비급여";
@@ -187,7 +191,7 @@ function buildNotes(
   const isNonBenefitOutpatient = input.visit === "outpatient";
   if (isNonBenefitOutpatient) {
     notes.push(
-      input.severity === "critical"
+      severity === "critical"
         // ⚠ 약관 조건을 그대로 옮긴다. 무조건 "같은 날이면 합치라"가 아니다.
         //    제3조⑥은 동일 의료기관의 외래+처방, ⑦은 "같은 치료를 목적으로" 한 다회 통원이다.
         ? "약관은 ①동일한 의료기관에서 같은 날 받은 외래와 처방조제, ②하루에 같은 치료를 목적으로 2회 이상 받은 통원을 각각 1회의 통원으로 봅니다. 이 경우에만 한 행으로 합쳐 입력해 주세요. 치료 목적이 다르거나 다른 의료기관이면 행을 나눠 입력합니다."
@@ -204,7 +208,7 @@ function buildNotes(
     // ⚠ 이 문장은 **계산기가 0원을 어떻게 다뤘는지**만 말한다. 0원 가입이 유효한 계약인지,
     //   무효인지, 실제 한도가 0원인지는 원문에서 확인하지 않았고 여기서 단정하지 않는다.
     if (outpatientLimitState === "zero") {
-      notes.push(`통원 가입금액을 0원으로 입력하셔서 계산기에서는 통원 ${input.severity === "critical" ? "1회당" : "1일당"} 지급 한도를 적용하지 않았습니다. 실제 가입금액이 있으면 증권의 금액을 입력해 주세요.`);
+      notes.push(`통원 가입금액을 0원으로 입력하셔서 계산기에서는 통원 ${severity === "critical" ? "1회당" : "1일당"} 지급 한도를 적용하지 않았습니다. 실제 가입금액이 있으면 증권의 금액을 입력해 주세요.`);
     }
   }
   if (limitState === "unset") {
@@ -290,7 +294,12 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
   // 유니온 내로잉. 급여 묶음에는 비급여 전용 축이 없다.
   const nb = input.coverage === "non_benefit" ? input : undefined;
   const bf = input.coverage === "benefit" ? input : undefined;
-  const severity: Severity | undefined = nb?.severity;
+  /**
+   * 검증을 통과한 중증/비중증 (G-32).
+   *   ⚠ **읽기는 아래 한 자리에서만** 한다 — 선행 preflight(치료유형·통원 카운터 stray)가
+   *     결과를 정하는 경로에서는 이 이름에 닿지 않는다. 급여 묶음에서는 끝까지 `undefined`다.
+   */
+  let severity: Severity | undefined;
   /** 진료비는 이미 검증됐고, **다른 이유**로 계산을 막는 자리. 진료비 합계를 보존한다. */
   const blocked = (notes: string[]): MultiClaimResult => ({
     status: "PENDING_UNVERIFIED", generation: "2026", lines: [],
@@ -442,6 +451,33 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
         `받은 값: ${showValue(visits ?? days)}`,
       ]);
     }
+
+    // ── 중증/비중증은 열거값만 받는다 (G-32) ─────────────────────
+    //   ⚠ 종전에는 이 진입점이 중증도를 **검증하지 않았다.** `severity === "critical"` /
+    //     `=== "non_critical"` 비교만 있어, 그 둘이 아닌 값은 아래 통원 카운터 preflight를
+    //     **통과해 버리고**(유효값이면 카운터 미입력이 차단되는데도) 행 계산에서
+    //     `calc2026`이 비중증으로 계산했다. 실측(비급여 통원 30만원 1행):
+    //     `"critical"`은 카운터 안내로 차단 / `"mild"`·`"x"`·`"CRITICAL"`·`1`·`true`·`{}`·
+    //     `[]`·`bigint`·`Symbol`·함수·순환 참조는 **OK 150,000원**. 무효값이 유효값보다
+    //     느슨한 경로를 탔다. 입원에서도 중증 900,000이어야 할 자기부담금이 1,500,000이 됐다.
+    //   ⚠ `undefined`의 기존 의미는 그대로다 — 여기서 막지 않고, 행 계산의 `calc2026`이
+    //     내던 "비급여: 중증/비중증(severity) 미지정 → 계산 불가"를 그대로 쓴다.
+    //   ⚠ **자리가 계약이다.** 위 치료유형 preflight와 입원의 통원 카운터 stray 안내가
+    //     먼저다(둘 다 중증도와 무관하게 결정된다). 바로 아래 카운터 축 분리가 이 값을
+    //     처음 소비하므로, 여기가 "실제 쓰이는 자리 앞"의 가장 늦은 지점이다.
+    //   ⚠ **여기서 한 번만 읽는다.** 이 값을 아래 판정·산식·안내가 모두 쓴다.
+    //   ⚠ 반환은 이 진입점의 기존 실패 계약 `blocked()` 그대로다 — 검증된 진료비 합계를
+    //     보존하고 행·후보 보험금을 노출하지 않는다.
+    const rawSeverity = readCount(nb, "severity");
+    if (rawSeverity !== undefined
+      && rawSeverity !== "critical" && rawSeverity !== "non_critical") {
+      return blocked([
+        "비급여: 중증/비중증(severity)은 \"critical\"(중증) 또는 \"non_critical\"(비중증) 두 값만 받습니다. 두 값은 특별약관1·2가 서로 다른 자기부담률·한도·통원 카운터를 정하므로, 확인하기 전에는 계산하지 않습니다.",
+        "값이 그 둘이 아니면 비중증으로 추정하지 않습니다 — 추정하면 중증 청구가 조용히 비중증으로 계산됩니다.",
+        `받은 값: ${showValue(rawSeverity)}`,
+      ]);
+    }
+    severity = rawSeverity as Severity | undefined;
 
     // ── 통원 카운터 축 분리 ───────────────────────────────────────
     //   중증은 '통원 100회'(특약1 제3조 (1)①·(2)① 표), 비중증은 '통원 100일'
@@ -815,7 +851,7 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
       totalOwnPay: results.reduce((s, x) => s + (x.ownPay ?? 0), 0),
       totalInsurancePay: results.reduce((s, x) => s + (x.insurancePay ?? 0), 0),
       appliedCaps: [...new Set(results.flatMap((x) => x.appliedCaps))],
-      notes: buildNotes(input, limitState, outpatientLimitState),
+      notes: buildNotes(input, limitState, outpatientLimitState, severity),
     };
   }
 

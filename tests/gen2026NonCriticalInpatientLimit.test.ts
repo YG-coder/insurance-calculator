@@ -130,8 +130,10 @@ console.log("\n[가드] 소스에 종별 조건이 실제로 연결돼 있다");
   check("중증 입원도 종별 미지정을 막는다",
     /중증 비급여 입원: 의료기관 종별 미지정/.test(eng2) && (eng2.match(/input\.tier !== "clinic" && input\.tier !== "hospital"/g) ?? []).length === 4,
     String((eng2.match(/input\.tier !== "clinic" && input\.tier !== "hospital"/g) ?? []).length));
+  // ⚠ 앵커 갱신(G-32): 같은 조건식이 `input.severity` 대신 **검증된 지역 변수**를 쓴다.
+  //   G-30이 세운 "중증 입원의 종별 미지정을 소비 후보로 남긴다"는 의미는 그대로다.
   check("세 번째 자리는 stray 검사의 '후보로 남긴다' 조건이다(G-30)",
-    /if \(input\.visit === "inpatient"\n\s*&& !\(input\.severity === "critical" && input\.tier !== "clinic" && input\.tier !== "hospital"\)\) \{/.test(eng2));
+    /if \(input\.visit === "inpatient"\n\s*&& !\(severity === "critical" && input\.tier !== "clinic" && input\.tier !== "hospital"\)\) \{/.test(eng2));
   check("네 번째 자리는 nhis stray의 '후보로 남긴다' 조건이다(G-31)",
     /const tierPendingAhead = input\.visit === "inpatient"\n\s*&& input\.tier !== "clinic" && input\.tier !== "hospital";/.test(eng2));
   const ui = [

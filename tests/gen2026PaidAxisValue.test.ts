@@ -204,14 +204,22 @@ console.log("\n[G-20] 7. 경로별 계약 — 활성 경로만 읽고, 급여는
     const x = wrap(() => calculateGen2026Item(ROUTED({ priorAnnualInsurancePaid: v }) as never));
     check(`전환 경로 ${label} → blocked(진료비 합계 보존)`, isBlocked(x, 2_000_000), shape(x));
   }
-  // 급여 경로는 이 축을 쓰지 않는다 — 계산은 종전 그대로이고, 값을 읽지도 않는다.
+  // ⚠ **계약이 바뀌었다(G-30).** G-20 시점에는 급여가 이 축을 **읽지도 않아** 조용히
+  //   폐기했고 그 사실을 여기서 고정하고 있었다. G-30이 그 조용한 폐기를 닫았다 —
+  //   이 축은 비급여 특별약관 제5조①의 축이라 급여에 대응 축이 없다. 값과 무관하게
+  //   차단하고(숫자 `0` 포함), 형식 안내(FIRST)가 아니라 **미사용 축 안내**를 낸다.
+  const STRAY = "priorAnnualInsurancePaid은(는) 비급여 특별약관의 금액 축입니다";
   const bfRef = shape(wrap(() => calculateMany2026(BF() as never)));
-  for (const [label, v] of [["정상값", RIGHT], ...BAD] as [string, unknown][]) {
-    check(`급여 + ${label} → 종전과 같은 결과(조용한 폐기 유지)`,
-      shape(wrap(() => calculateMany2026(BF({ priorAnnualInsurancePaid: v }) as never))) === bfRef,
-      shape(wrap(() => calculateMany2026(BF({ priorAnnualInsurancePaid: v }) as never))));
+  for (const [label, v] of [["숫자 0", 0], ["정상값", RIGHT], ...BAD] as [string, unknown][]) {
+    const x = wrap(() => calculateMany2026(BF({ priorAnnualInsurancePaid: v }) as never));
+    check(`급여 + ${label} → stray 차단(진료비 합계 보존)`,
+      isBlocked(x, 1_000_000) && notes(x).includes(STRAY), shape(x));
   }
-  check("급여 경로에는 이 축의 차단 안내가 나오지 않는다",
+  check("급여: 축을 싣지 않으면 종전대로 계산한다",
+    shape(wrap(() => calculateMany2026(BF() as never))) === bfRef);
+  check("급여: 명시적 undefined는 미제공과 같다",
+    shape(wrap(() => calculateMany2026(BF({ priorAnnualInsurancePaid: undefined }) as never))) === bfRef);
+  check("급여 경로에는 이 축의 **형식** 안내가 나오지 않는다(미사용 축 안내다)",
     !notes(wrap(() => calculateMany2026(BF({ priorAnnualInsurancePaid: "abc" }) as never))).includes(FIRST));
 }
 
@@ -232,17 +240,24 @@ console.log("\n[G-20] 7b. 접근자 호출 횟수 — '읽지 않는다'는 결�
   check("비중증 통원: 읽은 값이 실제로 한도에 반영된다", ins(a.x) === "100000", ins(a.x));
   const b = probe({ ...NB(), severity: "critical", priorAnnualOutpatientVisits: 0, priorAnnualOutpatientDays: undefined }, RIGHT);
   check("중증 통원(HOLD 이중 실행): 접근자 1회", b.reads === 1, `reads=${b.reads}`);
-  // 급여 경로에서는 아예 읽지 않는다 — 던지는 접근자로도 확인한다.
+  // ⚠ **계약이 바뀌었다(G-30).** 급여 경로도 이제 이 이름을 정확히 한 번 읽어 stray를
+  //   차단한다. 조용한 폐기를 막으려면 값을 읽어야 하므로 던지는 접근자의 예외가 전파되며,
+  //   그 대상은 **종전에 조용히 폐기하며 성공하던 입력뿐**이다(아래 선행 차단 검사가 고정).
   const c = probe(BF(), RIGHT);
-  check("급여: 접근자 0회", c.reads === 0, `reads=${c.reads}`);
+  check("급여: 접근자 정확히 1회", c.reads === 1, `reads=${c.reads}`);
+  check("급여: 읽은 값으로 stray를 차단한다", isBlocked(c.x, AMT), shape(c.x));
   let boomReads = 0;
   const boom = { ...BF() };
   Object.defineProperty(boom, "priorAnnualInsurancePaid",
     { get() { boomReads++; throw new Error("touched"); }, enumerable: true, configurable: true });
-  const cb = wrap(() => calculateMany2026(boom as never));
-  check("급여: 던지는 접근자가 있어도 예외로 죽지 않는다", !threw(cb), shape(cb));
-  check("급여: 던지는 접근자가 실행되지 않았다", boomReads === 0, `reads=${boomReads}`);
-  check("급여: 결과가 종전과 같다", shape(cb) === shape(wrap(() => calculateMany2026(BF() as never))));
+  check("급여: 던지는 접근자는 전파된다(막으려면 읽어야 한다)",
+    threw(wrap(() => calculateMany2026(boom as never))) && boomReads === 1, `reads=${boomReads}`);
+  let preReads = 0;
+  const pre = { ...BF({ amounts: ["abc"] }) };
+  Object.defineProperty(pre, "priorAnnualInsurancePaid",
+    { get() { preReads++; throw new Error("x"); }, enumerable: true, configurable: true });
+  check("급여: 진료비가 먼저 무효면 접근자 0회이고 예외도 없다",
+    !threw(wrap(() => calculateMany2026(pre as never))) && preReads === 0, `reads=${preReads}`);
   // 무효값도 한 번만 읽고 차단한다.
   const d = probe(NB(), "9900000");
   check("무효값도 접근자 1회 뒤 차단", d.reads === 1 && isBlocked(d.x, AMT), `reads=${d.reads} ${shape(d.x)}`);
@@ -358,8 +373,8 @@ console.log("\n[G-20] 11. 소스 계약");
   check("이 축에 절삭·클램프를 걸지 않는다", !/Math\.(min|max|floor|ceil|round)\([^)]*paidRaw/.test(body));
   // 남은 nonNegInt 사용처를 정확히 고정한다.
   const uses = body.match(/nonNegInt\([^)]*\)/g) ?? [];
-  check("nonNegInt의 남은 사용처는 priorAnnualDeductible 한 곳뿐이다",
-    uses.length === 1 && uses[0] === "nonNegInt(nb?.priorAnnualDeductible)", uses.join(" | "));
+  // ⚠ **낡은 계약을 교체했다(G-30).** 마지막 사용처(누적 공제금액)가 단일 읽기로 옮겨지며 삭제됐다.
+  check("nonNegInt가 이 파일에서 사라졌다(G-30)", uses.length === 0, uses.join(" | "));
   // 순서: 급여 stray → 레거시 → 별도 키 → 치료유형 → 통원 카운터 → 공제금액 → 지급보험금 → 가입금액 → 계산
   const iLegacy = body.indexOf('readCount(input, "priorAnnualPaid")');
   // ⚠ **낡은 앵커를 교체했다(G-28).** 위와 같은 이유다(단일 읽기 for 루프).

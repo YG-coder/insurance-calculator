@@ -370,7 +370,11 @@ console.log("\n[소스] 형식 우선 검증 · 전달 조건 · 금지 사항")
     && /if \(value === undefined\) return \{ state: "unset" \};/.test(eng)
     && /if \(value === 0\) return \{ state: "zero" \};/.test(eng)
     && /return \{ state: "applied", limit: Math\.min\(value, max\) \};/.test(eng)
-    && /const priorDeductible = Math\.max\(0, input\.priorAnnualDeductible \?\? 0\);/.test(eng)
+    // ⚠ **낡은 앵커를 교체했다(G-30).** 위치·기존 의미(500만원 상한의 소비 조건·산식이
+    //   그대로다)는 변함이 없다. G-30이 이 축을 **한 번만 읽어** 미소비 조합을 거부하게
+    //   바꾸면서 `input.priorAnnualDeductible`을 다시 읽던 자리가 검증한 값(`rawDeductible`)을
+    //   쓰는 형태로 바뀌었다. `Math.max(0, …)`와 `remaining` 산식은 한 글자도 바뀌지 않았다.
+    && /const priorDeductible = Math\.max\(0, \(rawDeductible as number \| undefined\) \?\? 0\);/.test(eng)
     && /const remaining = Math\.max\(c\.annualDeductibleCap - priorDeductible, 0\);/.test(eng));
   // 화면은 여전히 이 판정을 대신하지 않는다(0·상한 판정은 엔진이 한다).
   check("화면이 통원 가입금액을 깎거나 0을 미입력으로 바꾸지 않는다",

@@ -252,8 +252,10 @@ console.log("\n[G-16] 7. 소스 계약");
   //   `toJSON()` 예외에서 안내를 만들다 죽던 것을 고쳤다), 확인 대상을 새 표시로 옮긴다.
   //   요지(이 커밋이 그 자리를 건드리지 않았다)는 같다. 새 계약은
   //   tests/multiClaimNoteSafeDisplay.test.ts가 본다.
-  check("다른 안내 6곳은 안전 표시(showValue)를 쓴다",
-    (body.match(/받은 값: \$\{showValue\(/g) ?? []).length === 6
+  // ⚠ **낡은 계약을 교체했다(G-30).** 위치·기존 의미(이 커밋이 그 자리를 건드리지 않았다)는 그대로이고,
+  //   G-30이 미사용 금액 축 stray 안내를 한 곳 더해 6곳 → 7곳이 됐다.
+  check("다른 안내 7곳은 안전 표시(showValue)를 쓴다",
+    (body.match(/받은 값: \$\{showValue\(/g) ?? []).length === 7
     && !/받은 값: \$\{JSON\.stringify/.test(body),
     String((body.match(/받은 값: \$\{showValue\(/g) ?? []).length));
   // ⚠ **낡은 계약을 교체했다.** G-16 시점에는 금액 누적 3축이 모두 nonNegInt의 관용을

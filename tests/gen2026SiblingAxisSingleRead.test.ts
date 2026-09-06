@@ -405,10 +405,15 @@ console.log("\n[G-29] 8. 구조 검사 — 본체 재읽기·축 교차·관용 
     rules.includes("GEN2026-CRITICAL-DEDUCTIBLE-POOL-SCOPE"));
   check("HOLD 본문의 '현재 구현' 서술이 그대로다(각각 따로 계산)",
     rules.includes("priorAnnualInpatientDeductible로 **각각 500만원 한도를 따로** 계산한다"));
+  // ⚠ **계약이 바뀌었다(G-30).** G-29 시점에는 `priorAnnualDeductible`이 별도 보장종목에서
+  //   **조용히 폐기**돼 "결과가 미제공과 같다"로 두 축의 분리를 확인할 수 있었다. G-30이 그
+  //   조용한 폐기를 닫아 이제 명시적으로 **거부**한다. 두 축이 분리돼 있다는 요지는 같고,
+  //   확인 방법만 "무시된다"에서 "다른 축으로 쓰이지 않고 거부된다"로 바뀐다.
   check("그 서술대로 동작한다 — 중증 MRI pool은 priorAnnualInpatientDeductible만 소진한다",
     totals(item(CMRI)({ [P]: 5_000_000 })) !== totals(item(CMRI)())
-    && totals(item(CMRI)({ priorAnnualDeductible: 5_000_000 })) === totals(item(CMRI)()),
-    `${totals(item(CMRI)({ priorAnnualDeductible: 5_000_000 }))} vs ${totals(item(CMRI)())}`);
+    && isRejected(item(CMRI)({ priorAnnualDeductible: 5_000_000 }))
+    && note0(item(CMRI)({ priorAnnualDeductible: 5_000_000 })).startsWith("priorAnnualDeductible은(는) 일반 상해·질병 비급여의 금액 축"),
+    note0(item(CMRI)({ priorAnnualDeductible: 5_000_000 })).slice(0, 40));
   check("500만 원 상한은 산식이 Math.max로 처리한다(절삭 없음)", /Math\.max\(.*poolUsed/.test(code) || /poolUsed/.test(code));
 }
 

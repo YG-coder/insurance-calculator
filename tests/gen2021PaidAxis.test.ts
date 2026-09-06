@@ -379,7 +379,12 @@ console.log("\n[무회귀] 파서·초기값·상한·기존 동작은 그대로
     && !/const digits = \(v: string\) =>/.test(ui)
     && !/digits\(copyCount\)/.test(ui));
   check("지급보험금은 활성 축 값 하나만 전달한다",
-    /priorAnnualRiderPaid: isRider \? money\.priorPaid : undefined,/.test(ui)
+    // ⚠ **낡은 앵커를 교체했다(G-30).** 위치·기존 의미("화면이 활성 축 하나만 전달한다")는
+    //   그대로다. 종전에는 `common`이 `priorAnnualRiderPaid: isRider ? … : undefined`로
+    //   일반 세 분기에도 그 필드를 실었고(값은 undefined지만 **속성은 존재**), 타입이 이를
+    //   막지 못했다. G-30이 금액 축을 `common`에서 내리고 각 분기에서만 싣게 바꿨다.
+    !/priorAnnualRiderPaid: isRider \? money\.priorPaid : undefined,/.test(ui)
+    && (ui.match(/priorAnnualRiderPaid: money\.priorPaid,/g) ?? []).length === 3
     && (ui.match(/priorAnnualInsurancePaid: money\.priorPaid,/g) ?? []).length === 3
     && /const priorPaidNum = priorPaid === "" \? 0 : gen2021Money\(priorPaid\);/.test(ui));
   check("가입금액의 빈 값 미적용 정책 그대로",

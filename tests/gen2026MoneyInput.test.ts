@@ -416,9 +416,12 @@ console.log("\n[소스] 파서·게이트·전달 형태");
   //   옮기면서 그 호출이 사라졌으므로(검증된 원값을 그대로 쓴다), 확인 대상을 새 모양으로
   //   옮긴다. 요지(이 커밋이 엔진의 누적 축을 건드리지 않았다)는 같다.
   //   새 계약은 tests/gen2026PaidAxisValue.test.ts가 본다.
+  // ⚠ **낡은 계약을 교체했다(G-30).** 위치·기존 의미("이 커밋이 엔진의 누적 축을 건드리지 않았다")는
+  //   그대로다. G-30이 누적 공제금액도 검증된 원값을 쓰게 바꾸면서 `nonNegInt` 호출이
+  //   사라졌으므로 확인 대상을 새 모양으로 옮긴다.
   check("엔진의 누적 두 축은 이 커밋이 건드리지 않았다",
     /let insurancePaid = \(paidRaw as number \| undefined\) \?\? 0;/.test(eng)
-    && /let deductiblePaid = nonNegInt\(nb\?\.priorAnnualDeductible\);/.test(eng));
+    && /let deductiblePaid = checkedDeductible \?\? 0;/.test(eng));
   check("다른 세대 파서를 재사용하지 않는다",
     !/gen2021Money/.test(code) && !/stdMoney/.test(code));
 }

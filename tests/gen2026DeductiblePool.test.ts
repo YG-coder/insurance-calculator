@@ -58,18 +58,67 @@ console.log("\n[5세대 500만원 공제 pool] 경계 — 직전·정확히 도�
   check("500만원 초과 입력도 잔여 0으로 클램프", over.ownPay === 0 && over.insurancePay === 1_000_000);
 }
 
+// ⚠ **계약이 바뀌었다(G-30).** 종전에는 미소비 조합에 이 축을 실어도 **읽고 무시**한 채
+//   계산을 그대로 진행했고, 이 절이 그 사실("미적용")을 고정하고 있었다. 그러나 다회
+//   엔진(C군)은 같은 조합을 이미 거부하고 있어 **두 진입점의 계약이 갈려 있었다.**
+//   G-30이 단건도 거부로 맞췄다. "이 조합에서 pool이 적용되지 않는다"는 요지는 그대로이며,
+//   확인 방법이 "계산은 되고 상한만 미적용"에서 "쓰이지 않는 입력이라 계산하지 않는다"로 바뀐다.
+//   ⚠ **축을 싣지 않으면 종전 계산 그대로**라는 점을 같은 자리에서 함께 고정한다.
 console.log("\n[5세대 500만원 공제 pool] 적용 범위 — 중증·입원·상급종합/종합만");
 {
+  const NOTE = "누적 공제금액(priorAnnualDeductible)은 중증 비급여 입원 중 상급종합병원·종합병원에만 적용됩니다";
+  const rejects = (r: ReturnType<typeof calc2026>) => r.status === "PENDING_UNVERIFIED"
+    && r.ownPay === null && r.insurancePay === null && String(r.notes?.[0]).startsWith(NOTE);
   const clinic = critIn(10_000_000, "clinic", 4_900_000);
-  check("중증 의원급 입원에는 미적용", clinic.deductibleApplied === 3_000_000 && clinic.ownPay === 3_000_000 && clinic.appliedCaps.length === 0, JSON.stringify(clinic));
-}
-{
-  const out = calc2026({ amount: 10_000_000, coverage: "non_benefit", nonBenefitItem: "general", severity: "critical", visit: "outpatient", tier: "hospital", priorAnnualDeductible: 4_900_000 });
-  check("중증 통원에는 미적용", !out.appliedCaps.includes("GEN2026_CRITICAL_INPATIENT_DEDUCTIBLE_ANNUAL") && out.ownPay === 3_000_000, JSON.stringify(out));
-}
-{
-  const nc = calc2026({ amount: 10_000_000, coverage: "non_benefit", nonBenefitItem: "general", severity: "non_critical", visit: "inpatient", tier: "hospital", priorAnnualDeductible: 4_900_000 });
-  check("비중증 입원에는 미적용", !nc.appliedCaps.includes("GEN2026_CRITICAL_INPATIENT_DEDUCTIBLE_ANNUAL"), JSON.stringify(nc));
+  check("중증 의원급 입원: 미소비 조합이라 거부(G-30)", rejects(clinic), JSON.stringify(clinic));
+  check("중증 의원급 입원: 축을 싣지 않으면 종전 계산 그대로",
+    critIn(10_000_000, "clinic").deductibleApplied === 3_000_000
+    && critIn(10_000_000, "clinic").ownPay === 3_000_000
+    && critIn(10_000_000, "clinic").appliedCaps.length === 0);
+  const gen = (e: Record<string, unknown>) => calc2026({ amount: 10_000_000, coverage: "non_benefit", nonBenefitItem: "general", ...e } as never);
+  const out = gen({ severity: "critical", visit: "outpatient", tier: "hospital", priorAnnualDeductible: 4_900_000 });
+  check("중증 통원: 미소비 조합이라 거부(G-30)", rejects(out), JSON.stringify(out));
+  const outNone = gen({ severity: "critical", visit: "outpatient", tier: "hospital" });
+  check("중증 통원: 축을 싣지 않으면 종전 계산 그대로",
+    !outNone.appliedCaps.includes("GEN2026_CRITICAL_INPATIENT_DEDUCTIBLE_ANNUAL") && outNone.ownPay === 3_000_000, JSON.stringify(outNone));
+  const nc = gen({ severity: "non_critical", visit: "inpatient", tier: "hospital", priorAnnualDeductible: 4_900_000 });
+  check("비중증 입원: 미소비 조합이라 거부(G-30)", rejects(nc), JSON.stringify(nc));
+  const ncNone = gen({ severity: "non_critical", visit: "inpatient", tier: "hospital" });
+  check("비중증 입원: 축을 싣지 않으면 종전 계산 그대로",
+    ncNone.status === "OK" && !ncNone.appliedCaps.includes("GEN2026_CRITICAL_INPATIENT_DEDUCTIBLE_ANNUAL"), JSON.stringify(ncNone));
+  // 숫자 0도 막는다 — 미제공만 미사용과 같다.
+  check("미소비 조합에서 숫자 0도 거부한다", rejects(critIn(10_000_000, "clinic", 0)));
+  // 선행 안내가 먼저다.
+  const tierless = calc2026({ amount: 10_000_000, coverage: "non_benefit", nonBenefitItem: "general", severity: "critical", visit: "inpatient", priorAnnualDeductible: 4_900_000 } as never);
+  check("종별 미지정은 후보로 남겨 종별 preflight 안내가 먼저다",
+    String(tierless.notes?.[0]).startsWith("중증 비급여 입원: 의료기관 종별 미지정"), JSON.stringify(tierless.notes?.[0]));
+  const itemless = calc2026({ amount: 10_000_000, coverage: "non_benefit", visit: "outpatient", severity: "critical", priorAnnualDeductible: 0 } as never);
+  check("치료유형 미지정 안내가 먼저다",
+    String(itemless.notes?.[0]).startsWith("비급여: 치료유형(nonBenefitItem) 미지정"));
+  // 접근자 — 정확히 한 번, 선행 차단에서는 0회.
+  const probe = (base: Record<string, unknown>, get: () => unknown) => {
+    let reads = 0; const o = { ...base };
+    Object.defineProperty(o, "priorAnnualDeductible", { enumerable: true, configurable: true, get() { reads += 1; return get(); } });
+    let threw = false;
+    try { calc2026(o as never); } catch { threw = true; }
+    return { reads, threw };
+  };
+  const CONSUME = { amount: 10_000_000, coverage: "non_benefit", nonBenefitItem: "general", severity: "critical", visit: "inpatient", tier: "hospital" };
+  const UNUSED = { ...CONSUME, tier: "clinic" };
+  check("소비 조합: 정확히 1회 읽는다", probe(CONSUME, () => 0).reads === 1);
+  check("미소비 조합: 정확히 1회 읽는다", probe(UNUSED, () => 0).reads === 1);
+  check("치료유형 미지정: 접근자 0회이고 예외도 없다", (() => {
+    const r = probe({ amount: 10_000_000, coverage: "non_benefit", visit: "inpatient", tier: "clinic", severity: "critical" }, () => { throw new Error("boom"); });
+    return r.reads === 0 && !r.threw;
+  })());
+  // 변하는 getter — 첫 검증값 하나만 쓰인다.
+  check("변하는 getter에서 첫 값으로 계산한다", (() => {
+    let i = 0; const seq = [4_900_000, 0];
+    let reads = 0; const o = { ...CONSUME };
+    Object.defineProperty(o, "priorAnnualDeductible", { enumerable: true, configurable: true, get() { reads += 1; return seq[Math.min(i++, 1)]; } });
+    const r = calc2026(o as never);
+    return reads === 1 && r.ownPay === critIn(10_000_000, "hospital", 4_900_000).ownPay;
+  })());
 }
 
 console.log("\n[5세대 500만원 공제 pool] 0·음수 누적 입력의 정규화 정책 유지");
@@ -192,28 +241,50 @@ console.log("\n[deductibleApplied] 키가 존재하는 범위 — 5세대 비급
   check("다회 급여 행에 키 없음", !has(manyBen.lines[0]), JSON.stringify(manyBen.lines[0]));
 }
 
-console.log("\n[불변식] 격자");
+// ⚠ **격자를 둘로 나눴다(G-30).** 종전에는 480건 전부가 `status === "OK"`인 불변식 스윕이었고,
+//   그 안에 **미소비 조합 + 축 제공**(350건)이 섞여 있어 "읽고 무시"라는 결함을 계약처럼
+//   고정하고 있었다. 이제 두 묶음으로 나눈다.
+//     A. 정상 무회귀 130건 — 소비 조합 전부(60) + 미소비 조합의 축 미제공(70).
+//        불변식은 종전과 **한 글자도 바뀌지 않았다.**
+//     B. 의도된 거부 전환 350건 — 미소비 조합 × 축 제공(숫자 0 포함).
+console.log("\n[불변식] 격자 — 정상 무회귀 / 의도된 거부 전환");
 {
   const amounts = [0, 1, 29_999, 30_000, 99_999, 100_000, 1_000_000, 9_999_999, 10_000_000, 33_333_333];
   const priors = [undefined, 0, 1_000_000, 4_999_999, 5_000_000, 9_000_000];
-  let bad = 0; let firstBad = "";
+  const NOTE = "누적 공제금액(priorAnnualDeductible)은 중증 비급여 입원 중 상급종합병원·종합병원에만 적용됩니다";
+  let okCount = 0, rejCount = 0, bad = 0, firstBad = "";
   for (const severity of ["critical", "non_critical"] as Severity[]) {
     for (const visit of ["inpatient", "outpatient"] as Visit[]) {
       for (const tier of ["clinic", "hospital"] as Tier[]) {
         for (const amount of amounts) {
           for (const prior of priors) {
+            const consumes = severity === "critical" && visit === "inpatient" && tier === "hospital";
             const r = calc2026({ amount, coverage: "non_benefit", nonBenefitItem: "general", severity, visit, tier, priorAnnualDeductible: prior });
+            if (!consumes && prior !== undefined) {
+              // B. 의도된 거부 — 진료비 합계 없이 pending, 안내는 다회 C군과 같은 문구.
+              const good = r.status === "PENDING_UNVERIFIED" && r.ownPay === null && r.insurancePay === null
+                && String(r.notes?.[0]).startsWith(NOTE);
+              if (good) rejCount++;
+              else { bad++; if (!firstBad) firstBad = `B ${severity}/${visit}/${tier}/${amount}/${prior} → ${JSON.stringify(r)}`; }
+              continue;
+            }
+            // A. 정상 무회귀 — 불변식은 종전 그대로다.
             const d = r.deductibleApplied ?? -1;
             const okAll = r.status === "OK"
               && (r.ownPay ?? 0) + (r.insurancePay ?? 0) === r.amount
               && Number.isInteger(d) && d >= 0 && d <= r.amount && d <= (r.ownPay ?? 0);
-            if (!okAll) { bad++; if (!firstBad) firstBad = `${severity}/${visit}/${tier}/${amount}/${prior} → ${JSON.stringify(r)}`; }
+            if (okAll) okCount++;
+            else { bad++; if (!firstBad) firstBad = `A ${severity}/${visit}/${tier}/${amount}/${prior} → ${JSON.stringify(r)}`; }
           }
         }
       }
     }
   }
-  check(`불변식 ${amounts.length * priors.length * 8}건 통과 (ownPay+insurancePay=amount, 0<=공제<=min(진료비, 자기부담금))`, bad === 0, firstBad);
+  check("A. 정상 무회귀 130건 (ownPay+insurancePay=amount, 0<=공제<=min(진료비, 자기부담금))",
+    okCount === 130 && bad === 0, `${okCount}건 / ${firstBad}`);
+  check("B. 의도된 거부 전환 350건 (미소비 조합 × 축 제공 — 숫자 0 포함)",
+    rejCount === 350 && bad === 0, `${rejCount}건 / ${firstBad}`);
+  check("두 묶음의 합이 종전 격자 480건과 같다", okCount + rejCount === amounts.length * priors.length * 8);
 }
 
 console.log("\n[가드] 종전 명칭이 실행 코드·문서에 남지 않는다");

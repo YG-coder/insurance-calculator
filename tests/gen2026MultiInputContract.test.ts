@@ -232,11 +232,12 @@ console.log("\n[G-14C] 8. 소스 계약");
   // ⚠ 안내에서 JSON.stringify를 직접 쓰면 다시 던진다. 지문(fingerprint)용 1회만 남아야 한다.
   check("안내에 JSON.stringify를 직접 쓰지 않는다",
     !/받은 값: \$\{JSON\.stringify/.test(body));
-  // 통원 카운터 4곳 + A군 1 + B군 1 + C군 3 + 지급보험금 1(G-20) + 연간 가입금액 1(G-21) = 11.
-  //   ⚠ 계약 갱신(G-20·G-21): 두 금액 축이 값 검증으로 옮겨지면서 안내가 두 곳 늘었다.
-  //     요지("받은 값을 싣는 안내는 예외 없이 전부 안전 표시를 쓴다")는 그대로다.
+  // 통원 카운터 4곳 + A군 1 + B군 1 + C군 3 + 지급보험금 1(G-20) + 연간 가입금액 1(G-21)
+  //   + 급여 미사용 금액 축 1(G-30) + 입원의 통원 가입금액 1(G-30) = 13.
+  //   ⚠ 계약 갱신(G-20·G-21 → G-30). 요지("받은 값을 싣는 안내는 예외 없이 전부 안전
+  //     표시를 쓴다")는 그대로다.
   check("'받은 값' 안내가 모두 안전 표시를 쓴다",
-    (body.match(/받은 값: \$\{showValue\(/g) ?? []).length === 11,
+    (body.match(/받은 값: \$\{showValue\(/g) ?? []).length === 13,
     String((body.match(/받은 값: \$\{showValue\(/g) ?? []).length));
   check("B군 키 목록이 9종", (body.match(/const SPECIAL_ITEM_ONLY_KEYS = \[[\s\S]*?\] as const;/) ?? [""])[0]
     .split('"').filter((x) => x.startsWith("prior") || ["approvedThroughVisit", "injectionPurpose", "item", "lines", "route", "stays"].includes(x)).length === 9);
@@ -290,9 +291,15 @@ console.log("\n[G-14C] 9. 규칙값·산식·HOLD 불변");
 // ── 10. 범위 밖(이번에 봉인하지 않은 축)이 그대로인지 ────────────────
 console.log("\n[G-14C] 10. 범위 밖 축 무변경");
 {
+  // ⚠ **계약이 바뀌었다(G-30).** G-14C 시점에는 이 축이 "이번에 봉인하지 않은 축"이라
+  //   입원에 실려도 조용히 폐기되고 계산이 그대로 진행됐다(실측: 접근자 호출 0회).
+  //   G-30이 그 조용한 폐기를 닫았다 — 통원 가입금액은 통원 행에만 있는 한도이므로
+  //   입원에 실리면 진료비 합계를 보존한 채 차단한다.
   const a = call(nbIn({ outpatientCoverageLimit: 100_000 }));
-  check("outpatientCoverageLimit을 입원에 실어도 종전대로 계산",
-    !threw(a) && a.status === "OK" && a.totalInsurancePay === 1_400_000);
+  check("outpatientCoverageLimit을 입원에 실으면 차단한다(G-30)",
+    !threw(a) && a.status === "PENDING_UNVERIFIED" && a.totalAmount === 2_000_000
+    && a.totalInsurancePay === null
+    && String(a.notes?.[0]).startsWith("통원 가입금액(outpatientCoverageLimit)은 통원 보상에만"));
   const b = call(nbIn({ nhisCoinsuranceRate: 0.2 }));
   check("nhisCoinsuranceRate를 비급여에 실어도 종전대로 계산",
     !threw(b) && b.status === "OK" && b.totalInsurancePay === 1_400_000);

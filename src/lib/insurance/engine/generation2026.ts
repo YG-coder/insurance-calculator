@@ -111,6 +111,17 @@ const invalidOutpatientLimitNotes = (axis: string, got: unknown): string[] => [
 const zeroOutpatientLimitNote = (unit: string): string =>
   `통원 가입금액을 0원으로 입력하셔서 계산기에서는 통원 ${unit} 지급 한도를 적용하지 않았습니다. 실제 가입금액이 있으면 증권의 금액을 입력해 주세요.`;
 
+/**
+ * 급여 계산에서 쓰이지 않는 금액 축 (G-30). 둘 다 비급여 특별약관의 축이라 급여에 대응 축이 없고,
+ * 종전에는 급여 두 경로에서 **조용히 폐기**됐다(실측: 두 축 모두 접근자 호출 0회).
+ *   ⚠ 순서가 안내 우선순위다. 두 키가 동시에 실려도 먼저 찾은 키 하나만 안내한다.
+ *   ⚠ **비급여**의 `priorAnnualDeductible` 미소비 조합(중증 통원·병의원급 입원·비중증)은
+ *     이번 범위가 아니다 — 그쪽은 조용한 폐기가 아니라 **읽고 무시**이고(이름을 읽는다),
+ *     거부를 세우려면 `tests/gen2026DeductiblePool.test.ts`의 480건 불변식 스윕이 고정한
+ *     "다른 조합은 종전대로 계산된다"는 계약을 함께 바꿔야 한다. 후속 과제로 명시했다.
+ */
+const BENEFIT_UNUSED_MONEY_KEYS = ["priorAnnualDeductible", "perVisitCoverageLimit"] as const;
+
 function pending(amount: number, reasons: string[]): CalcResult {
   return { status: "PENDING_UNVERIFIED", generation: "2026", amount,
     ownPay: null, insurancePay: null, rateBased: null, rateApplied: null, minDeductible: null, notes: reasons, appliedCaps: [] };
@@ -156,6 +167,29 @@ export function calc2026(input: Gen2026ClaimInput): CalcResult {
     return pending(amount, [
       "5세대: priorAnnualPaid는 2·3세대 입원 자기부담 상한용 필드라 5세대에서는 읽지 않습니다. 5세대 500만원 상한은 약관상 공제금액을 누적하므로 priorAnnualDeductible로 넘겨 주세요.",
     ]);
+  }
+
+  // ── 미사용 금액 축 stray 거부 (G-30) ────────────────────────────────
+  //   `perVisitCoverageLimit`(통원 회·일당 가입금액)과 `priorAnnualDeductible`(제5조⑤의
+  //   500만원 누적 공제금액)은 **비급여 특별약관**의 축이다. 급여에는 대응 축이 없다.
+  //   ⚠ 종전에는 **조용히 폐기**됐다(실측: 급여 두 경로에서 두 축 모두 접근자 호출 0회 —
+  //     결과가 미제공과 완전히 같았던 이유는 반영돼서가 아니라 읽히지 않아서다).
+  //   ⚠ 값이 `0`이어도 막는다 — 바로 위 레거시 필드(`priorAnnualPaid`)와 같은 계약이다.
+  //   ⚠ 각 키를 **한 번만** 읽는다. 목록 순서가 안내 우선순위다.
+  //   ⚠ 반환은 이 진입점의 기존 실패 계약 `pending(amount, …)` 그대로다.
+  //   ⚠ 안내에 받은 값 자체를 넣지 않는다 — 이 파일에는 `showValue()`가 없고, 무효 입력을
+  //     템플릿 리터럴에 끼우면 Symbol·`toString()`이 던지는 객체에서 안내를 만들다 죽는다
+  //     (급여 통원 두 축이 이미 `typeof`만 싣는 계약이다).
+  if (input.coverage === "benefit") {
+    for (const key of BENEFIT_UNUSED_MONEY_KEYS) {
+      const got: unknown = (input as unknown as Record<string, unknown>)[key];
+      if (got === undefined) continue;
+      return pending(amount, [
+        `5세대 급여: ${key}은(는) 비급여 특별약관의 금액 축이라 급여 계산에는 쓰이지 않습니다. 급여의 본인부담금은 국민건강보험 본인부담률과 약관의 공제 기준으로 정해집니다.`,
+        "쓰이지 않는 입력을 조용히 버리면 반영했다고 오해할 수 있어 계산하지 않았습니다.",
+        `받은 값의 형식: ${typeof got}`,
+      ]);
+    }
   }
 
   // ── 급여 ──
@@ -244,7 +278,55 @@ export function calc2026(input: Gen2026ClaimInput): CalcResult {
   if (!input.severity) {
     return pending(amount, ["비급여: 중증/비중증(severity) 미지정 → 계산 불가"]);
   }
-  const priorDeductible = Math.max(0, input.priorAnnualDeductible ?? 0);
+  // ── 통원 가입금액은 통원에서만 소비한다 (G-30) ──────────────────────
+  //   특별약관1·2 제3조 (1)①·(2)① 표의 **통원 행**에만 있는 한도다(중증 1회당, 비중증 1일당).
+  //   입원 행에는 이 축이 없다.
+  //   ⚠ 종전에는 비급여 **입원**에 실려 오면 조용히 폐기됐다(실측: 접근자 호출 0회 —
+  //     아래 두 통원 분기만 이 이름에 닿았다).
+  //   ⚠ 값이 `0`이어도 막는다. 한 번만 읽는다.
+  //   ⚠ **치료유형·중증 구분 안내 뒤**다. 그 셋이 정해지기 전에 먼저 거부하면
+  //     "치료유형을 고르세요"라고 말해야 할 자리에 "이 필드를 쓰지 마세요"가 나간다.
+  //   ⚠ 타입은 `visit`으로 좁힐 수 없다(호출부가 `visit`을 변수로 넘긴다). 런타임으로 닫는다.
+  //   ⚠ **종별 미지정(중증 입원)은 후보로 남긴다** — 아래 종별 preflight가 "종별을 고르세요"를
+  //     내야 하는 자리다. 형제 축(`priorAnnualDeductible`)과 같은 계약이고, 종별을 고른 뒤
+  //     같은 입력을 다시 넣으면 이 안내가 나온다. 기존 선행 안내 순서를 그대로 둔다.
+  if (input.visit === "inpatient"
+    && !(input.severity === "critical" && input.tier !== "clinic" && input.tier !== "hospital")) {
+    const strayPerVisit: unknown = (input as { perVisitCoverageLimit?: unknown }).perVisitCoverageLimit;
+    if (strayPerVisit !== undefined) {
+      return pending(amount, [
+        "통원 가입금액(perVisitCoverageLimit)은 통원 보상에만 적용됩니다(특별약관1·2 제3조 (1)제1항·(2)제1항 <구분·보상금액>의 통원 행 — 중증은 1회당, 비중증은 1일당).",
+        "입원 보상에는 이 한도가 없습니다. 쓰이지 않는 입력을 조용히 버리면 한도를 반영했다고 오해할 수 있어 계산하지 않았습니다.",
+        `받은 값의 형식: ${typeof strayPerVisit}`,
+      ]);
+    }
+  }
+  // ── 누적 공제금액은 중증·입원·상급종합/종합에서만 소비한다 (G-30) ────
+  //   제5조⑤(2026-09-05 직독, 인쇄 p.280)의 500만원 상한이 걸리는 조합이다. 엔진도 아래에서
+  //   `severity === "critical" && visit === "inpatient" && tier === "hospital"`일 때만 이 값을
+  //   쓴다. 그 밖의 조합에서는 어디에도 쓰이지 않는다.
+  //   ⚠ 종전에는 이 이름을 **읽고 무시**했다 — `Math.max(0, … ?? 0)`가 값을 만들었지만
+  //     상급종합·종합 입원 분기에서만 썼다. 다회 엔진(C군)은 같은 조합을 이미 거부하고
+  //     있었는데 단건만 뚫려 있어 **두 진입점의 계약이 갈렸다.**
+  //   ⚠ **종별 미지정(`tier === undefined`)은 후보로 남긴다** — 여기서 먼저 거부하면
+  //     "종별을 고르세요"라고 말해야 할 자리에 "이 필드를 쓰지 마세요"가 나간다.
+  //     다회 C군과 같은 계약이고, 아래 종별 preflight가 제 안내를 낸다.
+  //   ⚠ 값이 `0`이어도 막는다 — 형제 축(`perVisitCoverageLimit`·레거시 `priorAnnualPaid`)과
+  //     같은 계약이다. 미제공(`undefined`)만 미사용과 같다.
+  //   ⚠ 값을 **한 번만** 읽고, 그 값을 아래 산식이 그대로 쓴다.
+  //   ⚠ 안내는 다회 C군의 문구를 그대로 쓴다 — 두 진입점이 같은 조합에 다른 말을 하지 않는다.
+  //   ⚠ 치료유형·중증 구분 안내 **뒤**다. 그 셋이 정해지기 전에는 그 안내가 우선한다.
+  const rawDeductible: unknown = (input as { priorAnnualDeductible?: unknown }).priorAnnualDeductible;
+  if (rawDeductible !== undefined
+    && !(input.severity === "critical" && input.visit === "inpatient"
+      && (input.tier === undefined || input.tier === "hospital"))) {
+    return pending(amount, [
+      "누적 공제금액(priorAnnualDeductible)은 중증 비급여 입원 중 상급종합병원·종합병원에만 적용됩니다(특별약관1 제5조 제5항).",
+      "이 조합에서는 계산에 쓰이지 않으므로, 조용히 버리지 않고 계산하지 않았습니다.",
+      `받은 값의 형식: ${typeof rawDeductible}`,
+    ]);
+  }
+  const priorDeductible = Math.max(0, (rawDeductible as number | undefined) ?? 0);
 
   if (input.severity === "critical") {
     const c = GEN2026.nonBenefit.critical;

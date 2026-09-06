@@ -500,7 +500,7 @@ console.log("\n[G-23] 10. 소스 계약");
   check("pool 합산 범위 HOLD 주석이 그대로", /GEN2026-CRITICAL-DEDUCTIBLE-POOL-SCOPE = HOLD/.test(raw));
   // 다른 엔진의 사본은 건드리지 않았다.
   for (const [label, path] of [["2·3세대", "src/lib/insurance/engine/multiClaim.ts"],
-    ["5세대 다회", "src/lib/insurance/engine/multiClaim2026.ts"]] as [string, string][]) {
+    /* G-30에서 삭제 */] as [string, string][]) {
     check(`${label} 엔진의 nonNegInt 사본은 그대로`, /const nonNegInt =/.test(readFileSync(path, "utf8")));
   }
   const stripped = (path: string) => readFileSync(path, "utf8").split("\n")

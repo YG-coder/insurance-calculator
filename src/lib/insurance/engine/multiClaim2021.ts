@@ -262,12 +262,51 @@ export function calculateMany2021(input: Gen2021MultiClaimInput): MultiClaimResu
     }
   }
 
+  // ── 미사용 금액 축 stray 거부 (G-30) ────────────────────────────────
+  //   4세대 금액 축은 **일반 보장과 3대비급여 특약이 서로 다른 축을 쓴다.**
+  //     일반(rider === "none") → `priorAnnualInsurancePaid` + `annualCoverageLimit`
+  //       (제5조① — 상해급여·질병급여·상해비급여·질병비급여 각 축의 연간 보험가입금액)
+  //     특약(도수·주사료·MRI)  → `priorAnnualRiderPaid`
+  //       (특약의 연간 보상한도는 <표>가 항목별로 따로 정한다. 일반 가입금액과 별개다)
+  //   ⚠ 종전에는 비활성 축이 **조용히 폐기**됐다(실측: 접근자 호출 0회 — 결과가 미제공과
+  //     완전히 같았던 이유는 반영돼서가 아니라 읽히지 않아서다). 타입도 세 축을 공통
+  //     베이스에 열어 두어 어느 조합에나 실을 수 있었다. 이번에 타입과 런타임을 함께 닫는다.
+  //   ⚠ 값이 `0`이어도 막는다 — 명시적으로 전달된 축이므로 형제 축(통원 횟수·특약 횟수·
+  //     승인 회차)과 같은 계약이다.
+  //   ⚠ `in`이 아니라 `!== undefined`로 본다. 호출부가 흔히 쓰는
+  //     `{ ...common, priorAnnualRiderPaid: undefined }` 패턴을 막지 않기 위해서다
+  //     (이 저장소의 4세대 화면이 실제로 그 패턴을 쓴다).
+  //   ⚠ 각 키를 **한 번만** 읽는다. 검사한 값과 안내에 표시하는 값이 같아야 한다.
+  //   ⚠ 형제 축(위 세 stray 검사)과 같은 자리 — 활성 축 값 검증보다 앞이다. 한 필드만
+  //     다른 순서로 두지 않는다.
+  {
+    const strayKeys: readonly string[] = rider === "none"
+      ? ["priorAnnualRiderPaid"]
+      : ["priorAnnualInsurancePaid", "annualCoverageLimit"];
+    for (const key of strayKeys) {
+      const got = readCount(input, key);
+      if (got === undefined) continue;
+      return blocked([
+        rider === "none"
+          ? "3대비급여 특약의 기존 지급보험금(priorAnnualRiderPaid)은 도수치료·체외충격파치료·증식치료, 비급여 주사료, 비급여 MRI·MRA 특약 계산에만 쓰입니다."
+          : key === "annualCoverageLimit"
+            ? "연간 보험가입금액(annualCoverageLimit)은 일반 급여·비급여 보장의 축입니다(기본형·비급여 특별약관 제5조 제1항). 3대비급여 특약의 연간 보상한도는 특약 <표>가 항목별로 따로 정하므로 이 축을 쓰지 않습니다."
+            : "일반 보장의 기존 지급보험금(priorAnnualInsurancePaid)은 급여·비급여 일반 보장 계산에만 쓰입니다. 3대비급여 특약은 별도 축(priorAnnualRiderPaid)을 씁니다.",
+        rider === "none"
+          ? "일반 보장은 별도 축(priorAnnualInsurancePaid)을 씁니다. 두 축은 한도가 달라 서로 대신 쓰지 않습니다."
+          : "두 축은 한도 근거가 달라 서로 대신 쓰지 않습니다.",
+        "쓰이지 않는 입력을 조용히 버리면 반영했다고 오해할 수 있어 계산하지 않았습니다.",
+        `받은 값: ${showValue(got)}`,
+      ]);
+    }
+  }
+
   // ── 활성 지급보험금 누적 축: 원문만 읽어 둔다 ────────────────────────
   //   ⚠ 값 검증은 아래 **승인 회차 preflight 뒤**에서 한다. 잘못된 진료비·횟수·승인
   //     회차가 함께 있으면 그 안내가 더 앞선 안내이므로 가려지면 안 된다.
   //   ⚠ **활성 축 하나만** 읽는다. 일반 경로는 priorAnnualInsurancePaid, 특약 경로는
-  //     priorAnnualRiderPaid다. 비활성 축에 남아 있는 값은 이번 커밋에서 보지 않는다 —
-  //     미사용 금액 축 stray 거부는 후속 항목이고, 그 조용한 폐기 동작은 그대로다.
+  //     priorAnnualRiderPaid다. 비활성 축은 **위 stray 검사가 막는다**(G-30에서 닫았다 —
+  //     종전에는 조용히 폐기됐고, 그 후속 항목이 위 블록이다).
   const paidKey = rider === "none" ? "priorAnnualInsurancePaid" : "priorAnnualRiderPaid";
   const paidRaw = readCount(input, paidKey);
   // ⚠ 정규화하지 않는다. 위에서 미입력·잘못된 값을 이미 차단했고, 쓰이지 않는 축은

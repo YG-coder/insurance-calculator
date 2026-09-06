@@ -178,8 +178,12 @@ console.log("\n[G-15] 5. 범위 밖 경로는 무변경");
 console.log("\n[G-15] 6. 다회는 기존 blocked() 계약으로 전달한다");
 {
   const many = (extra: Record<string, unknown> = {}): MultiClaimResult =>
+    // ⚠ **낡은 픽스처를 교체했다(G-30).** 종전에는 이 급여 입력에 `priorAnnualInsurancePaid: 0`을
+    //   실었고, 급여가 그 축을 **조용히 폐기**했기 때문에 계산이 그대로 됐다. G-30이 그 조용한
+    //   폐기를 닫아 이제 stray로 차단되므로, 급여와 무관한 그 축을 픽스처에서 뺀다.
+    //   이 절이 보는 것(급여 통원의 rate·tier 입력 계약)은 그대로다.
     calculateMany2026({ coverage: "benefit", cause: "disease", visit: "outpatient",
-      amounts: [AMOUNT, 150_000], priorAnnualInsurancePaid: 0, ...extra } as unknown as Gen2026MultiClaimInput);
+      amounts: [AMOUNT, 150_000], ...extra } as unknown as Gen2026MultiClaimInput);
   const okRun = many({ nhisCoinsuranceRate: 0.2, tier: "clinic" });
   check("다회 정상 무회귀", okRun.status === "OK" && okRun.totalOwnPay === 90_000 && okRun.totalInsurancePay === 360_000,
     `${okRun.status}/${okRun.totalOwnPay}/${okRun.totalInsurancePay}`);

@@ -344,8 +344,12 @@ console.log("\n[G-14B] 9b. 타입 수준 허용·금지");
    *     속성 줄에 보고될지 TS 버전·형태에 따라 달라져, 지시문 위치가 어긋나면
    *     "쓰이지 않은 지시문"으로 엉뚱하게 실패한다.
    */
+  //   ⚠ **미선언도 실패로 본다(G-30에서 엄격하게 고쳤다).** 종전에는 `K extends keyof T`가
+  //     거짓일 때 `true`를 돌려주어, `?: never` 줄을 **지우기만 해도** 검사를 통과했다
+  //     (G-30 변조 검사에서 발견). 미선언은 초과 속성 검사만 남아 리터럴은 막지만
+  //     **변수 경유·외부 데이터는 막지 못한다** — 봉인이 아니다. 그래서 `false`로 본다.
   type Sealed<T, K extends string> = K extends keyof T
-    ? (T[K] extends undefined ? true : false) : true;
+    ? (T[K] extends undefined ? true : false) : false;
   const sealedCriticalMriCount: Sealed<Gen2026CriticalMriInput, "priorAnnualCoveredCount"> = true;
   const sealedMskPool: Sealed<Gen2026CriticalMskInput, "priorAnnualInpatientDeductible"> = true;
   const sealedInjPool: Sealed<Gen2026CriticalInjectionInput, "priorAnnualInpatientDeductible"> = true;

@@ -83,11 +83,21 @@ function check(name: string, ok: boolean, detail = "") {
   check("계약자가 정한 통원 가입금액 10만이 구속", withLimit.totalInsurancePay === 100_000 && withLimit.totalOwnPay === 900_000);
 
   // 입원에는 통원 가입금액을 적용하지 않는다
+  //   ⚠ **계약이 바뀌었다(G-30).** 종전에는 이 축을 입원에 실어도 **조용히 폐기**하고
+  //     계산을 그대로 진행했다(접근자 호출 0회로 실측). 이제는 차단한다. 입원 계산 자체는
+  //     그대로이므로 아래 두 검사로 나눈다 — 미적용(계산)과 stray 차단(입력 계약).
   const inpatient = calculateMany2026({
     cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "non_critical", visit: "inpatient", tier: "clinic",
-    amounts: [1_000_000], outpatientCoverageLimit: 100_000,
+    amounts: [1_000_000],
   });
   check("입원에는 통원 가입금액 미적용", inpatient.totalOwnPay === 500_000 && inpatient.totalInsurancePay === 500_000);
+  const inpatientStray = calculateMany2026({
+    cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "non_critical", visit: "inpatient", tier: "clinic",
+    amounts: [1_000_000], outpatientCoverageLimit: 100_000,
+  } as never);
+  check("입원에 통원 가입금액을 실으면 차단(G-30)",
+    inpatientStray.status === "PENDING_UNVERIFIED" && inpatientStray.totalAmount === 1_000_000
+    && inpatientStray.totalInsurancePay === null);
 
   // 같은 날 통원은 합산해 한 행으로 — 약관 근거가 있으므로 미지원 고지가 아니라 합산 안내
   const nonCritical = calculateMany2026({

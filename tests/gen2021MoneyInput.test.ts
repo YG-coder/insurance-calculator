@@ -375,8 +375,13 @@ console.log("\n[소스] 파서·게이트·전달 형태");
     /const gen2021CopyCount = \(v: string\): number \| null =>/.test(src)
     && !/digits\(copyCount\)/.test(src));
   check("엔진 전달 형태", (src.match(/annualCoverageLimit: money\.annualLimit,/g) ?? []).length === 3
-    && (src.match(/priorAnnualInsurancePaid: money\.priorPaid,/g) ?? []).length === 3
-    && /priorAnnualRiderPaid: isRider \? money\.priorPaid : undefined,/.test(src));
+    // ⚠ **낡은 앵커를 교체했다(G-30).** 위치·기존 의미("화면이 활성 축 하나만 전달한다")는
+    //   그대로다. 종전에는 `common`이 `priorAnnualRiderPaid: isRider ? … : undefined`로
+    //   일반 세 분기에도 그 필드를 실었고(값은 undefined지만 **속성은 존재**), 타입이 이를
+    //   막지 못했다. G-30이 금액 축을 `common`에서 내리고 각 분기에서만 싣게 바꿨다.
+    && !/priorAnnualRiderPaid: isRider \? money\.priorPaid : undefined,/.test(src)
+    && (src.match(/priorAnnualRiderPaid: money\.priorPaid,/g) ?? []).length === 3
+    && (src.match(/priorAnnualInsurancePaid: money\.priorPaid,/g) ?? []).length === 3);
 }
 {
   const eng = readFileSync("src/lib/insurance/engine/multiClaim2021.ts", "utf8");

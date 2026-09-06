@@ -191,7 +191,9 @@ console.log("\n[G-19] 4. 계산 계약 무회귀 — 표시만 바뀌고 결과�
 console.log("\n[G-19] 5. 소스 계약");
 {
   const files: [string, string, number][] = [
-    ["4세대", "src/lib/insurance/engine/multiClaim2021.ts", 6],
+    // ⚠ 계약 갱신(G-30): 미사용 금액 축 stray 안내가 한 곳 늘어 6 → 7이다.
+    //   요지("받은 값을 싣는 안내는 예외 없이 전부 안전 표시를 쓴다")는 그대로다.
+    ["4세대", "src/lib/insurance/engine/multiClaim2021.ts", 7],
     ["2·3세대", "src/lib/insurance/engine/multiClaim.ts", 4],
   ];
   for (const [gen, path, n] of files) {

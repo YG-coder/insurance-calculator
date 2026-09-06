@@ -222,22 +222,30 @@ console.log("\n[G-18] 3b. 안내가 방향을 단정하지 않는다 — 반대 
     userNotes.includes(NOTE_ZERO) && userNotes.includes(NOTE_UNSET) && userNotes.includes(NOTE_BAD));
 }
 
-console.log("\n[G-18] 4. 특약 경로는 이 축을 보지 않는다(조용한 폐기 유지 — 후속 항목)");
+// ⚠ **계약이 바뀌었다(G-30).** G-18 시점에는 특약 경로가 이 축을 **조용히 폐기**했고
+//   (접근자 호출 0회) 그 사실 자체를 여기서 고정하고 있었다. 후속 항목으로 남겼던 그
+//   조용한 폐기를 G-30이 닫았다 — 이제 값이 `0`이어도 차단한다. 특약의 연간 보상한도는
+//   특약 <표>가 항목별로 따로 정하므로 일반 가입금액 축을 쓰지 않는다.
+console.log("\n[G-18] 4. 특약 경로는 이 축을 쓰지 않고 **차단**한다 (G-30에서 전환)");
 {
-  const ref = shape(call(RID()));
+  const STRAY_HEAD = "연간 보험가입금액(annualCoverageLimit)은 일반 급여·비급여 보";
   for (const [label, v] of [["숫자 0", 0], ["정상값", 500_000], ...BAD] as [string, unknown][]) {
     const x = call(RID({ annualCoverageLimit: v }));
-    check(`특약 + ${label} → 종전과 같은 결과(조용한 폐기)`, shape(x) === ref, shape(x));
+    check(`특약 + ${label} → stray 차단(진료비 합계 보존)`,
+      isBlocked(x, AMT) && notes(x).includes(STRAY_HEAD), shape(x));
   }
-  check("특약 경로에는 가입금액 안내가 하나도 나오지 않는다",
+  check("특약 경로에는 가입금액 **적용** 안내가 하나도 나오지 않는다",
     !notes(call(RID({ annualCoverageLimit: 0 }))).includes(NOTE_ZERO)
     && !notes(call(RID())).includes(NOTE_UNSET)
     && !notes(call(RID({ annualCoverageLimit: 60_000_000 }))).includes(NOTE_CLAMP));
+  check("축을 싣지 않으면 특약은 종전대로 계산한다", shape(call(RID())) === shape(call(RID())));
   for (const rider of ["manual_therapy", "injection", "mri"]) {
     const base: Record<string, unknown> = { cause: "disease", coverage: "non_benefit", visit: "outpatient",
       rider, amounts: [AMT], ...(rider === "mri" ? {} : { priorAnnualRiderVisits: 0 }) };
-    check(`특약 ${rider}: 무효 가입금액이 있어도 계산한다`,
-      shape(call({ ...base, annualCoverageLimit: "abc" })) === shape(call(base)));
+    check(`특약 ${rider}: 가입금액이 실리면 값과 무관하게 차단한다`,
+      isBlocked(call({ ...base, annualCoverageLimit: "abc" }), AMT)
+      && isBlocked(call({ ...base, annualCoverageLimit: 0 }), AMT));
+    check(`특약 ${rider}: 축이 없으면 종전대로 계산한다`, ins(call(base)) === "210000");
   }
 }
 
@@ -246,16 +254,24 @@ console.log("\n[G-18] 4b. 특약 경로는 이 이름을 **읽지도** 않는다
   // ⚠ 엔진 직접 호출 계약 전용 검사다. 값 자체가 아니라 **읽는 행위**를 본다 — 쓰지 않는
   //   축을 읽으면 외부 객체의 접근자(getter)가 실행되고, 그 접근자가 던지면 특약 묶음
   //   전체가 예외로 죽는다. 검증을 건너뛰는 것만으로는 이 계약이 지켜지지 않는다.
+  // ⚠ **계약이 바뀌었다(G-30).** 조용한 폐기를 막으려면 값을 **읽어야** 하므로, 특약 경로도
+  //   이제 이 이름을 정확히 한 번 읽는다. 던지는 접근자의 예외가 전파되는 대상은 **종전에
+  //   조용히 폐기하며 성공하던 입력뿐**이고, 다른 축이 이미 무효라 앞에서 차단되던 입력은
+  //   종전 그대로다(아래 4c절이 고정한다).
   let reads = 0;
   const counting = { ...RID(), get annualCoverageLimit(): number { reads++; return 500_000; } };
   const rr = call(counting);
-  check("특약 경로: 접근자가 한 번도 실행되지 않는다", reads === 0, `reads=${reads}`);
-  check("특약 경로: 결과는 종전과 같다", shape(rr) === shape(call(RID())), shape(rr));
+  check("특약 경로: 접근자를 정확히 한 번 읽는다", reads === 1, `reads=${reads}`);
+  check("특약 경로: 읽은 값으로 stray를 차단한다", isBlocked(rr, AMT), shape(rr));
 
   const boom = { ...RID(), get annualCoverageLimit(): number { throw new Error("touched"); } };
-  const br = call(boom);
-  check("특약 경로: 던지는 접근자가 있어도 예외로 죽지 않는다", !threw(br), shape(br));
-  check("특약 경로: 던지는 접근자가 있어도 계산이 같다", shape(br) === shape(call(RID())), shape(br));
+  check("특약 경로: 던지는 접근자는 전파된다(막으려면 읽어야 한다)", threw(call(boom)));
+  // 선행 차단 경로에서는 종전 그대로 읽지 않는다.
+  let pre = 0;
+  const preBlocked = { ...RID({ amounts: ["abc"] }), get annualCoverageLimit(): number { pre++; return 1; } };
+  check("특약 경로: 진료비가 먼저 무효면 접근자 0회(종전 그대로)", (call(preBlocked), pre === 0), `reads=${pre}`);
+  check("특약 경로: 진료비가 먼저 무효면 던지는 접근자도 안전(종전 그대로)",
+    !threw(call({ ...RID({ amounts: ["abc"] }), get annualCoverageLimit(): number { throw new Error("x"); } })));
 
   // 일반 축에서는 반대로 **정확히 한 번** 읽는다(같은 값을 두 번 읽어 달라지면 안 된다).
   let g = 0;
@@ -368,8 +384,9 @@ console.log("\n[G-18] 7. 소스 계약 — nonNegInt 완전 제거와 검증 위
   //   `toJSON()` 예외에서 안내를 만들다 죽던 것을 고쳤다), 확인 대상을 새 표시로 옮긴다.
   //   요지(이 커밋이 그 자리를 건드리지 않았다)는 같다. 새 계약은
   //   tests/multiClaimNoteSafeDisplay.test.ts가 본다.
-  check("다른 안내 6곳은 안전 표시(showValue)를 쓴다",
-    (body.match(/받은 값: \$\{showValue\(/g) ?? []).length === 6
+  // ⚠ 계약 갱신(G-30): 미사용 금액 축 stray 안내가 한 곳 늘어 6 → 7이다.
+  check("다른 안내 7곳은 안전 표시(showValue)를 쓴다",
+    (body.match(/받은 값: \$\{showValue\(/g) ?? []).length === 7
     && !/받은 값: \$\{JSON\.stringify/.test(body),
     String((body.match(/받은 값: \$\{showValue\(/g) ?? []).length));
   check("G-16 금액 계약이 그대로",
@@ -387,7 +404,11 @@ console.log("\n[G-18] 7. 소스 계약 — nonNegInt 완전 제거와 검증 위
     (std.match(/받은 값: \$\{showValue\(/g) ?? []).length === 4
     && !/받은 값: \$\{JSON\.stringify/.test(std));
   const g5 = readFileSync("src/lib/insurance/engine/multiClaim2026.ts", "utf8");
-  check("5세대 엔진은 자기 nonNegInt를 그대로 가진다", /const nonNegInt =/.test(g5));
+  // ⚠ **낡은 계약을 교체했다(G-30).** 위치·기존 의미("이 커밋이 5세대 엔진을 손대지
+  //   않았다")는 그대로다. G-30이 5세대 다회의 마지막 `nonNegInt` 사용처(누적 공제금액)를
+  //   단일 읽기로 옮기면서 그 파일에서도 함수를 삭제했다.
+  check("5세대 엔진에는 nonNegInt가 없다(G-30에서 제거)",
+    !/nonNegInt/.test(g5.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ")));
   check("5세대 엔진 계산은 손대지 않았다", /const consumes = amount > 0 &&/.test(g5));
   const ui = readFileSync("src/components/calculators/HealthCalcMulti2021.tsx", "utf8");
   check("UI 전달 형태는 그대로",

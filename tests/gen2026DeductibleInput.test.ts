@@ -424,9 +424,13 @@ console.log("\n[소스] 형식 우선 검증 · 전달 조건 · 타입 단언 �
   const many = readFileSync("src/lib/insurance/engine/multiClaim2026.ts", "utf8");
   const spec = readFileSync("src/lib/insurance/engine/specialItem2026.ts", "utf8");
   check("엔진의 소비 조건·상한은 그대로다",
-    /const priorDeductible = Math\.max\(0, input\.priorAnnualDeductible \?\? 0\);/.test(eng)
+    // ⚠ **낡은 앵커를 교체했다(G-30).** 위치·기존 의미(소비 조건·상한 산식)는 그대로다.
+    //   G-30이 이 축을 한 번만 읽어 미소비 조합을 거부하게 바꾸면서, 산식이 검증한 값을 쓴다.
+    /const priorDeductible = Math\.max\(0, \(rawDeductible as number \| undefined\) \?\? 0\);/.test(eng)
     && /const remaining = Math\.max\(c\.annualDeductibleCap - priorDeductible, 0\);/.test(eng)
-    && /let deductiblePaid = nonNegInt\(nb\?\.priorAnnualDeductible\);/.test(many)
+    // ⚠ 계약 갱신(G-30): 이 축도 검증된 원값을 쓰는 단일 읽기가 됐다(`nonNegInt` 삭제).
+    //   소비 조건·상한 자체는 그대로다 — 아래 두 줄이 그것을 본다.
+    && /let deductiblePaid = checkedDeductible \?\? 0;/.test(many)
     && /priorAnnualDeductible: severity === "critical" && nb\.visit === "inpatient" && nb\.tier === "hospital"/.test(many)
     && /spec\.poolEligible && line\.visit === "inpatient" && line\.tier === "hospital"/.test(spec));
   check("다른 세대 파서를 재사용하지 않는다", !/gen2021Money/.test(code) && !/stdMoney/.test(code));

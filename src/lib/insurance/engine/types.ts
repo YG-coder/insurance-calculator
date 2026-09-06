@@ -77,6 +77,11 @@ interface Gen2026CommonInput {
 export interface Gen2026BenefitInput extends Gen2026CommonInput {
   coverage: "benefit";
   nhisCoinsuranceRate?: number;
+  // ⚠ 두 축은 비급여 특별약관의 금액 축이라 급여에는 대응 축이 없다(G-30).
+  //   종전에는 선언 자체가 없어 리터럴만 막혔고(초과 속성 검사), 변수 경유·외부 데이터는
+  //   통과해 런타임이 **조용히 폐기**했다(실측: 접근자 호출 0회). 타입과 런타임을 함께 닫는다.
+  priorAnnualDeductible?: never;
+  perVisitCoverageLimit?: never;
 }
 
 export interface Gen2026NonBenefitInput extends Gen2026CommonInput {
@@ -219,11 +224,29 @@ interface Gen2021MultiCommonInput {
   visit: Visit;
   tier?: Tier;
   amounts: number[];
-  annualCoverageLimit?: number; // 증권상 선택 가입금액(최대 5천만원). 미입력 시 적용하지 않음
-  priorAnnualInsurancePaid?: number;
-  priorAnnualRiderPaid?: number;
   // ⚠ 두 횟수 축은 여기 두지 않는다. 공통 베이스에 두면 어느 조합에나 아무 축이나 실을 수
   //   있게 된다. 쓰는 변형에서만 number로 열고 나머지는 never로 닫는다.
+  // ⚠ **금액 세 축도 같은 이유로 여기 두지 않는다(G-30).** 종전에는 셋 다 이 베이스에 열려
+  //   있어 어느 조합에나 실을 수 있었고, 런타임은 비활성 축을 **조용히 폐기**했다
+  //   (실측: 접근자 호출 0회). 일반 보장과 3대비급여 특약은 서로 다른 금액 축을 쓴다.
+  //     일반(rider === "none") → `priorAnnualInsurancePaid` + `annualCoverageLimit`
+  //       (기본형 제5조① 인쇄 p.209 · 비급여 특별약관 제5조① p.264 — 원인 × 급여 구분 4축)
+  //     특약(도수·주사료·MRI)  → `priorAnnualRiderPaid`
+  //       (특약 <표>가 항목별 연간 보상한도를 따로 정한다. 일반 가입금액과 별개다)
+}
+
+/** 일반 보장(rider === "none")이 쓰는 금액 축. 특약 축은 닫는다. */
+interface Gen2021GeneralMoneyAxes {
+  annualCoverageLimit?: number; // 증권상 선택 가입금액(최대 5천만원). 미입력 시 적용하지 않음
+  priorAnnualInsurancePaid?: number;
+  priorAnnualRiderPaid?: never;
+}
+
+/** 3대비급여 특약이 쓰는 금액 축. 일반 축 두 개는 닫는다. */
+interface Gen2021RiderMoneyAxes {
+  priorAnnualRiderPaid?: number;
+  annualCoverageLimit?: never;
+  priorAnnualInsurancePaid?: never;
 }
 
 /**
@@ -236,7 +259,7 @@ interface Gen2021MultiCommonInput {
  */
 
 /** 비급여 통원 — 연 100회 한도가 걸리는 유일한 일반 경로. */
-export interface Gen2021MultiGeneralNonBenefitOutpatientInput extends Gen2021MultiCommonInput {
+export interface Gen2021MultiGeneralNonBenefitOutpatientInput extends Gen2021MultiCommonInput, Gen2021GeneralMoneyAxes {
   rider?: "none";
   coverage: "non_benefit";
   visit: "outpatient";
@@ -246,7 +269,7 @@ export interface Gen2021MultiGeneralNonBenefitOutpatientInput extends Gen2021Mul
 }
 
 /** 급여 — 연간 횟수 한도가 없다(약관의 '90회'는 계약 종료 후 계속 통원 규정이다). */
-export interface Gen2021MultiGeneralBenefitInput extends Gen2021MultiCommonInput {
+export interface Gen2021MultiGeneralBenefitInput extends Gen2021MultiCommonInput, Gen2021GeneralMoneyAxes {
   rider?: "none";
   coverage: "benefit";
   priorAnnualOutpatientVisits?: never;
@@ -255,7 +278,7 @@ export interface Gen2021MultiGeneralBenefitInput extends Gen2021MultiCommonInput
 }
 
 /** 비급여 입원 — 통원 횟수 한도가 적용되지 않는다. */
-export interface Gen2021MultiGeneralNonBenefitInpatientInput extends Gen2021MultiCommonInput {
+export interface Gen2021MultiGeneralNonBenefitInpatientInput extends Gen2021MultiCommonInput, Gen2021GeneralMoneyAxes {
   rider?: "none";
   coverage: "non_benefit";
   visit: "inpatient";
@@ -276,7 +299,7 @@ export interface Gen2021MultiGeneralNonBenefitInpatientInput extends Gen2021Mult
 export type Gen2021MskApprovedThrough = 10 | 20 | 30 | 40 | 50;
 
 /** 도수치료·체외충격파·증식치료 — 연 50회 한도 + <표1> 주)의 승인 구간. */
-export interface Gen2021MultiRiderManualInput extends Gen2021MultiCommonInput {
+export interface Gen2021MultiRiderManualInput extends Gen2021MultiCommonInput, Gen2021RiderMoneyAxes {
   rider: "manual_therapy";
   coverage: Coverage;
   priorAnnualRiderVisits?: number;
@@ -289,7 +312,7 @@ export interface Gen2021MultiRiderManualInput extends Gen2021MultiCommonInput {
  *   ⚠ <표1> 주)의 승인 구간은 도수·체외충격파·증식치료 3종 전용이라 주사료에는 없다.
  *     승인 축이 실려 오면 쓰이지 않는 입력이므로 막는다.
  */
-export interface Gen2021MultiRiderInjectionInput extends Gen2021MultiCommonInput {
+export interface Gen2021MultiRiderInjectionInput extends Gen2021MultiCommonInput, Gen2021RiderMoneyAxes {
   rider: "injection";
   coverage: Coverage;
   priorAnnualRiderVisits?: number;
@@ -303,7 +326,7 @@ export type Gen2021MultiRiderCountedInput =
   | Gen2021MultiRiderInjectionInput;
 
 /** MRI·MRA — 금액 한도만 있고 **횟수 한도가 없다**. 횟수 축을 요구하지도 받지도 않는다. */
-export interface Gen2021MultiRiderMriInput extends Gen2021MultiCommonInput {
+export interface Gen2021MultiRiderMriInput extends Gen2021MultiCommonInput, Gen2021RiderMoneyAxes {
   rider: "mri";
   coverage: Coverage;
   priorAnnualOutpatientVisits?: never;
@@ -326,12 +349,20 @@ interface Gen2026MultiCommonInput {
   visit: Visit;
   tier?: Tier;
   amounts: number[];
-  priorAnnualInsurancePaid?: number;
+  // ⚠ 금액 축은 여기 두지 않는다(G-30). 기존 지급보험금·연간 보험가입금액·통원 가입금액은
+  //   모두 **비급여 특별약관 제5조①**의 축이고 급여에는 대응 축이 없다. 종전에는
+  //   `priorAnnualInsurancePaid`만 이 베이스에 열려 있어 급여에도 실을 수 있었고, 런타임은
+  //   그 값을 **조용히 폐기**했다(실측: 접근자 호출 0회).
 }
 
 export interface Gen2026MultiBenefitInput extends Gen2026MultiCommonInput {
   coverage: "benefit";
   nhisCoinsuranceRate?: number;
+  // ⚠ 비급여 특별약관 제5조①의 금액 축 세 개는 급여에 없다. 타입에서 닫고 런타임에서도 막는다.
+  priorAnnualInsurancePaid?: never;
+  annualCoverageLimit?: never;
+  outpatientCoverageLimit?: never;
+  priorAnnualDeductible?: never;
   // ⚠ 통원 카운터는 비급여 통원 전용이다(특약1·2 제3조 (1)①·(2)① 표의 '통원 100회'/'통원 100일').
   //   급여에는 연간 횟수·일수 한도가 없다. 타입에서 닫고 런타임에서도 막는다.
   priorAnnualOutpatientVisits?: never;
@@ -341,6 +372,8 @@ export interface Gen2026MultiBenefitInput extends Gen2026MultiCommonInput {
 export interface Gen2026MultiNonBenefitInput extends Gen2026MultiCommonInput {
   coverage: "non_benefit";
   severity?: Severity;
+  /** 제5조① — (1)상해비급여 / (2)질병비급여 각 축의 기존 지급보험금. 급여에는 없다. */
+  priorAnnualInsurancePaid?: number;
   nonBenefitItem: Gen2026NonBenefitItem; // 필수
   // 특별약관1 제5조⑤ 500만원 상한의 연 누적 **공제금액**(중증·입원·상급종합/종합 전용).
   priorAnnualDeductible?: number;
@@ -442,6 +475,15 @@ interface Gen2026SpecialBase {
    */
   priorAnnualOutpatientVisits?: never;
   priorAnnualOutpatientDays?: never;
+  // ⚠ 아래 세 축은 일반 (1)(2) 전용이다(G-30). (3) 별도 보장종목의 한도는 <표1>이 항목별로
+  //   따로 정하고, 제5조①단서·③이 일반 가입금액을 여기에 적용하지 않는다고 명시한다.
+  //   종전에는 타입에 선언조차 없어 리터럴만 막혔고(초과 속성 검사), 변수 경유·외부 데이터는
+  //   통과해 런타임이 **조용히 폐기**했다(실측: 네 경로 × 세 축 모두 접근자 호출 0회).
+  //   ⚠ 중증 MRI의 500만원 상한은 별도 축 `priorAnnualInpatientDeductible`을 쓴다.
+  //     `priorAnnualDeductible`(일반 축)과 합치지 않는다.
+  annualCoverageLimit?: never;
+  outpatientCoverageLimit?: never;
+  priorAnnualDeductible?: never;
 }
 
 export interface Gen2026CriticalMskInput extends Gen2026SpecialBase {

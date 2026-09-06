@@ -9,17 +9,15 @@ import { calc2026 } from "./generation2026";
 import { CapCode, ClaimLineResult, Gen2026MultiClaimInput, Gen2026NonBenefitItem, MultiClaimResult, Severity } from "./types";
 
 /**
- * ⚠ 관용 정규화. **이 파일에 남은 사용처는 `priorAnnualDeductible` 한 곳뿐이다.**
- *   기존 지급보험금 축은 엄격 검증으로 옮겨져 검증된 원값을 그대로 쓴다(아래 `paidRaw`).
- *   남겨 둔 이유는 누적 공제금액 축의 정리가 이번 범위가 아니기 때문이다 — 그 축은
- *   C군이 확정된 값만 검증하고 미입력은 `0`을 자리값으로 쓰는데, 그 정책 자체를 이번에
- *   손대면 500만원 상한 HOLD와 얽힌 계약을 함께 건드리게 된다.
- *   ⚠ 새 축에 이것을 다시 쓰지 않는다. 사용처 개수를 검사로 고정해 두었다.
- *   ⚠ 2·3세대 `multiClaim.ts`, 5세대 `specialItem2026.ts`·`roomCharge2026.ts`는 각자
- *     자기 사본을 가지며 이번 변경 범위가 아니다.
+ * ⚠ 관용 정규화 `nonNegInt()`를 이 파일에서 **삭제했다(G-30).** 마지막 사용처였던
+ *   `priorAnnualDeductible`이 C군에서 검증한 값을 그대로 쓰게 되면서(단일 읽기) 이 함수를
+ *   지날 값이 남지 않았다. 종전에는 `Number.isFinite(v) ? Math.max(0, Math.floor(v)) : 0`이라
+ *   두 번째 읽기의 음수·소수·문자열·객체를 조용히 0으로 세탁했다.
+ *   ⚠ 남겨 두면 다음에 추가되는 축이 다시 그 관용을 타고 검증을 우회한다 —
+ *     G-26이 공용 `isNum()`을, G-29가 `specialItem2026`의 같은 함수를 폐기한 이유와 같다.
+ *   ⚠ 2·3세대 `multiClaim.ts`는 자기 사본을 가지며 이번 변경 범위가 아니다.
  */
-const nonNegInt = (v: number | undefined) =>
-  v !== undefined && Number.isFinite(v) ? Math.max(0, Math.floor(v)) : 0;
+
 
 /**
  * 통원 카운터 검증. **회와 일이 같은 형식 규칙을 쓴다** — 둘 다 0 이상의 안전 정수다.
@@ -65,6 +63,16 @@ const readCount = (o: object | undefined, key: string): unknown =>
  *   ⚠ `priorAnnualDeductible`은 여기 넣지 않는다. 이 묶음이 **실제로 소비하는** 축이라
  *     아래에서 경로·값을 따로 검증한다.
  */
+/**
+ * 급여 묶음에서 쓰이지 않는 금액 축 (G-30).
+ *   세 축 모두 비급여 특별약관 제5조①의 축이라 급여에는 대응 축이 없다.
+ *   ⚠ 순서가 안내 우선순위다. 여러 키가 동시에 실려도 먼저 찾은 키 하나만 안내한다.
+ *   ⚠ `priorAnnualDeductible`은 여기 넣지 않는다 — C군이 급여 전용 안내를 이미 갖고 있다.
+ */
+const BENEFIT_UNUSED_MONEY_KEYS = [
+  "priorAnnualInsurancePaid", "annualCoverageLimit", "outpatientCoverageLimit",
+] as const;
+
 const SPECIAL_ITEM_ONLY_KEYS = [
   "priorAnnualInpatientDeductible", "priorAnnualCoveredCount", "priorAnnualTreatmentActCount",
   "approvedThroughVisit", "injectionPurpose", "item", "lines", "route", "stays",
@@ -287,6 +295,27 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
         `받은 값: ${showValue(strayVisits ?? strayDays)}`,
       ]);
     }
+    // ── 급여 묶음의 미사용 금액 축 stray 거부 (G-30) ────────────────
+    //   연간 보험가입금액·통원 가입금액·기존 지급보험금 세 축은 모두 **비급여 특별약관**의
+    //   축이다(제5조① — "(1)상해비급여에 대하여… (2)질병비급여에 대하여…"). 급여 묶음에는
+    //   대응 축이 없어 이 엔진이 어디에서도 읽지 않는다.
+    //   ⚠ 종전에는 **조용히 폐기**됐다(실측: 세 축 모두 접근자 호출 0회 — 결과가 미제공과
+    //     완전히 같았던 이유는 반영돼서가 아니라 읽히지 않아서다).
+    //   ⚠ 값이 `0`이어도 막는다 — 바로 위 통원 카운터와 같은 계약이다.
+    //   ⚠ 위 카운터 안내가 **먼저**다. 이 블록을 그 뒤에 두어 종전 우선순위를 유지한다.
+    //   ⚠ 각 키를 한 번만 읽고, 목록 순서대로 먼저 찾은 키만 안내한다.
+    //   ⚠ `priorAnnualDeductible`은 여기 넣지 않는다 — 아래 C군이 급여 전용 안내를 이미
+    //     갖고 있고, 한 축을 두 자리에서 막으면 안내가 갈린다.
+    for (const key of BENEFIT_UNUSED_MONEY_KEYS) {
+      const got = readCount(bf, key);
+      if (got === undefined) continue;
+      return blocked([
+        `${key}은(는) 비급여 특별약관의 금액 축입니다(제5조 제1항 — 상해비급여·질병비급여 각각에 대해 따로 정합니다). 급여 계산에는 쓰이지 않습니다.`,
+        "급여의 본인부담금은 국민건강보험 본인부담률과 약관의 공제 기준으로 정해지며, 이 세 축을 쓰지 않습니다.",
+        "쓰이지 않는 입력을 조용히 버리면 반영했다고 오해할 수 있어 계산하지 않았습니다.",
+        `받은 값: ${showValue(got)}`,
+      ]);
+    }
   }
 
   // ── A군: 2·3세대 전용 레거시 필드 ─────────────────────────────────
@@ -418,6 +447,9 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
   //     그래서 **미지정은 후보로 두고** 기존 안내가 제 역할을 하게 둔다.
   //   ⚠ 합산 범위(상해·질병 및 3대비급여를 하나로 세는지)는 확정되지 않았고
   //     (GEN2026-CRITICAL-DEDUCTIBLE-POOL-SCOPE = HOLD) 이 검증은 그것을 건드리지 않는다.
+  //   ⚠ 여기서 읽은 값을 아래 계산이 그대로 쓴다(G-30). 종전에는 `runBundle`이
+  //     `nonNegInt(nb?.priorAnnualDeductible)`로 다시 읽어 **2회**였다.
+  let checkedDeductible: number | undefined;
   {
     const deductible = readCount(input, "priorAnnualDeductible");
     if (deductible !== undefined) {
@@ -452,6 +484,32 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
           `받은 값: ${showValue(deductible)}`,
         ]);
       }
+      // ⚠ 검증한 값을 그대로 아래 계산에 넘긴다. 여기까지 온 값은 0 이상의 안전한 정수다.
+      checkedDeductible = deductible as number;
+    }
+  }
+
+  // ── D군: outpatientCoverageLimit — 통원에서만 소비한다 (G-30) ─────
+  //   통원 가입금액은 특별약관1·2 제3조 (1)①·(2)① 표의 **통원 행**에만 있는 한도다
+  //   (중증은 1회당, 비중증은 1일당). 입원 행에는 이 축이 없다.
+  //   ⚠ 종전에는 비급여 **입원**에 실려 오면 조용히 폐기됐다(실측: 접근자 호출 0회 —
+  //     `usesOutpatientLimit = !!nb && visit === "outpatient"`가 이름에 닿지 않았다).
+  //     급여 묶음의 같은 축은 위 급여 stray 블록이 막는다.
+  //   ⚠ 값이 `0`이어도 막는다 — 형제 축(통원 카운터·누적 공제금액)과 같은 계약이다.
+  //   ⚠ **C군 뒤, 활성 축 검증 앞**이다. 위 preflight·통원 카운터·공제금액 안내가 모두
+  //     앞서므로 종전 안내 우선순위가 바뀌지 않는다.
+  //   ⚠ 한 번만 읽는다. 검사한 값과 안내에 표시하는 값이 같다.
+  //   ⚠ 타입은 `visit`으로 좁힐 수 없다(호출부가 `visit`을 변수로 넘기므로 유니온을 쪼개면
+  //     정상 화면이 `as` 없이는 컴파일되지 않는다). 그래서 이 축만 런타임으로 닫는다.
+  if (nb && nb.visit === "inpatient") {
+    const strayOut = readCount(nb, "outpatientCoverageLimit");
+    if (strayOut !== undefined) {
+      return blocked([
+        "통원 가입금액(outpatientCoverageLimit)은 통원 보상에만 적용됩니다(특별약관1·2 제3조 (1)제1항·(2)제1항 <구분·보상금액>의 통원 행 — 중증은 1회당, 비중증은 1일당).",
+        "입원 보상에는 이 한도가 없고 연간 보험가입금액(annualCoverageLimit)만 적용됩니다.",
+        "쓰이지 않는 입력을 조용히 버리면 한도를 반영했다고 오해할 수 있어 계산하지 않았습니다.",
+        `받은 값: ${showValue(strayOut)}`,
+      ]);
     }
   }
 
@@ -584,7 +642,11 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
     // 특별약관1 제5조⑤ 500만원 상한의 누적 대상은 약관상 **공제금액**이다(인쇄 p.280).
     //   ⚠ single.ownPay를 누적하면 안 된다. 연간 보험가입금액 한도로 잘려 추가 부담한 금액이
     //     섞여 pool이 과대 소진되고, 이후 건의 공제가 사라져 보험금이 과다 산출된다.
-    let deductiblePaid = nonNegInt(nb?.priorAnnualDeductible);
+    // ⚠ **한 번만 읽는다(G-30).** 종전에는 위 C군 검증이 한 번, 여기가 또 한 번 읽어
+    //   중증·입원·상급종합/종합 경로에서 **2회**였다. 값이 달라지는 접근자에서 검증한 값과
+    //   계산에 쓰는 값이 갈리고, 두 번째 값은 `nonNegInt`가 조용히 세탁했다.
+    //   G-23·G-26·G-28·G-29가 다른 축에 세운 계약과 같다. 위에서 검증한 값을 그대로 쓴다.
+    let deductiblePaid = checkedDeductible ?? 0;
     // ⚠ 두 카운터 모두 정규화하지 않는다. 대상 통원 경로에서는 위에서 미입력·잘못된 값을
     //   이미 차단했고, 그 밖의 경로에서는 실려 오는 것 자체가 차단된다. 여기서 ?? 0은
     //   "쓰이지 않는 축"의 자리값일 뿐 미입력을 0으로 추정하는 것이 아니다.

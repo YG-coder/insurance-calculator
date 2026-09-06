@@ -200,21 +200,35 @@ console.log("\n[G-21] 6. 접근자 호출 횟수 — 읽는 계약을 결과와 
     severity: "non_critical", visit: "outpatient", amounts: [300_000, 300_000],
     priorAnnualOutpatientDays: 0, priorAnnualInsurancePaid: 300_000 }, 400_000);
   check("HOLD 이중 실행 경로: 접근자 1회", b.reads === 1, `reads=${b.reads}`);
+  // ⚠ **계약이 바뀌었다(G-30).** G-21 시점에는 급여가 이 이름을 **읽지 않아** 조용히
+  //   폐기했고, 그 사실(접근자 0회)을 여기서 고정하고 있었다. 후속 과제로 남겼던 그 조용한
+  //   폐기를 G-30이 닫았다 — 이 축은 비급여 특별약관 제5조①의 축이라 급여에 대응 축이 없다.
+  //   조용한 폐기를 막으려면 값을 **읽어야** 하므로 접근자도 1회 실행되고, 던지는 접근자의
+  //   예외는 전파된다. 그 대상은 **종전에 조용히 폐기하며 성공하던 입력뿐**이다.
   const c = probe(BF(), 400_000);
-  check("급여(미사용 경로): 접근자 0회", c.reads === 0, `reads=${c.reads}`);
+  check("급여(미사용 경로): 접근자 정확히 1회", c.reads === 1, `reads=${c.reads}`);
+  check("급여(미사용 경로): 읽은 값으로 stray를 차단한다", isBlocked(c.x, 300_000), shape(c.x));
   let boomReads = 0;
   const boom = { ...BF() };
   Object.defineProperty(boom, "annualCoverageLimit", { get() { boomReads++; throw new Error("touched"); }, enumerable: true, configurable: true });
   const cb = wrap(() => calculateMany2026(boom as never));
-  check("급여: 던지는 접근자가 실행되지 않는다", boomReads === 0, `reads=${boomReads}`);
-  check("급여: 예외로 죽지 않고 결과가 종전과 같다", !threw(cb) && shape(cb) === shape(bf()), shape(cb));
+  check("급여: 던지는 접근자는 전파된다(막으려면 읽어야 한다)", boomReads === 1 && threw(cb), `reads=${boomReads}`);
+  // 선행 차단 경로에서는 종전 그대로 읽지 않는다.
+  let preReads = 0;
+  const pre = { ...BF({ amounts: ["abc"] }) };
+  Object.defineProperty(pre, "annualCoverageLimit", { get() { preReads++; throw new Error("x"); }, enumerable: true, configurable: true });
+  check("급여: 진료비가 먼저 무효면 접근자 0회이고 예외도 없다",
+    !threw(wrap(() => calculateMany2026(pre as never))) && preReads === 0, `reads=${preReads}`);
   const d = probe(NB(), "400000");
   check("무효값도 접근자 1회 뒤 차단", d.reads === 1 && isBlocked(d.x, 2_000_000), `reads=${d.reads}`);
-  // 급여에 실려 온 stray 값은 종전대로 조용히 폐기된다(후속 과제).
-  const bfRef = shape(bf());
-  for (const [label, v] of [["정상값", 400_000], ...BAD] as [string, unknown][]) {
-    check(`급여 + ${label} → 종전과 같은 결과(조용한 폐기 유지)`, shape(bf({ annualCoverageLimit: v })) === bfRef);
+  // 급여에 실려 온 stray는 값과 무관하게 차단된다(숫자 0 포함).
+  for (const [label, v] of [["숫자 0", 0], ["정상값", 400_000], ...BAD] as [string, unknown][]) {
+    check(`급여 + ${label} → stray 차단(진료비 합계 보존)`,
+      isBlocked(wrap(() => calculateMany2026(BF({ annualCoverageLimit: v }) as never)), 300_000));
   }
+  check("급여: 축을 싣지 않으면 종전대로 계산한다", !isBlocked(bf(), 300_000));
+  check("급여: 명시적 undefined는 미제공과 같다",
+    shape(bf({ annualCoverageLimit: undefined })) === shape(bf()));
 }
 
 console.log("\n[G-21] 7. 안내 우선순위 — 앞선 검증이 가려지지 않는다");
@@ -278,8 +292,13 @@ console.log("\n[G-21] 9. G-20·다른 진입점·HOLD 무변경");
     severity: "critical", item: "injection", injectionPurpose: "general",
     lines: [{ amount: 1_000_000, visit: "outpatient", tier: "clinic" }], priorAnnualCoveredCount: 0,
     annualCoverageLimit: v } as never));
-  check("별도 보장종목: 이 축을 쓰지 않는다(값과 무관하게 같은 결과)",
-    shape(item(400_000)) === shape(item("abc")) && shape(item(400_000)) === shape(item(undefined)), shape(item("abc")));
+  // ⚠ **계약이 바뀌었다(G-30).** 종전에는 별도 보장종목이 이 축을 **조용히 폐기**해
+  //   값과 무관하게 결과가 같았다(접근자 호출 0회). 이제는 값과 무관하게 **거부**한다 —
+  //   (3) 별도 보장종목의 한도는 <표1>이 항목별로 따로 정하고 일반 가입금액을 쓰지 않는다.
+  check("별도 보장종목: 이 축을 쓰지 않고 값과 무관하게 거부한다(G-30)",
+    shape(item(400_000)) === shape(item("abc")) && shape(item(400_000)) === shape(item(0))
+    && statusOf(item(400_000)) === "PENDING_UNVERIFIED", shape(item("abc")));
+  check("별도 보장종목: 축을 싣지 않으면 종전대로 계산한다", statusOf(item(undefined)) === "OK");
   // HOLD는 그대로다.
   const eng = readFileSync("src/lib/insurance/engine/multiClaim2026.ts", "utf8");
   check("지급 0원 HOLD 이중 실행·fingerprint 비교가 그대로",
@@ -326,9 +345,9 @@ console.log("\n[G-21] 10. 소스 계약");
   const iDeduct = body.indexOf('readCount(input, "priorAnnualDeductible")');
   check("검증 순서: 누적 공제금액 → 지급보험금 → 연간 가입금액 → 계산",
     iDeduct > 0 && iDeduct < iPaid && iPaid < iLimit && iLimit < iRun, `${iDeduct}/${iPaid}/${iLimit}/${iRun}`);
-  check("nonNegInt의 남은 사용처는 여전히 priorAnnualDeductible 한 곳뿐이다",
-    (body.match(/nonNegInt\([^)]*\)/g) ?? []).length === 1
-    && (body.match(/nonNegInt\([^)]*\)/g) ?? [])[0] === "nonNegInt(nb?.priorAnnualDeductible)");
+  // ⚠ **낡은 계약을 교체했다(G-30).** 위치·기존 의미("이 축이 관용 파서를 거치지 않는다")는
+  //   그대로다. G-30이 마지막 사용처(누적 공제금액)를 단일 읽기로 옮기며 함수를 삭제했다.
+  check("nonNegInt가 이 파일에서 사라졌다(G-30)", !/nonNegInt/.test(body));
   // 범위 밖 파일은 그대로다.
   const rc = readFileSync("src/lib/insurance/engine/roomCharge2026.ts", "utf8");
   // ⚠ 계약 갱신(G-22): 그 함수도 검증된 원값만 받게 바뀌었다. 이 커밋이 손대지 않았다는

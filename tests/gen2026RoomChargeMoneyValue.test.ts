@@ -319,7 +319,7 @@ console.log("\n[G-22] 9. 소스 계약");
     && /return rejected\("연간 보험가입금액\(annualCoverageLimit\)", limitRaw\);/.test(body));
   // 다른 엔진은 자기 사본을 그대로 가진다.
   for (const [label, path] of [["2·3세대", "src/lib/insurance/engine/multiClaim.ts"],
-    ["5세대 다회", "src/lib/insurance/engine/multiClaim2026.ts"]] as [string, string][]) {
+    /* G-30에서 삭제 */] as [string, string][]) {
     check(`${label} 엔진의 nonNegInt 사본은 그대로`, /const nonNegInt =/.test(readFileSync(path, "utf8")));
   }
   // ⚠ **낡은 계약을 교체했다(G-29).** 위치(다른 엔진의 사본 확인)와 기존 의미("이 커밋이

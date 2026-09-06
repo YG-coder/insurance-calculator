@@ -121,6 +121,15 @@ function specOf(input: Gen2026SpecialItemInput): ItemSpec {
 //   ⚠ 모르는 값이 else 분기나 기본 반환을 타고 MRI·비중증·일반 주사 산식으로 떨어지면
 //     "계산 못 함"이 아니라 **틀린 보험금**이 나온다. 값을 확인하기 전에는 계산하지 않는다.
 // ─────────────────────────────────────────────────────────────────────
+/**
+ * 별도 보장종목에서 쓰이지 않는 금액 축 (G-30).
+ *   셋 다 일반 (1)(2) 전용이다. 순서가 안내 우선순위이며, 여러 키가 동시에 실려도
+ *   먼저 찾은 키 하나만 안내한다(형제 목록 `UNUSED_KEYS`·`SPECIAL_ITEM_ONLY_KEYS`와 같다).
+ */
+const SPECIAL_ITEM_UNUSED_MONEY_KEYS = [
+  "annualCoverageLimit", "outpatientCoverageLimit", "priorAnnualDeductible",
+] as const;
+
 const SPECIAL_ITEM_VALUES: readonly string[] = Object.keys(GEN2026_SPECIAL_ITEM_LABEL);
 const PURPOSE_VALUES: readonly string[] = Object.keys(GEN2026_INJECTION_PURPOSE_LABEL);
 
@@ -289,6 +298,36 @@ function validateItemInput(
   if (pool !== undefined
     && !(typeof pool === "number" && Number.isSafeInteger(pool) && pool >= 0)) {
     return rejected("누적 공제금액(priorAnnualInpatientDeductible)은 0 이상의 정수여야 합니다 —", pool);
+  }
+
+  // ── 별도 보장종목에 쓰이지 않는 금액 축 stray 거부 (G-30) ────────
+  //   (3) 별도 보장종목의 한도는 <표1>이 항목별로 따로 정하고, 제5조①단서·③이 일반 (1)(2)의
+  //   가입금액을 여기에 적용하지 않는다고 명시한다. 그래서 아래 세 축은 어느 별도 보장종목
+  //   에서도 소비되지 않는다 — 일반 (1)(2)로 되돌아온 `route: "general"`에서만 쓰인다.
+  //     `annualCoverageLimit`     연간 보험가입금액 (제5조① — 일반 (1)(2) 전용)
+  //     `outpatientCoverageLimit` 통원 가입금액 (제3조 (1)①·(2)① 표의 통원 행 전용)
+  //     `priorAnnualDeductible`   일반 축의 누적 공제금액 (중증 MRI는 별도 축
+  //                               `priorAnnualInpatientDeductible`을 쓴다 — 합치지 않는다)
+  //   ⚠ 종전에는 네 경로 모두에서 **조용히 폐기**됐다(실측: 세 축 모두 접근자 호출 0회 —
+  //     값 `5,000,000`의 결과가 미제공과 완전히 같았던 이유는 반영돼서가 아니라 읽히지
+  //     않아서다). 타입에는 선언조차 없어 리터럴은 tsc가 막았지만, 변수 경유·외부 데이터는
+  //     타입을 우회했다. 이번에 `?: never`로 함께 닫는다.
+  //   ⚠ 값이 `0`이어도 막는다 — 형제 축(통원 카운터·보상한 횟수·누적 공제금액·승인 구간
+  //     축)과 같은 계약이다.
+  //   ⚠ **형제 두 축(covered·pool) 바로 뒤**다. 목록 순서가 안내 우선순위이고, 한 축만
+  //     다른 자리에 두지 않는다. 경로 대조는 이미 위에서 끝났으므로 경로가 틀린 입력에서는
+  //     여기에 닿지 않는다(접근자 0회 — G-29의 계약).
+  //   ⚠ `in`이 아니라 `!== undefined`로 본다. 호출부의 `{ ...base, key: undefined }` 패턴을
+  //     막지 않기 위해서다.
+  if (raw.route === "special_item") {
+    for (const key of SPECIAL_ITEM_UNUSED_MONEY_KEYS) {
+      const got: unknown = raw[key];
+      if (got === undefined) continue;
+      return rejected(
+        `${key}은(는) 일반 상해·질병 비급여의 금액 축이라 별도 보장종목(3대비급여·비중증 MRI) 계산에 쓰이지 않습니다. 이 보장종목의 한도는 <표1>이 항목별로 따로 정하고, 통원 가입금액과 연간 보험가입금액은 적용되지 않습니다(특별약관1 제5조 제1항 단서·제3항) —`,
+        got,
+      );
+    }
   }
 
   if (raw.route === "special_item") {

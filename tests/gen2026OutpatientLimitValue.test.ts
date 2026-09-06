@@ -250,19 +250,36 @@ console.log("\n[G-24] 6. 읽는 계약 — 결과가 아니라 접근자 호출 
   check("단건 중증 통원: 활성 축을 정확히 1회 읽는다", s1.reads === 1 && statusOf(s1.x) === "OK", `reads=${s1.reads}`);
   const s2 = probe(SB("non_critical", "outpatient"), P, one, calc2026 as never);
   check("단건 비중증 통원: 1회", s2.reads === 1);
-  check("단건 비급여 입원: 0회(미사용 경로)", probe(SB("critical", "inpatient"), P, one, calc2026 as never).reads === 0);
-  check("단건 급여 통원: 0회(미사용 경로)",
-    probe({ amount: 1_000_000, coverage: "benefit", visit: "outpatient", nhisCoinsuranceRate: 0.3 }, P, one, calc2026 as never).reads === 0);
+  // ⚠ **계약이 바뀌었다(G-30).** G-24 시점에는 단건의 미사용 두 경로(비급여 입원·급여)가
+  //   이 이름을 **읽지 않아** 조용히 폐기했고 그 사실을 여기서 고정하고 있었다. G-30이 그
+  //   조용한 폐기를 닫았다 — 통원 가입금액은 통원 행에만 있는 한도다. 이제 1회 읽고 막는다.
+  check("단건 비급여 입원: 1회 읽고 차단(G-30)", (() => {
+    const r = probe(SB("critical", "inpatient"), P, one, calc2026 as never);
+    return r.reads === 1 && statusOf(r.x) === "PENDING_UNVERIFIED";
+  })());
+  check("단건 급여 통원: 1회 읽고 차단(G-30)", (() => {
+    const r = probe({ amount: 1_000_000, coverage: "benefit", visit: "outpatient", nhisCoinsuranceRate: 0.3 }, P, one, calc2026 as never);
+    return r.reads === 1 && statusOf(r.x) === "PENDING_UNVERIFIED";
+  })());
   // ⚠ 종전에는 다회가 2N+2회였다(행 3개면 8회). 그 수치를 못박는다.
   for (const rows of [1, 2, 3, 4]) {
     const m = probe(MB("critical", "outpatient", rows), O, one, calculateMany2026 as never);
     check(`다회 중증 통원 ${rows}행: 행 수와 무관하게 1회(종전 ${2 * rows + 2}회)`, m.reads === 1, `reads=${m.reads}`);
   }
   check("다회 비중증 통원 3행: 1회", probe(MB("non_critical", "outpatient", 3), O, one, calculateMany2026 as never).reads === 1);
-  check("다회 비급여 입원 3행: 0회(미사용 경로)", probe(MB("critical", "inpatient", 3), O, one, calculateMany2026 as never).reads === 0);
-  check("다회 급여 통원: 0회(미사용 경로)",
-    probe({ cause: "disease", coverage: "benefit", visit: "outpatient", amounts: [1_000_000], nhisCoinsuranceRate: 0.3 },
-      O, one, calculateMany2026 as never).reads === 0);
+  // ⚠ **계약이 바뀌었다(G-30).** G-24 시점에는 다회의 미사용 두 경로(비급여 입원·급여)가
+  //   이 이름을 **읽지 않아** 조용히 폐기했고 그 사실을 여기서 고정하고 있었다. G-30이 그
+  //   조용한 폐기를 닫았다 — 통원 가입금액은 통원 행에만 있는 한도다. 이제 정확히 1회 읽고
+  //   차단한다. **단건(`calc2026`)의 `perVisitCoverageLimit`은 이번 범위가 아니라 그대로다.**
+  check("다회 비급여 입원 3행: 1회 읽고 차단(G-30)", (() => {
+    const r = probe(MB("critical", "inpatient", 3), O, one, calculateMany2026 as never);
+    return r.reads === 1 && multiBlocked(r.x, 3_000_000);
+  })());
+  check("다회 급여 통원: 1회 읽고 차단(G-30)", (() => {
+    const r = probe({ cause: "disease", coverage: "benefit", visit: "outpatient", amounts: [1_000_000], nhisCoinsuranceRate: 0.3 },
+      O, one, calculateMany2026 as never);
+    return r.reads === 1 && multiBlocked(r.x, 1_000_000);
+  })());
   // 무효값도 한 번만 읽고 막는다.
   const bad = probe(MB("critical", "outpatient", 3), O, () => -1, calculateMany2026 as never);
   check("다회: 무효값도 1회만 읽고 차단한다", bad.reads === 1 && multiBlocked(bad.x, 3_000_000), `reads=${bad.reads} ${shape(bad.x)}`);
@@ -274,11 +291,19 @@ console.log("\n[G-24] 6. 읽는 계약 — 결과가 아니라 접근자 호출 
   check("단건 활성: 던지는 접근자도 1회만 실행된다", threw(bs.x) && bs.reads === 1, `reads=${bs.reads}`);
   const bm = probe(MB("critical", "outpatient", 3), O, boom, calculateMany2026 as never);
   check("다회 활성: 던지는 접근자가 1회만 실행된다(종전 8회 시도)", threw(bm.x) && bm.reads === 1, `reads=${bm.reads}`);
-  check("단건 입원: 던지는 접근자가 실행되지 않는다", !threw(probe(SB("critical", "inpatient"), P, boom, calc2026 as never).x));
-  check("다회 입원: 던지는 접근자가 실행되지 않는다", !threw(probe(MB("critical", "inpatient", 3), O, boom, calculateMany2026 as never).x));
-  check("다회 급여: 던지는 접근자가 실행되지 않는다",
-    !threw(probe({ cause: "disease", coverage: "benefit", visit: "outpatient", amounts: [1_000_000], nhisCoinsuranceRate: 0.3 },
+  // ⚠ **계약이 바뀌었다(G-30).** 조용한 폐기를 막으려면 읽어야 하므로 단건 입원에서도 전파된다.
+  check("단건 입원: 던지는 접근자가 전파된다(G-30)", threw(probe(SB("critical", "inpatient"), P, boom, calc2026 as never).x));
+  check("단건 입원: 치료유형이 먼저 미지정이면 실행되지 않는다(종전 그대로)",
+    !threw(probe({ amount: 1_000_000, coverage: "non_benefit", visit: "inpatient", tier: "clinic", severity: "critical" }, P, boom, calc2026 as never).x));
+  // ⚠ **계약이 바뀌었다(G-30).** 조용한 폐기를 막으려면 값을 읽어야 하므로, 다회의 미사용
+  //   두 경로에서도 던지는 접근자가 전파된다. 그 대상은 종전에 조용히 폐기하며 성공하던
+  //   입력뿐이고, 선행 preflight가 막는 경로는 아래 검사대로 종전 그대로다.
+  check("다회 입원: 던지는 접근자가 전파된다(G-30)", threw(probe(MB("critical", "inpatient", 3), O, boom, calculateMany2026 as never).x));
+  check("다회 급여: 던지는 접근자가 전파된다(G-30)",
+    threw(probe({ cause: "disease", coverage: "benefit", visit: "outpatient", amounts: [1_000_000], nhisCoinsuranceRate: 0.3 },
       O, boom, calculateMany2026 as never).x));
+  check("다회 입원: 진료비가 먼저 무효면 실행되지 않는다(종전 그대로)",
+    !threw(probe({ ...MB("critical", "inpatient", 3), amounts: ["abc"] }, O, boom, calculateMany2026 as never).x));
   // ⚠ 기존 preflight가 막는 경로에서도 실행되지 않는다(G-23의 계약과 같다).
   check("다회: 통원 카운터 미입력 preflight가 막으면 실행되지 않는다",
     !threw(probe({ cause: "disease", coverage: "non_benefit", visit: "outpatient", severity: "critical",
@@ -333,10 +358,13 @@ console.log("\n[G-24] 8. 다른 축·다른 경로·HOLD 무회귀");
 {
   // 급여·입원은 값과 무관하게 종전 그대로다.
   for (const [vlabel, v] of BAD) {
-    check(`단건 비급여 입원 + ${vlabel} → 종전 그대로 계산`, ins(SIn({ perVisitCoverageLimit: v })) === "700000");
-    check(`단건 급여 통원 + ${vlabel} → 종전 그대로 계산`, ins(SBf({ perVisitCoverageLimit: v })) === "700000");
-    check(`다회 비급여 입원 + ${vlabel} → 종전 그대로 계산`, ins(MIn({ outpatientCoverageLimit: v })) === "700000");
-    check(`다회 급여 통원 + ${vlabel} → 종전 그대로 계산(이 축을 읽지 않는다)`, shape(MBf({ outpatientCoverageLimit: v })) === shape(MBf()), shape(MBf({ outpatientCoverageLimit: v })));
+    // ⚠ **계약이 바뀌었다(G-30).** 두 미사용 경로는 이제 값과 무관하게 stray로 막는다.
+    check(`단건 비급여 입원 + ${vlabel} → stray 차단(G-30)`, statusOf(SIn({ perVisitCoverageLimit: v })) === "PENDING_UNVERIFIED", shape(SIn({ perVisitCoverageLimit: v })));
+    check(`단건 급여 통원 + ${vlabel} → stray 차단(G-30)`, statusOf(SBf({ perVisitCoverageLimit: v })) === "PENDING_UNVERIFIED", shape(SBf({ perVisitCoverageLimit: v })));
+    // ⚠ **계약이 바뀌었다(G-30).** 두 미사용 경로는 이제 값과 무관하게 stray로 차단한다.
+    //   단건 두 줄(위)은 이번 범위가 아니라 종전 그대로다.
+    check(`다회 비급여 입원 + ${vlabel} → stray 차단(G-30)`, multiBlocked(MIn({ outpatientCoverageLimit: v }), 1_000_000), shape(MIn({ outpatientCoverageLimit: v })));
+    check(`다회 급여 통원 + ${vlabel} → stray 차단(G-30)`, multiBlocked(MBf({ outpatientCoverageLimit: v }), 1_000_000), shape(MBf({ outpatientCoverageLimit: v })));
   }
   // 상급병실료는 이번 범위 밖이다 — 계산도 안내도 그대로다.
   const RC = (extra: Record<string, unknown> = {}) => wrap(() => calculateRoomCharge2026({

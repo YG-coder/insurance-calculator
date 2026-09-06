@@ -190,18 +190,24 @@ console.log("\n[G-17] 3. 활성 특약 축 — 무효값 차단");
   }
 }
 
-console.log("\n[G-17] 4. 비활성 축 stray는 종전대로 조용히 폐기된다(후속 항목)");
+// ⚠ **계약이 바뀌었다(G-30).** G-17 시점에는 비활성 축이 **조용히 폐기**됐고(접근자 호출
+//   0회) 그 사실을 여기서 고정하고 있었다. 후속 항목으로 남겼던 그 조용한 폐기를 G-30이
+//   닫았다 — 일반 보장과 3대비급여 특약은 서로 다른 금액 축을 쓰고, 값이 `0`이어도 차단한다.
+console.log("\n[G-17] 4. 비활성 축 stray를 **차단**한다 (G-30에서 전환)");
 {
-  // 일반 경로에 특약 축이 실려도, 특약 경로에 일반 축이 실려도 이번 커밋은 보지 않는다.
   for (const [label, base, key] of [
     ["일반 경로 + priorAnnualRiderPaid", GEN, "priorAnnualRiderPaid"],
     ["특약 경로 + priorAnnualInsurancePaid", RID, "priorAnnualInsurancePaid"],
   ] as [string, (e?: Record<string, unknown>) => unknown, string][]) {
-    const ref = shape(call(base()));
     for (const v of [0, 400_000, "abc", null, {}, NaN, 400_000n]) {
       const x = call(base({ [key]: v }));
-      check(`${label} = ${typeof v} → 종전과 같은 결과(조용한 폐기 유지)`, shape(x) === ref, shape(x));
+      check(`${label} = ${typeof v} → stray 차단(진료비 합계 보존)`,
+        isBlocked(x, AMT) && notes(x).includes(key), shape(x));
     }
+    check(`${label}: 축을 싣지 않으면 종전대로 계산한다`, !isBlocked(call(base()), AMT));
+    // 명시적 undefined는 미제공과 같다 — 호출부의 `{ ...common, key: undefined }` 패턴을 막지 않는다.
+    check(`${label}: 명시적 undefined는 미제공과 같다`,
+      shape(call(base({ [key]: undefined }))) === shape(call(base())));
   }
 }
 
@@ -323,8 +329,9 @@ console.log("\n[G-17] 8. 소스 계약");
   //   `toJSON()` 예외에서 안내를 만들다 죽던 것을 고쳤다), 확인 대상을 새 표시로 옮긴다.
   //   요지(이 커밋이 그 자리를 건드리지 않았다)는 같다. 새 계약은
   //   tests/multiClaimNoteSafeDisplay.test.ts가 본다.
-  check("다른 안내 6곳은 안전 표시(showValue)를 쓴다",
-    (body.match(/받은 값: \$\{showValue\(/g) ?? []).length === 6
+  // ⚠ 계약 갱신(G-30): 미사용 금액 축 stray 안내가 한 곳 늘어 6 → 7이다.
+  check("다른 안내 7곳은 안전 표시(showValue)를 쓴다",
+    (body.match(/받은 값: \$\{showValue\(/g) ?? []).length === 7
     && !/받은 값: \$\{JSON\.stringify/.test(body),
     String((body.match(/받은 값: \$\{showValue\(/g) ?? []).length));
   check("G-16 금액 계약이 그대로",
@@ -338,7 +345,12 @@ console.log("\n[G-17] 8. 소스 계약");
   check("5세대 엔진은 손대지 않았다", /const consumes = amount > 0 &&/.test(g5));
   const ui = readFileSync("src/components/calculators/HealthCalcMulti2021.tsx", "utf8");
   check("UI는 축을 계속 분리해 전달한다",
-    /priorAnnualRiderPaid: isRider \? money\.priorPaid : undefined,/.test(ui)
+    // ⚠ **낡은 앵커를 교체했다(G-30).** 위치·기존 의미("화면이 활성 축 하나만 전달한다")는
+    //   그대로다. 종전에는 `common`이 `priorAnnualRiderPaid: isRider ? … : undefined`로
+    //   일반 세 분기에도 그 필드를 실었고(값은 undefined지만 **속성은 존재**), 타입이 이를
+    //   막지 못했다. G-30이 금액 축을 `common`에서 내리고 각 분기에서만 싣게 바꿨다.
+    !/priorAnnualRiderPaid: isRider \? money\.priorPaid : undefined,/.test(ui)
+    && (ui.match(/priorAnnualRiderPaid: money\.priorPaid,/g) ?? []).length === 3
     && (ui.match(/priorAnnualInsurancePaid: money\.priorPaid,/g) ?? []).length === 3);
 }
 

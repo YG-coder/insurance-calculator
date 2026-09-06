@@ -251,8 +251,13 @@ console.log("\n[G-15] 7. 소스 계약");
 
   const hold = readFileSync("tests/gen2026HoldStatus.test.ts", "utf8");
   check("FROZEN 표에 갱신 이유가 적혀 있다", /G-15에서 \*\*의도적으로\*\* 갱신했다\(종전 2c019bb8…\)/.test(hold));
-  check("FROZEN 표의 itemGuards 해시는 그대로다",
-    /"src\/lib\/insurance\/engine\/itemGuards\.ts": "ad08c2d9640544c5dc7faf9e328cac805ed9c2dfdd73409a05207e48d5ae110f"/.test(hold));
+  // ⚠ **낡은 계약을 교체했다(G-26).** 이 검사의 요지는 "G-15가 `generation2026.ts`만 바꿨고
+  //   공용 가드 파일은 건드리지 않았다"였다. G-26이 진료비 축을 닫으면서 `itemGuards.ts`의
+  //   `isNum`을 `isClaimAmount`로 교체했으므로 해시가 갱신됐다. 요지는 **G-15가 그 파일을
+  //   바꾸지 않았다**는 것이므로, 갱신 이유가 G-26으로 기록돼 있는지를 대신 고정한다.
+  check("FROZEN 표의 itemGuards 갱신 이유가 G-26으로 기록돼 있다",
+    /G-26에서 \*\*의도적으로\*\* 갱신했다\(종전 ad08c2d9…\)/.test(hold)
+    && /"src\/lib\/insurance\/engine\/itemGuards\.ts": "546f476a59ff0dd8ca85fd6e84c25eedeeaed80f63d042e1d662bdff0e1ebc94"/.test(hold));
 }
 
 console.log(`\n[G-15 급여 통원 입력 계약] ✅ ${pass} / ❌ ${fail}`);

@@ -431,16 +431,20 @@ console.log("\n[G-23] 10. 소스 계약");
     body.slice(iValidate, iCalc).indexOf("priorAnnualInsurancePaid") === -1);
   check("검증한 원값을 지역 상수로 고정한다",
     /const priorPaid = paidRaw as number \| undefined;/.test(body));
+  // ⚠ **낡은 계약 3건을 교체했다(G-26).** 형태만 바뀌었고 **G-23이 세운 계약은 그대로**다 —
+  //   `runOnce`가 검증된 원값을 인자로 받고, 두 해석이 같은 값에서 출발한다.
+  //   G-26이 진료비 배열도 같은 방식으로 넘기면서 `runOnce`의 인자와 `validateItemInput`의
+  //   반환 형태가 달라졌다(진료비를 돌려주므로 `null`이 아니라 `{ amounts }`).
   check("runOnce가 검증된 값을 인자로 받는다",
-    /priorPaid: number \| undefined,\n\): Gen2026SpecialItemResult \{/.test(body)
+    /priorPaid: number \| undefined, amounts: number\[\],\n\): Gen2026SpecialItemResult \{/.test(body)
     && /let paid = priorPaid \?\? 0;/.test(body));
-  check("두 해석이 같은 원값에서 출발한다",
-    /const counted = runOnce\(input, spec, true, priorPaid\);/.test(body)
-    && /const notCounted = runOnce\(input, spec, false, priorPaid\);/.test(body));
-  check("진입점의 검증 계약은 종전 그대로다",
-    /const invalid = validateItemInput\(rest\);/.test(body)
-    && /if \(invalid !== null\) return invalid;/.test(body)
-    && /\? calculateSpecialItem2026\(rest\)/.test(body));
+  check("두 해석이 같은 원값에서 출발한다(지급보험금·진료비 모두)",
+    /const counted = runOnce\(input, spec, true, priorPaid, amounts\);/.test(body)
+    && /const notCounted = runOnce\(input, spec, false, priorPaid, amounts\);/.test(body));
+  check("진입점의 검증 계약은 종전 그대로다(검증 → 거부면 반환 → 아니면 계산)",
+    /const checked = validateItemInput\(rest\);/.test(body)
+    && /if \("route" in checked\) return checked;/.test(body)
+    && /\? calculateSpecialItem2026\(rest, checked\.amounts\)/.test(body));
   check("이 파일에서 이 속성을 정확히 두 번만 읽는다(special_item 검증 1 + 일반 전환 전달 1)",
     (body.match(/\.priorAnnualInsurancePaid/g) ?? []).length === 2,
     String((body.match(/\.priorAnnualInsurancePaid/g) ?? []).length));
@@ -453,25 +457,24 @@ console.log("\n[G-23] 10. 소스 계약");
     && /let count = nonNegInt\(/.test(body) && /let poolUsed = nonNegInt\(/.test(body),
     String((body.match(/nonNegInt\(/g) ?? []).length));
   check("nonNegInt를 export하지 않는다", !/export const nonNegInt/.test(raw));
-  // ── G-22 보고 정정 ────────────────────────────────────────────────
-  //   G-22 커밋 메시지·문서에서 공용 isNum 호출부를 "4곳"이라고 적었으나 실제로는 5곳이었다.
-  //   `raw.amounts.every(isNum)`가 **함수 참조**라 `isNum(` 패턴에 걸리지 않았기 때문이다.
-  //   G-22가 두 곳을 전용 가드로 바꿨으므로 현재 남은 호출부는 3곳이다.
+  // ── G-22 보고 정정과 그 뒤 (G-26에서 교체) ───────────────────────
+  //   ⚠ **낡은 계약 3건을 교체했다.** G-22 커밋 메시지·문서는 공용 isNum 호출부를 "4곳"이라
+  //     적었으나 실제로는 5곳이었고(`raw.amounts.every(isNum)`가 함수 참조라 `isNum(`
+  //     패턴에 걸리지 않았다), G-22 이후 남은 사용처는 3곳이었다. 이 파일은 그 **3곳이
+  //     그대로 남아 있는지**를 고정했다. G-26이 그 3곳을 모두 진료비 전용 가드로 바꿔
+  //     사용처가 0이 되었고, 공용 `isNum`은 삭제됐다. 이제 **삭제되었는지**를 고정한다.
   const guards = readFileSync("src/lib/insurance/engine/itemGuards.ts", "utf8");
   const room = readFileSync("src/lib/insurance/engine/roomCharge2026.ts", "utf8");
   const roomBody = room.split("\n").filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join("\n");
-  check("공용 isNum의 정의가 그대로다(G-22에서 강화하지 않기로 했다)",
-    /export const isNum = \(v: unknown\) => typeof v === "number" && Number\.isFinite\(v\);/.test(guards));
-  check("이 파일의 isNum 사용은 진료비 두 축뿐이다(호출 1 + 함수 참조 1)",
-    (body.match(/isNum\(/g) ?? []).length === 1 && /raw\.amounts\.every\(isNum\)/.test(body),
-    String((body.match(/isNum\(/g) ?? []).length));
-  check("상급병실료의 isNum 사용은 진료비 축 1곳이다",
-    (roomBody.match(/isNum\(/g) ?? []).length === 1);
-  const isNumSites = (src: string) =>
-    (src.match(/isNum\(/g) ?? []).length + (src.match(/every\(isNum\)/g) ?? []).length;
-  check("공용 isNum 사용처는 저장소 전체에서 3곳이다(G-22 보고의 '2곳'은 함수 참조를 세지 않은 수치)",
-    isNumSites(body) === 2 && isNumSites(roomBody) === 1,
-    `${isNumSites(body)} + ${isNumSites(roomBody)}`);
+  check("공용 isNum이 삭제됐다(사용처 0)",
+    !/export const isNum/.test(guards) && !/\bisNum\b/.test(body) && !/\bisNum\b/.test(roomBody));
+  check("이 파일의 진료비 두 축이 진료비 전용 가드를 쓴다(행별 1 + 배열 원소 1)",
+    (body.match(/isClaimAmount\(/g) ?? []).length === 2,
+    String((body.match(/isClaimAmount\(/g) ?? []).length));
+  check("상급병실료의 진료비 축도 같은 가드를 쓴다(1곳)",
+    (roomBody.match(/isClaimAmount\(/g) ?? []).length === 1);
+  check("진료비 전용 가드는 0 이상의 안전한 정수만 통과시킨다",
+    /export const isClaimAmount = \(v: unknown\): v is number =>\n\s*typeof v === "number" && Number\.isSafeInteger\(v\) && v >= 0;/.test(guards));
   // HOLD·산식·한도는 그대로다.
   check("지급 0원 HOLD 안내가 그대로", /ZERO_PAY_HOLD_NOTES/.test(body)
     && /지급 보험금이 0원인 치료행위가 연간 보상 횟수를 소진하는지는 표준약관에 정해져 있지 않습니다\./.test(raw));

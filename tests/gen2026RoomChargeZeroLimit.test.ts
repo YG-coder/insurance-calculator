@@ -234,8 +234,11 @@ console.log("\n[G-25] 6. 다른 축·다른 경로 무회귀");
   check("지급보험금 무효는 종전대로 거부", isRejected(rc({ priorAnnualInsurancePaid: -1 })));
   // 진료비 축 — 계약이 다르다(0이 유효한 청구 행). 건드리지 않았다.
   check("진료비 0원 행은 종전대로 계산된다", calcShape(rc({ stays: [{ roomChargeTotal: 0, inpatientDays: 1 }] })).includes("ins=0"));
-  check("진료비 소수는 종전대로 통과한다(normalizeAmount 계약)",
-    !isRejected(rc({ stays: [{ roomChargeTotal: 400_000.9, inpatientDays: 10 }] })));
+  // ⚠ **낡은 계약을 교체했다(G-26).** G-25 시점에는 진료비 축이 공용 `isNum()`을 써서 소수가
+  //   통과한 뒤 `normalizeAmount`가 내림했다. G-26이 진료비 축을 0 이상의 안전한 정수로
+  //   닫았다. 이 파일의 요지(연간 가입금액 축의 0원 안내)는 그대로다.
+  check("진료비 소수는 이제 막힌다(G-26)",
+    isRejected(rc({ stays: [{ roomChargeTotal: 400_000.9, inpatientDays: 10 }] })));
   check("진료비 음수는 종전대로 거부", isRejected(rc({ stays: [{ roomChargeTotal: -1, inpatientDays: 10 }] })));
   // 진입점 경유도 같다.
   const viaItem = (extra: Record<string, unknown>) => wrap(() => calculateGen2026Item(RC(extra) as never));

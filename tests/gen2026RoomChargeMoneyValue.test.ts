@@ -224,15 +224,18 @@ console.log("\n[G-22] 7. 거부 반환 객체·첫 안내·계산 합계 계약"
 
 console.log("\n[G-22] 8. 다른 진입점·다른 축·HOLD 무회귀");
 {
-  // 진료비 두 축은 공용 isNum 그대로다 — 이번 범위가 아니다.
+  // ⚠ **낡은 계약 2건을 교체했다(G-26).** G-22 시점에는 진료비 축이 공용 `isNum()`(= 유한한
+  //   숫자)만 통과하면 됐고, 이 파일은 "음수는 통과하고 소수는 내림된다"를 **후속 과제로
+  //   남겨 둔 상태**로 고정했다. G-26이 세 진료비 축을 모두 0 이상의 안전한 정수로 닫았다.
+  //   이 파일의 요지(상급병실료의 **두 금액 축**은 진료비와 다른 계약이다)는 그대로다.
   const negAmount = wrap(() => calculateGen2026Item({ route: "special_item", coverage: "non_benefit",
     severity: "critical", item: "injection", injectionPurpose: "general",
     lines: [{ amount: -400_000, visit: "outpatient", tier: "clinic" }], priorAnnualCoveredCount: 0 } as never));
-  check("별도 보장종목: 음수 진료비가 종전대로 통과한다(후속 과제)", statusOf(negAmount) === "OK", shape(negAmount));
+  check("별도 보장종목: 음수 진료비가 이제 막힌다(G-26)", isRejected(negAmount), shape(negAmount));
   const fracAmount = wrap(() => calculateGen2026Item({ route: "special_item", coverage: "non_benefit",
     severity: "critical", item: "injection", injectionPurpose: "general",
     lines: [{ amount: 400_000.9, visit: "outpatient", tier: "clinic" }], priorAnnualCoveredCount: 0 } as never));
-  check("별도 보장종목: 소수 진료비가 종전대로 내림된다(후속 과제)", statusOf(fracAmount) === "OK");
+  check("별도 보장종목: 소수 진료비가 이제 막힌다(G-26 — 내림하지 않는다)", isRejected(fracAmount));
   // ⚠ **낡은 계약을 교체했다.** G-22 시점에는 별도 보장종목의 지급보험금이 아직 관용을 써서
   //   음수가 통과했다. G-23이 그 축을 닫았으므로 확인 대상을 새 계약으로 옮긴다.
   //   이 파일의 요지(상급병실료 진료비 두 축은 그대로다)는 아래 두 검사가 계속 고정한다.
@@ -242,8 +245,9 @@ console.log("\n[G-22] 8. 다른 진입점·다른 축·HOLD 무회귀");
     priorAnnualInsurancePaid: -400_000 } as never));
   check("별도 보장종목: 음수 지급보험금도 이제 막힌다(G-23)", isRejected(negPaidItem), shape(negPaidItem));
   // 이 파일의 진료비 축도 그대로다.
-  check("상급병실료 진료비: 소수는 종전대로 통과·내림",
-    statusOf(wrap(() => calculateRoomCharge2026({ ...RC(), stays: [{ roomChargeTotal: 400_000.9, inpatientDays: 10 }] } as never))) === "OK");
+  // ⚠ **낡은 계약을 교체했다(G-26).** 종전에는 소수가 통과해 `normalizeAmount`가 내림했다.
+  check("상급병실료 진료비: 소수가 이제 막힌다(G-26 — 내림하지 않는다)",
+    isRejected(wrap(() => calculateRoomCharge2026({ ...RC(), stays: [{ roomChargeTotal: 400_000.9, inpatientDays: 10 }] } as never))));
   check("상급병실료 진료비: 음수는 종전대로 거부",
     isRejected(wrap(() => calculateRoomCharge2026({ ...RC(), stays: [{ roomChargeTotal: -1, inpatientDays: 10 }] } as never))));
   check("상급병실료 진료비: undefined는 종전대로 거부",
@@ -267,24 +271,35 @@ console.log("\n[G-22] 9. 소스 계약");
     (body.match(/!nonNegSafeInt\(/g) ?? []).length === 2
     && /if \(paidRaw !== undefined && !nonNegSafeInt\(paidRaw\)\)/.test(body)
     && /if \(limitRaw !== undefined && !nonNegSafeInt\(limitRaw\)\)/.test(body));
-  // ⚠ 공용 isNum은 강화하지 않았다 — 진료비 축이 계속 쓴다.
+  // ⚠ **낡은 계약 3건을 교체했다(G-26).** G-22는 "공용 `isNum()`을 강화하지 않는다 —
+  //   진료비 축이 계속 쓴다"를 고정했다. 그 판단의 근거는 **진료비 축과 이 파일의 두 금액
+  //   축이 계약이 다르다**는 것이었고, 그 근거는 지금도 유효하다. 다만 G-26이 진료비 축
+  //   자체를 닫으면서 `isNum`의 사용처가 0이 되어 **가드를 삭제**했다(전용 가드
+  //   `isClaimAmount`로 대체). 여기서는 두 가드가 **여전히 분리돼 있는지**를 고정한다.
   const guards = readFileSync("src/lib/insurance/engine/itemGuards.ts", "utf8");
-  check("공용 isNum의 정의가 그대로다",
-    /export const isNum = \(v: unknown\) => typeof v === "number" && Number\.isFinite\(v\);/.test(guards));
-  check("이 파일의 진료비 축은 여전히 공용 isNum을 쓴다",
-    /if \(!isNum\(stay\.roomChargeTotal\) \|\| \(stay\.roomChargeTotal as number\) < 0\)/.test(body));
+  const item0 = readFileSync("src/lib/insurance/engine/specialItem2026.ts", "utf8");
+  const item0Code = item0.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
+  check("공용 isNum이 실행 코드에서 사라졌다(사용처 0)",
+    !/export const isNum/.test(guards)
+    && !/\bisNum\b/.test(body) && !/\bisNum\b/.test(item0Code));
+  check("진료비 전용 가드가 공용으로 생겼다(isClaimAmount)",
+    /export const isClaimAmount = \(v: unknown\): v is number =>\n\s*typeof v === "number" && Number\.isSafeInteger\(v\) && v >= 0;/.test(guards));
+  check("이 파일의 진료비 축은 진료비 전용 가드를 쓴다", /if \(!isClaimAmount\(total\)\)/.test(body));
   const item = readFileSync("src/lib/insurance/engine/specialItem2026.ts", "utf8");
-  check("별도 보장종목의 진료비 축도 공용 isNum 그대로", /if \(!isNum\(line\.amount\)\)/.test(item));
-  check("isNum 호출부가 저장소 전체에서 2곳으로 줄었다(종전 4곳)",
-    (body.match(/isNum\(/g) ?? []).length === 1 && (item.match(/isNum\(/g) ?? []).length === 1,
-    `${(body.match(/isNum\(/g) ?? []).length} + ${(item.match(/isNum\(/g) ?? []).length}`);
+  check("별도 보장종목의 진료비 축도 같은 진료비 전용 가드를 쓴다",
+    /if \(!isClaimAmount\(amount\)\) return rejected\(`\$\{i \+ 1\}번째 행의 진료비\(amount\)`/.test(item));
+  check("두 금액 축의 전용 가드는 진료비 가드와 **분리된 채**로 남았다",
+    /const nonNegSafeInt = /.test(body) && !/isClaimAmount\(paidRaw\)/.test(body)
+    && !/isClaimAmount\(limitRaw\)/.test(body));
   // 각 축을 한 번만 읽는다.
   check("두 축을 각각 한 번만 읽는다",
     (body.match(/\.priorAnnualInsurancePaid/g) ?? []).length === 1
     && (body.match(/\.annualCoverageLimit/g) ?? []).length === 1,
     `${(body.match(/\.priorAnnualInsurancePaid/g) ?? []).length} / ${(body.match(/\.annualCoverageLimit/g) ?? []).length}`);
+  // ⚠ G-26에서 반환에 `stayTotals`가 추가됐다(진료비도 같은 계약으로 넘긴다). 두 금액 축의
+  //   계약은 그대로다.
   check("검증한 값을 그대로 돌려주어 본체가 다시 읽지 않는다",
-    /return \{ paid: paidRaw as number \| undefined, limit: limitRaw as number \| undefined \};/.test(body)
+    /return \{ paid: paidRaw as number \| undefined, limit: limitRaw as number \| undefined, stayTotals \};/.test(body)
     && /const annualLimit = annualLimitOf\(input\.severity, checked\.limit\);/.test(body)
     && /let paid = checked\.paid \?\? 0;/.test(body));
   // 관용 파서가 사라졌다.

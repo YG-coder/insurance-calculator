@@ -8,7 +8,23 @@ export const VISIT_VALUES: readonly string[] = ["outpatient", "inpatient"];
 export const TIER_VALUES: readonly string[] = ["clinic", "hospital"];
 export const CAUSE_VALUES: readonly string[] = ["injury", "disease"];
 
-export const isNum = (v: unknown) => typeof v === "number" && Number.isFinite(v);
+/**
+ * **진료비 축 전용** 형식 검증 — 0 이상의 안전한 정수.
+ *
+ * ⚠ 종전의 `isNum`(= 유한한 숫자)을 대체한다. 그 가드는 **음수·소수·안전 정수 초과를
+ *   통과시켰고**, 통과한 값이 하류 `normalizeAmount`(`Math.max(0, Math.floor(v))`)에서
+ *   조용히 다른 금액이 됐다(엔진 직접 호출로 실측). 진료비를 0원 행으로 바꾸면 총액과
+ *   행 목록이 입력과 달라진다.
+ * ⚠ 사용처는 5세대 진료비 **세 곳뿐**이다 — 상급병실료 `stays[].roomChargeTotal`,
+ *   별도 보장종목 `lines[].amount`, 일반 전환 경로 `amounts[]`.
+ *   금액이라는 이름이 같아도 계약이 다른 축(통원·연간 가입금액, 지급보험금, 누적 공제금액)에는
+ *   **쓰지 않는다.** 그 축들은 각자의 자리에서 허용 범위를 정한다.
+ * ⚠ 숫자 `0`은 **유효한 청구 행**이다. 거부하지 않는다.
+ * ⚠ 합계의 안전 정수 여부는 이 가드가 보지 않는다. 원소가 모두 안전해도 합계는 범위를
+ *   벗어날 수 있으므로 각 진입점이 원소 검사 뒤에 따로 본다.
+ */
+export const isClaimAmount = (v: unknown): v is number =>
+  typeof v === "number" && Number.isSafeInteger(v) && v >= 0;
 export const isPositiveInt = (v: unknown) =>
   typeof v === "number" && Number.isFinite(v) && Number.isInteger(v) && v > 0;
 export const oneOf = (v: unknown, values: readonly string[]) =>

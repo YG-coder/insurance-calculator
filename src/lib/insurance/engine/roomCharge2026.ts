@@ -22,9 +22,8 @@
 //   상급병실료 행에는 약관상 '공제금액'이 규정돼 있지 않고, 제5조⑤가 이 행에 적용된다는
 //   명시적 근거나 공식 해석을 찾지 못했다(GEN2026-ROOM-CHARGE-DEDUCTIBLE-POOL = HOLD).
 //   미지급 50%를 deductibleApplied로 만들지도 않는다.
-import { normalizeAmount } from "../common/settle";
 import { GEN2026 } from "./constants";
-import { CAUSE_VALUES, SEVERITY_VALUES, isNum, isPositiveInt, oneOf, rejected } from "./itemGuards";
+import { CAUSE_VALUES, SEVERITY_VALUES, isClaimAmount, isPositiveInt, oneOf, rejected } from "./itemGuards";
 import {
   CapCode, Gen2026RejectedResult, Gen2026RoomChargeInput, Gen2026RoomChargeLineResult,
   Gen2026RoomChargeResult, Severity,
@@ -44,7 +43,17 @@ const UNUSED_KEYS = [
  * 검증을 통과한 두 금액 축. `undefined`는 미입력이고, 그 밖은 0 이상의 안전한 정수다.
  *   ⚠ 본체가 입력을 **다시 읽지 않도록** 값을 그대로 돌려준다.
  */
-type CheckedMoney = { paid: number | undefined; limit: number | undefined };
+type CheckedMoney = {
+  paid: number | undefined; limit: number | undefined;
+  /**
+   * 검증을 통과한 행별 진료비. `stays`와 같은 순서·같은 길이다.
+   *   ⚠ 본체가 `stay.roomChargeTotal`을 **다시 읽지 않도록** 값을 그대로 돌려준다.
+   *     종전에는 같은 이름을 3회 읽었다(가드 인자·음수 비교·본체 `normalizeAmount`).
+   *     외부 객체의 접근자가 여러 번 실행되면 값이 실행 사이에 달라져, 검증한 값과
+   *     계산에 쓰는 값이 갈린다(실측: 검증 1,000,000 → 계산 4,000,000).
+   */
+  stayTotals: number[];
+};
 
 function validate(input: Gen2026RoomChargeInput): Gen2026RejectedResult | CheckedMoney {
   const raw = input as unknown as Record<string, unknown>;
@@ -56,18 +65,35 @@ function validate(input: Gen2026RoomChargeInput): Gen2026RejectedResult | Checke
     if (raw[key] !== undefined) return rejected(`상급병실료 차액 계산에 쓰이지 않는 입력(${key})`, raw[key]);
   }
   if (!Array.isArray(raw.stays)) return rejected("입원 목록(stays)", raw.stays);
+  // ── 진료비: 컨테이너 → 원소 → 합계 (G-26) ────────────────────────
+  //   ⚠ 종전에는 공용 `isNum()`(= 유한한 숫자)에 음수 비교만 더했다. 그래서 **소수와 안전
+  //     정수 초과가 통과했고**, 통과한 값이 본체 `normalizeAmount`에서 조용히 달라졌다
+  //     (실측: `0.5` → 0원 행, `300000.9` → 300,000, `MAX_SAFE+1` → 무검증 통과).
+  //   ⚠ 숫자 `0`은 **유효한 청구 행**이다. 종전 그대로 계산에 포함한다.
+  //   ⚠ 안내 문구는 바꾸지 않았다 — 바뀐 것은 그 안내에 **도달하는 값의 범위**뿐이다.
+  const stayTotals: number[] = [];
   for (let i = 0; i < raw.stays.length; i++) {
     const stay = raw.stays[i] as Record<string, unknown> | null;
     if (stay === null || typeof stay !== "object") return rejected(`${i + 1}번째 입원`, stay);
-    // ⚠ 금액을 조용히 0으로 정규화하지 않는다. 이 경로는 전용 진입점이라 NaN·Infinity·음수를
-    //   명시적으로 거부할 수 있다. 차액에 음수는 의미가 없고 오입력 신호다.
-    if (!isNum(stay.roomChargeTotal) || (stay.roomChargeTotal as number) < 0) {
-      return rejected(`${i + 1}번째 입원의 상급병실료 차액(roomChargeTotal)`, stay.roomChargeTotal);
+    // ⚠ **한 번만 읽는다.** 아래 검사와 본체 계산이 모두 이 값 하나를 쓴다.
+    const total: unknown = stay.roomChargeTotal;
+    if (!isClaimAmount(total)) {
+      return rejected(`${i + 1}번째 입원의 상급병실료 차액(roomChargeTotal)`, total);
     }
     // 총 입원일수는 약관에 산정 방법 정의가 없다. 추정하지 않고 양의 정수만 받는다.
     if (!isPositiveInt(stay.inpatientDays)) {
       return rejected(`${i + 1}번째 입원의 총 입원일수(inpatientDays)`, stay.inpatientDays);
     }
+    stayTotals.push(total);
+  }
+  // ⚠ 원소가 모두 안전한 정수여도 **합계**는 범위를 벗어날 수 있다([MAX_SAFE, MAX_SAFE]).
+  //   그 뒤의 누적(지급보험금·연간 한도 비교)이 정밀도를 잃으므로 계산하지 않는다.
+  const stayTotalSum = stayTotals.reduce((a, b) => a + b, 0);
+  if (!Number.isSafeInteger(stayTotalSum)) {
+    return rejected(
+      `상급병실료 차액의 합계가 안전한 정수 범위를 벗어나 계산하지 않았습니다. 각 행이 안전한 정수여도 합계는 벗어날 수 있습니다(받은 행 수 ${stayTotals.length}) —`,
+      stayTotalSum,
+    );
   }
   // ── 두 금액 축의 값 검증 ──────────────────────────────────────────
   //   종전에는 공용 `isNum()`(= 유한한 숫자)만 봤다. 그래서 **음수와 소수가 통과했고**,
@@ -100,7 +126,7 @@ function validate(input: Gen2026RoomChargeInput): Gen2026RejectedResult | Checke
   if (limitRaw !== undefined && !nonNegSafeInt(limitRaw)) {
     return rejected("연간 보험가입금액(annualCoverageLimit)", limitRaw);
   }
-  return { paid: paidRaw as number | undefined, limit: limitRaw as number | undefined };
+  return { paid: paidRaw as number | undefined, limit: limitRaw as number | undefined, stayTotals };
 }
 
 // ⚠ 관용 파서 `nonNegInt()`를 이 파일에서 **삭제했다.** 유일한 사용처였던 기존 지급보험금이
@@ -200,7 +226,10 @@ export function calculateRoomCharge2026(
 
   for (let index = 0; index < input.stays.length; index++) {
     const stay = input.stays[index];
-    const total = normalizeAmount(stay.roomChargeTotal);
+    // ⚠ 검증을 통과한 값을 그대로 쓴다. `normalizeAmount`를 다시 걸지 않는다 —
+    //   위 검사를 통과한 값에 대해 그 함수는 항등이며(`Math.max(0, Math.floor(v))`),
+    //   다시 걸면 "여기서도 값을 고친다"고 읽힌다.
+    const total = checked.stayTotals[index];
     const days = stay.inpatientDays;
     const appliedCaps: CapCode[] = [];
 

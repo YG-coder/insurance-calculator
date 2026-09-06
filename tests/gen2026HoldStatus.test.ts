@@ -370,7 +370,22 @@ console.log("\n[커밋 D·E] 계산·화면 무변경 (기준 30dee21)");
     //     (정상 경로 1회, 선행 preflight 차단 0회. 아래 [G-25] 절이 실측으로 고정한다).
     //   ⚠ `0`을 미적용으로 보는 것은 **이 계산기의 정책**이고 종전 그대로다. 0원 가입이 약관상
     //     유효한지·무효인지, 실제 계약 한도가 0원인지는 원문에서 확인하지 않았고 단정하지 않는다.
-    "src/lib/insurance/engine/roomCharge2026.ts": "c695da60f234d90d8dfbdd7e37b765dcc8da2c108247ea0540dc469a9cc5e311",
+    // ⚠ G-26에서 **의도적으로** 갱신했다(종전 c695da60…).
+    //   진료비 축(`stays[].roomChargeTotal`)이 공용 `isNum()`(= 유한한 숫자)에 음수 비교만
+    //   더한 상태였다. **소수와 안전 정수 초과가 통과했고**, 통과한 값이 본체
+    //   `normalizeAmount`에서 조용히 달라졌다(실측: `0.5` → 0원 행, `300000.9` → 300,000,
+    //   `MAX_SAFE+1` → 무검증 통과). 합계 검사가 없어 [MAX_SAFE, MAX_SAFE]도 통과했다.
+    //   또 같은 이름을 **3회** 읽어(가드 인자·음수 비교·본체) 값이 달라지는 접근자에서
+    //   **검증한 값과 계산에 쓰는 값이 갈렸다**(실측: 검증 1,000,000 → 계산 4,000,000).
+    //   진료비 전용 가드 `isClaimAmount`로 컨테이너 → 원소 → 합계를 검사하고, 검증한 값을
+    //   `CheckedMoney.stayTotals`로 본체에 넘겨 읽기를 1회로 줄였다(선행 차단 0회 유지).
+    //   ⚠ **유지한 계약**: 숫자 `0`은 유효한 청구 행, 빈 배열은 유효한 빈 묶음, 거부 안내
+    //     문구와 안내 우선순위(stays → 지급보험금 → 가입금액), `rejected()` 반환 계약
+    //     (총액 0), 산식·1일 평균 한도·연간 한도·상한 절삭·두 금액 축·G-25의 0원 안내,
+    //     GEN2026-ROOM-CHARGE-DEDUCTIBLE-POOL HOLD.
+    //   ⚠ 공용 `normalizeAmount`는 **한 글자도 바꾸지 않았다.** 이 파일에서 사용처가
+    //     사라져 import만 제거했다. 다른 엔진의 사용처는 이번 범위가 아니다.
+    "src/lib/insurance/engine/roomCharge2026.ts": "cf65a585183eee174760184ef022df4e7e5692ac0e8ede28ca02329d63dfa0e6",
     // ⚠ G-15에서 **의도적으로** 갱신했다(종전 2c019bb8…).
     //   급여 통원 분기가 `nhisCoinsuranceRate`·`tier`를 검증 없이 산식에 넣어, 타입을 우회한
     //   무효값이 `Math.max`/`md[tier]`에서 **NaN**이 되고 `settle()`의 유한성 폴백에 걸려
@@ -407,7 +422,15 @@ console.log("\n[커밋 D·E] 계산·화면 무변경 (기준 30dee21)");
     //   넣어 예외를 낮췄고, 계산식·검증 순서·허용 범위·첫 번째 안내·반환 객체는 그대로다.
     //   정상 직렬화 값의 표시도 종전과 같다 — 바뀐 것은 **예외가 나던 값뿐**이다.
     //   ⚠ roomCharge2026.ts는 이 커밋에서 손대지 않았으므로 아래 해시는 그대로다.
-    "src/lib/insurance/engine/itemGuards.ts": "ad08c2d9640544c5dc7faf9e328cac805ed9c2dfdd73409a05207e48d5ae110f",
+    // ⚠ G-26에서 **의도적으로** 갱신했다(종전 ad08c2d9…).
+    //   공용 `isNum`(= 유한한 숫자)을 **삭제하고** 진료비 전용 가드 `isClaimAmount`
+    //   (= 0 이상의 안전한 정수)를 넣었다. G-22는 "공용 가드를 강화하면 승인 범위 밖의
+    //   진료비 두 축이 함께 움직인다"는 이유로 강화를 **거부**했는데, G-26이 그 진료비 축
+    //   자체를 대상으로 삼아 세 사용처를 모두 새 가드로 옮겼다. `isNum`의 사용처는 0이 되어
+    //   남겨 둘 이유가 없다 — 남기면 다음에 추가되는 축이 다시 조용히 변형될 자리가 생긴다.
+    //   ⚠ `isPositiveInt`·`oneOf`·`showValue`·`rejected`와 값 목록 4종은 그대로다.
+    //     `rejected()`의 안전 표시 계약(G-14D)도 그대로 재사용한다.
+    "src/lib/insurance/engine/itemGuards.ts": "546f476a59ff0dd8ca85fd6e84c25eedeeaed80f63d042e1d662bdff0e1ebc94",
     "src/app/5th-generation-health-insurance-calculator/page.tsx": "7bc5927da6e9245189cd71524883b432594a8e720d1d2d4c0f73c3c04b1ed375",
   };
   for (const [file, want] of Object.entries(FROZEN)) {

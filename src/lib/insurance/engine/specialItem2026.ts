@@ -10,11 +10,16 @@
 //   2) 일반 경로의 통원 20만원·연간 보험가입금액이 **적용되지 않는다**(제5조①단서·③).
 //      → 계약자 선택값 입력을 받지 않는다. 한도는 약관이 고정한다.
 //   3) 1행 = 약관상 **공제 적용 단위 1개**(④1·④2·④3). 결과 행과 1:1로 대응한다.
-import { normalizeAmount, settle } from "../common/settle";
+// ⚠ `normalizeAmount`를 더 이상 import하지 않는다. 진료비를 조용히 고치던 세 자리
+//   (`totalAmount`·`runOnce`·승인 회차 집계)가 모두 **검증된 값**을 쓰게 되어 사용처가
+//   사라졌다. 남겨 두면 다음에 추가되는 행 축이 다시 조용히 변형될 자리가 생긴다.
+//   ⚠ 함수 자체는 바꾸지 않았다. 다른 엔진(`multiClaim.ts`·`multiClaim2026.ts`·
+//     `generation*.ts`)이 각자의 계약으로 쓰고 있고, 이번 범위가 아니다.
+import { settle } from "../common/settle";
 import { GEN2026 } from "./constants";
 import { calculateMany2026 } from "./multiClaim2026";
 import {
-  CAUSE_VALUES, SEVERITY_VALUES, TIER_VALUES, VISIT_VALUES, isNum, oneOf, rejected,
+  CAUSE_VALUES, SEVERITY_VALUES, TIER_VALUES, VISIT_VALUES, isClaimAmount, oneOf, rejected,
 } from "./itemGuards";
 import { calculateRoomCharge2026 } from "./roomCharge2026";
 import {
@@ -134,7 +139,21 @@ function specOf(input: Gen2026SpecialItemInput): ItemSpec {
 const SPECIAL_ITEM_VALUES: readonly string[] = Object.keys(GEN2026_SPECIAL_ITEM_LABEL);
 const PURPOSE_VALUES: readonly string[] = Object.keys(GEN2026_INJECTION_PURPOSE_LABEL);
 
-function validateItemInput(input: Exclude<Gen2026ItemClaimInput, Gen2026RoomChargeInput>): Gen2026RejectedResult | null {
+/**
+ * 검증을 통과한 **행별 진료비**. 입력의 `lines[].amount`(별도 보장종목) 또는
+ * `amounts[]`(일반 전환 경로)와 같은 순서·같은 길이다.
+ *
+ * ⚠ 본체가 원본을 **다시 읽지 않도록** 값을 그대로 돌려준다. 종전에는 별도 보장종목이
+ *   `line.amount`를 **4회** 읽었다(검증 1 + `totalAmount` 1 + 두 해석의 `runOnce` 2).
+ *   외부 객체의 접근자가 여러 번 실행되면 값이 실행 사이에 달라져, 검증한 값과 계산에
+ *   쓰는 값이 갈리고 **두 해석이 서로 다른 값에서 출발한다**(실측: 검증 300,000 →
+ *   계산 900,000). G-23이 지급보험금에 세운 계약과 같다.
+ */
+type CheckedAmounts = { amounts: number[] };
+
+function validateItemInput(
+  input: Exclude<Gen2026ItemClaimInput, Gen2026RoomChargeInput>,
+): Gen2026RejectedResult | CheckedAmounts {
   const raw = input as unknown as Record<string, unknown>;
   if (raw.route !== "special_item" && raw.route !== "general") return rejected("경로(route)", raw.route);
   if (raw.coverage !== "non_benefit") return rejected("급여 구분(coverage)", raw.coverage);
@@ -227,13 +246,33 @@ function validateItemInput(input: Exclude<Gen2026ItemClaimInput, Gen2026RoomChar
       return rejected("통원 카운터는 별도 보장종목(3대비급여·비중증 MRI)에 적용되지 않습니다 —", days ?? visits);
     }
     if (!Array.isArray(raw.lines)) return rejected("행 목록(lines)", raw.lines);
+    // ── 진료비: 컨테이너 → 원소 → 합계 (G-26) ──────────────────────
+    //   ⚠ 종전에는 공용 `isNum()`(= 유한한 숫자)만 봤다. 그래서 **음수·소수·안전 정수
+    //     초과가 통과했고**, 통과한 값이 하류 `normalizeAmount`에서 조용히 달라졌다
+    //     (실측: `-1`·`-300000`·`0.5`·`-0.5` → 모두 0원 행, `300000.9` → 300,000).
+    //   ⚠ 숫자 `0`은 **유효한 청구 행**이다. 종전 그대로 계산에 포함하며, 0원 행이 이 경로의
+    //     횟수·승인 회차를 소진하는지의 기존 계약(HOLD 포함)도 그대로다.
+    //   ⚠ 안내 문구는 바꾸지 않았다 — 바뀐 것은 그 안내에 도달하는 값의 범위뿐이다.
+    const lineAmounts: number[] = [];
     for (let i = 0; i < raw.lines.length; i++) {
       const line = raw.lines[i] as Record<string, unknown> | null;
       if (line === null || typeof line !== "object") return rejected(`${i + 1}번째 행`, line);
-      if (!isNum(line.amount)) return rejected(`${i + 1}번째 행의 진료비(amount)`, line.amount);
+      // ⚠ **한 번만 읽는다.** 검증과 본체 계산이 이 값 하나를 쓴다.
+      const amount: unknown = line.amount;
+      if (!isClaimAmount(amount)) return rejected(`${i + 1}번째 행의 진료비(amount)`, amount);
       if (!oneOf(line.visit, VISIT_VALUES)) return rejected(`${i + 1}번째 행의 치료 형태(visit)`, line.visit);
       // tier는 조건부 필수다. 값이 실려 왔다면 그 값 자체는 반드시 유효해야 한다.
       if (line.tier !== undefined && !oneOf(line.tier, TIER_VALUES)) return rejected(`${i + 1}번째 행의 의료기관 종별(tier)`, line.tier);
+      lineAmounts.push(amount);
+    }
+    // ⚠ 원소가 모두 안전한 정수여도 **합계**는 범위를 벗어날 수 있다([MAX_SAFE, MAX_SAFE]).
+    //   그 뒤의 누적(지급보험금·연간 보장한도 비교)이 정밀도를 잃으므로 계산하지 않는다.
+    const lineSum = lineAmounts.reduce((a, b) => a + b, 0);
+    if (!Number.isSafeInteger(lineSum)) {
+      return rejected(
+        `진료비 합계가 안전한 정수 범위를 벗어나 계산하지 않았습니다. 각 행이 안전한 정수여도 합계는 벗어날 수 있습니다(받은 행 수 ${lineAmounts.length}) —`,
+        lineSum,
+      );
     }
     // 승인 구간의 '치료횟수' 축은 근골격계 전용이다. 다른 항목에 실리면 조용히 버리지 않고 막는다.
     //   ⚠ '보상한 횟수'(priorAnnualCoveredCount)와 다른 축이다. 서로 대신 쓰지 않는다.
@@ -255,13 +294,35 @@ function validateItemInput(input: Exclude<Gen2026ItemClaimInput, Gen2026RoomChar
     //   `calculateSpecialItem2026`의 preflight를 통과한 뒤에만 소비되므로, 검증도 그 뒤에서
     //   한다. 여기서 읽으면 preflight가 이미 결과를 정한 입력에서까지 접근자가 실행되어
     //   종전에 안전하게 차단되던 입력에 새 런타임 예외가 생긴다.
-    return null;
+    return { amounts: lineAmounts };
   }
 
   if (!oneOf(raw.cause, CAUSE_VALUES)) return rejected("원인(cause)", raw.cause);
   if (!oneOf(raw.visit, VISIT_VALUES)) return rejected("치료 형태(visit)", raw.visit);
   if (raw.tier !== undefined && !oneOf(raw.tier, TIER_VALUES)) return rejected("의료기관 종별(tier)", raw.tier);
-  if (!Array.isArray(raw.amounts) || !raw.amounts.every(isNum)) return rejected("진료비 목록(amounts)", raw.amounts);
+  // ── 진료비: 컨테이너 → 원소 → 합계 (G-26) ────────────────────────
+  //   ⚠ 종전에는 `every(isNum)` 하나였다. **음수·소수·안전 정수 초과가 통과했고**,
+  //     통과한 값이 하류 `calculateMany2026`의 `normalizeAmount`에서 조용히 달라졌다
+  //     (실측: `-1`·`0.5` → 0원 행, `300000.9` → 300,000).
+  //   ⚠ **안내가 정밀해졌다.** 종전에는 원소가 잘못돼도 컨테이너 안내("진료비 목록")만
+  //     나가 몇 번째인지 알 수 없었다. 별도 보장종목·상급병실료와 같은 모양으로 맞춘다.
+  //     반환 계약(`rejected()` — 총액을 만들지 않는다)은 그대로다.
+  //   ⚠ 숫자 `0`은 유효한 청구 행이다. 빈 배열도 종전대로 유효한 빈 묶음이다.
+  if (!Array.isArray(raw.amounts)) return rejected("진료비 목록(amounts)", raw.amounts);
+  const generalAmounts: number[] = [];
+  for (let i = 0; i < raw.amounts.length; i++) {
+    // ⚠ **한 번만 읽는다.** 검증한 값을 그대로 하류에 넘긴다.
+    const amount: unknown = raw.amounts[i];
+    if (!isClaimAmount(amount)) return rejected(`${i + 1}번째 진료비(amounts)`, amount);
+    generalAmounts.push(amount);
+  }
+  const generalSum = generalAmounts.reduce((a, b) => a + b, 0);
+  if (!Number.isSafeInteger(generalSum)) {
+    return rejected(
+      `진료비 합계가 안전한 정수 범위를 벗어나 계산하지 않았습니다. 각 행이 안전한 정수여도 합계는 벗어날 수 있습니다(받은 행 수 ${generalAmounts.length}) —`,
+      generalSum,
+    );
+  }
 
   // ── 통원 카운터 축 분리 (일반 전환 경로) ───────────────────────────
   //   중증은 연 100'회'(특약1 제3조 (1)①·(2)① 표),
@@ -286,7 +347,7 @@ function validateItemInput(input: Exclude<Gen2026ItemClaimInput, Gen2026RoomChar
   //     갖지 않도록, 이 경로에는 검증을 우회하는 두 번째 공개 진입점을 만들지 않는다.
   //   ⚠ 지급보험금(priorAnnualInsurancePaid)도 같은 이유로 여기서 읽지 않는다.
   //     `calculateRoutedGeneral2026`이 `calculateMany2026`으로 그대로 넘긴다.
-  return null;
+  return { amounts: generalAmounts };
 }
 
 function blocked(totalAmount: number, notes: string[]): Gen2026SpecialItemResult {
@@ -321,7 +382,7 @@ const ZERO_PAY_HOLD_NOTES = [
 /** 한 해석(countZeroPay)으로 전 행을 계산한다. */
 function runOnce(
   input: Gen2026SpecialItemInput, spec: ItemSpec, countZeroPay: boolean,
-  priorPaid: number | undefined,
+  priorPaid: number | undefined, amounts: number[],
 ): Gen2026SpecialItemResult {
   // ⚠ 검증된 원값을 인자로 받는다. 여기서 input을 다시 읽으면 두 해석이 서로 다른 값에서
   //   출발할 수 있다(값이 달라지는 getter). 미입력은 종전대로 0에서 시작한다.
@@ -336,7 +397,8 @@ function runOnce(
 
   for (let index = 0; index < input.lines.length; index++) {
     const line = input.lines[index] as Gen2026CriticalMriLine & { tier?: Tier };
-    const amount = normalizeAmount(line.amount);
+    // ⚠ 검증된 원값을 인자로 받는다. 두 해석이 같은 값에서 출발해야 한다.
+    const amount = amounts[index];
     const appliedCaps: CapCode[] = [];
 
     // ── 횟수 축 ── 0원 행은 청구가 아니므로 횟수를 소진하지도, 한도에 걸리지도 않는다.
@@ -434,9 +496,12 @@ const fingerprint = (r: Gen2026SpecialItemResult) => JSON.stringify(
 /** ⚠ export하지 않는다. 검증을 우회하는 두 번째 입구를 만들지 않기 위해서다. */
 function calculateSpecialItem2026(
   input: Gen2026SpecialItemInput,
+  amounts: number[],
 ): Gen2026SpecialItemResult | Gen2026RejectedResult {
   const lines = input.lines ?? [];
-  const totalAmount = lines.reduce((a, l) => a + normalizeAmount(l.amount), 0);
+  // ⚠ 검증을 통과한 값으로 합계를 만든다. `normalizeAmount`를 다시 걸지 않는다 —
+  //   위 검사를 통과한 값에 대해 그 함수는 항등이며, 다시 걸면 "여기서도 값을 고친다"고 읽힌다.
+  const totalAmount = amounts.reduce((a, b) => a + b, 0);
   const spec = specOf(input);
 
   // ── preflight 1: 중증 MRI 입원의 의료기관 종별은 조건부 필수다 ──
@@ -482,7 +547,7 @@ function calculateSpecialItem2026(
     // ⚠ 연간 50회 한도의 '보상한 횟수'는 이 규칙으로 확정되지 않는다
     //   (GEN2026-SPECIAL-ITEM-COUNT-ZEROPAY = HOLD). 아래 두 해석 비교가 그쪽을 담당한다.
     const maxCount = priorActs
-      + lines.filter((l) => normalizeAmount(l.amount) > 0).length;
+      + amounts.filter((a) => a > 0).length;
     const needApproval = Math.min(maxCount, S.msk.annualVisits);
     if (needApproval > approved) {
       return blocked(totalAmount, [
@@ -524,9 +589,9 @@ function calculateSpecialItem2026(
   }
   const priorPaid = paidRaw as number | undefined;
 
-  const counted = runOnce(input, spec, true, priorPaid);
+  const counted = runOnce(input, spec, true, priorPaid, amounts);
   if (spec.annualVisits === null) return counted; // MRI는 횟수 한도가 없어 해석 차이가 없다
-  const notCounted = runOnce(input, spec, false, priorPaid);
+  const notCounted = runOnce(input, spec, false, priorPaid, amounts);
   if (fingerprint(counted) !== fingerprint(notCounted)) return blocked(totalAmount, ZERO_PAY_HOLD_NOTES);
   // 결과는 같지만 "몇 회째"는 해석에 따라 다를 수 있다. 다른 행은 null로 두고 단정하지 않는다.
   return {
@@ -548,13 +613,16 @@ function routeNote(input: Gen2026RoutedGeneralInput): string {
 }
 
 /** ⚠ export하지 않는다. 위와 같은 이유다. */
-function calculateRoutedGeneral2026(input: Gen2026RoutedGeneralInput): Gen2026RoutedGeneralResult {
+function calculateRoutedGeneral2026(input: Gen2026RoutedGeneralInput, amounts: number[]): Gen2026RoutedGeneralResult {
   // ⚠ 통원 카운터는 축에 맞는 쪽만 넘긴다. 둘을 동시에 넘기면 calculateMany2026의
   //   교차 필드 가드에 걸린다(그리고 걸리는 것이 맞다).
   //   중증 = 연 100회(특약1), 비중증 = 연 100일(특약2).
   const base = calculateMany2026({
     cause: input.cause, coverage: "non_benefit", visit: input.visit, tier: input.tier,
-    severity: input.severity, nonBenefitItem: "general", amounts: input.amounts,
+    severity: input.severity, nonBenefitItem: "general",
+    // ⚠ 검증을 통과한 배열을 넘긴다. 원본을 다시 읽지 않는다 — 하류 `calculateMany2026`이
+    //   `normalizeAmount`로 각 원소를 한 번 더 읽으면 값이 달라지는 접근자에서 갈린다.
+    amounts,
     priorAnnualInsurancePaid: input.priorAnnualInsurancePaid,
     annualCoverageLimit: input.annualCoverageLimit,
     outpatientCoverageLimit: input.outpatientCoverageLimit,
@@ -579,8 +647,10 @@ export function calculateGen2026Item(input: Gen2026ItemClaimInput): Gen2026ItemC
   const rest = input as Exclude<Gen2026ItemClaimInput, Gen2026RoomChargeInput>;
 
   // 1) 값 검증이 먼저다. specOf()나 어떤 산식에도 닿기 전에 막는다.
-  const invalid = validateItemInput(rest);
-  if (invalid !== null) return invalid;
+  //   ⚠ 검증을 통과한 **행별 진료비**를 그대로 받아 아래 계산에 넘긴다. 본체가 입력을
+  //     다시 읽지 않게 하기 위해서다(G-26).
+  const checked = validateItemInput(rest);
+  if ("route" in checked) return checked;
 
   // 2) 경로 대조. 여기 오는 값은 모두 유효한 리터럴이다.
   const purpose = (rest as { injectionPurpose?: Gen2026InjectionPurpose }).injectionPurpose;
@@ -600,6 +670,6 @@ export function calculateGen2026Item(input: Gen2026ItemClaimInput): Gen2026ItemC
 
   // 3) 계산.
   return rest.route === "special_item"
-    ? calculateSpecialItem2026(rest)
-    : calculateRoutedGeneral2026(rest);
+    ? calculateSpecialItem2026(rest, checked.amounts)
+    : calculateRoutedGeneral2026(rest, checked.amounts);
 }

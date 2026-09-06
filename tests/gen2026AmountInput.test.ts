@@ -340,8 +340,11 @@ console.log("\n[근거] 5세대의 0원 행 동작을 실제 엔진으로 확인
   check("소진 판정 자체가 amount > 0을 요구", /const consumes = amount > 0 &&/.test(multi));
   check("특별약관 횟수는 amount > 0일 때만 센다",
     /const counts = spec\.annualVisits !== null && amount > 0;/.test(special));
+  // ⚠ **낡은 계약을 교체했다(G-26).** 종전에는 승인 회차 집계가 `normalizeAmount(l.amount)`로
+  //   행을 다시 읽었다. G-26이 진료비를 진입점에서 한 번만 읽어 검증된 배열로 넘기면서
+  //   그 자리가 `amounts`를 쓰게 됐다. **양수 금액 행만 센다는 계약은 그대로다.**
   check("근골격계 승인 회차는 양수 금액 행만 센다",
-    /lines\.filter\(\(l\) => normalizeAmount\(l\.amount\) > 0\)\.length/.test(special));
+    /amounts\.filter\(\(a\) => a > 0\)\.length/.test(special));
   // ② 화면 동작으로도 확인한다 — 0원 행을 넣어도 한도 경계가 밀리지 않는다.
   const critOut = { coverage: "non_benefit", nonBenefitItem: "general", severity: "critical", visit: "outpatient", cause: "disease" };
   const withZero = screenOf(setup({ ...critOut, amounts: ["0", "300000"], priorVisits: "99" }));

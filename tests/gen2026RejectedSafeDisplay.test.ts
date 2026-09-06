@@ -278,8 +278,12 @@ console.log("\n[G-14D] 7. 소스 계약");
   check("itemGuards는 엔진을 import하지 않는다(leaf 유지)",
     !/from "\.\/(multiClaim2026|specialItem2026|roomCharge2026|generation2026)"/.test(body));
   // 검증 순서·허용 범위를 건드리지 않았다 — 판정 헬퍼 3종이 그대로다.
-  check("판정 헬퍼가 그대로다",
-    /export const isNum = \(v: unknown\) => typeof v === "number" && Number\.isFinite\(v\);/.test(body)
+  // ⚠ **낡은 계약을 교체했다(G-26).** 종전 판정 헬퍼 `isNum`(= 유한한 숫자)은 진료비 축이
+  //   유일한 사용처였고, G-26이 세 진료비 축을 0 이상의 안전한 정수로 닫으면서 사용처가
+  //   0이 되어 삭제됐다(전용 가드 `isClaimAmount`로 대체). 나머지 헬퍼는 그대로다.
+  check("판정 헬퍼가 그대로다(isNum → isClaimAmount 교체, 나머지 무변경)",
+    /export const isClaimAmount = \(v: unknown\): v is number =>/.test(body)
+    && !/export const isNum/.test(body)
     && /export const isPositiveInt =/.test(body) && /export const oneOf =/.test(body));
 
   // ⚠ G-14C의 지역 showValue는 **통합하지 않는다.** 공용 모듈로 빼면 그 파일의 소스 계약
@@ -303,7 +307,7 @@ console.log("\n[G-14D] 7. 소스 계약");
   // roomCharge2026은 이번 커밋에서 손대지 않는다(FROZEN 해시 유지).
   const rc = readFileSync("src/lib/insurance/engine/roomCharge2026.ts", "utf8");
   check("roomCharge2026은 itemGuards의 rejected를 그대로 쓴다",
-    /import \{ CAUSE_VALUES, SEVERITY_VALUES, isNum, isPositiveInt, oneOf, rejected \} from "\.\/itemGuards";/.test(rc)
+    /import \{ CAUSE_VALUES, SEVERITY_VALUES, isClaimAmount, isPositiveInt, oneOf, rejected \} from "\.\/itemGuards";/.test(rc)
     && !/showValue/.test(rc));
 
   // FROZEN 표가 새 해시로 갱신됐고 이유가 남아 있다.
@@ -317,8 +321,13 @@ console.log("\n[G-14D] 7. 소스 계약");
   //   그 파일이 여전히 공용 rejected()를 쓰고 자기 showValue 사본을 두지 않았음으로 확인한다.
   check("roomCharge2026의 해시 갱신에 이유가 적혀 있다",
     /G-22에서 \*\*의도적으로\*\* 갱신했다\(종전 fa3c0f00…\)/.test(hold));
-  check("itemGuards.ts 해시는 그대로다(공용 가드를 강화하지 않았다)",
-    /"src\/lib\/insurance\/engine\/itemGuards\.ts": "ad08c2d9640544c5dc7faf9e328cac805ed9c2dfdd73409a05207e48d5ae110f"/.test(hold));
+  // ⚠ **낡은 계약을 교체했다(G-26).** 이 검사의 요지는 "G-14D가 `showValue`를 넣으면서 공용
+  //   가드는 건드리지 않았다"였다. G-26이 진료비 축을 닫으며 `isNum`을 `isClaimAmount`로
+  //   교체해 해시가 갱신됐다. G-14D가 세운 계약(안전 표시)은 그대로이므로, 갱신 이유가
+  //   G-26으로 기록돼 있는지와 `showValue`·`rejected`가 그대로인지를 대신 고정한다.
+  check("itemGuards.ts 해시 갱신 이유가 G-26으로 기록돼 있다",
+    /G-26에서 \*\*의도적으로\*\* 갱신했다\(종전 ad08c2d9…\)/.test(hold)
+    && /"src\/lib\/insurance\/engine\/itemGuards\.ts": "546f476a59ff0dd8ca85fd6e84c25eedeeaed80f63d042e1d662bdff0e1ebc94"/.test(hold));
 }
 
 console.log(`\n[G-14D rejected 안전 표시] ✅ ${pass} / ❌ ${fail}`);

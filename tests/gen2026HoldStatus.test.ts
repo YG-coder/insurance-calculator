@@ -461,7 +461,16 @@ console.log("\n[커밋 D·E] 계산·화면 무변경 (기준 30dee21)");
     //     `undefined`가 아닌 무효값만 새 안내로 분리했다. 값을 한 번만 읽어 아래 판정·
     //     안내·산식이 그 값을 쓴다. 산식·상한·`ok()`/`pending()`의 반환값은 그대로다.
     "src/lib/insurance/engine/generation2026.ts": "c08a59b72f663bf16020d8afefc24ccb3663fbaa4fd5a27fffdb43f199ef5171",
-    "src/lib/insurance/engine/engine.ts": "da28c9f77d7d90ba1d0e18146d626c9ea7fc6a89013293a26ec50e223ee56c8e",
+    // ⚠ G-33에서 **의도적으로** 갱신했다(종전 da28c9f7…). 제네릭 진입점이 **선택된 세대가
+    //   소비하지 않는 5세대 전용 축**을 명시적으로 거부한다 — 종전에는 2009·2017·2021의
+    //   모든 경로에서 `nhisCoinsuranceRate`·`severity`·`nonBenefitItem`·
+    //   `priorAnnualDeductible`이 **조용히 폐기**됐다(실측: 접근자 호출 0회).
+    //   ⚠ 세대별 산식·상수·반환 계약은 손대지 않았다. 이 파일이 하는 일은 세대 위임 뒤에
+    //     stray를 보는 것뿐이고, 위임 결과가 이미 `PENDING_UNVERIFIED`이면 그 안내를 그대로
+    //     돌려주며 stray 이름을 읽지도 않는다.
+    //   ⚠ `perVisitCoverageLimit`은 2·3세대 **통원**이 실제로 소비하므로 그 경로에서는
+    //     막지 않는다(실측: 접근자 1회, 값 200,000에서 결과가 달라진다).
+    "src/lib/insurance/engine/engine.ts": "3b2a628301d0c6de4236040edcecff6ee37da8ece04a47bda51176f07b2ebf10",
     "src/lib/insurance/engine/capLabels.ts": "23d0bc4b40a1b408cf74ec0189457e1a3c9f6bc75988e4bcde4e7c2c8554410d",
     // ⚠ G-14D에서 **의도적으로** 갱신했다(종전 c10d2fea…).
     //   `rejected()`의 '받은 값' 표시가 `JSON.stringify(got) ?? String(got)`이라

@@ -150,22 +150,38 @@ console.log("\n[G-15] 5. 범위 밖 경로는 무변경");
     ({ amount: AMOUNT, coverage: "benefit", visit: "inpatient", ...extra });
   const baseInp = shape(call(inp()));
   check("급여 입원 기준", baseInp === "own=60000/ins=240000/rate=0.2/minD=0", baseInp);
+  // ⚠ 교체됨 (G-31). 종전 이 목록은 `nhisCoinsuranceRate`가 급여 **입원**에 실려도
+  //   "종전 그대로 계산된다"를 고정했다. 그 계약은 이 축이 급여 입원에서 **조용히 폐기**되던
+  //   상태(실측: 접근자 호출 0회)를 고정한 것이라, G-31이 명시적 거부로 바꾸면서 교체한다.
+  //   G-15가 이 절에서 지키려던 것은 "**급여 통원 밖에서는 이 파일의 검증이 새 판정을 하지
+  //   않는다**"이고, 그 의미는 `tier` 두 사례로 그대로 유지된다.
   for (const [label, extra] of [
-    ["tier 'ZZZ'", { tier: "ZZZ" }], ["tier null", { tier: null }], ["rate 'abc'", { nhisCoinsuranceRate: "abc" }],
-    ["rate null", { nhisCoinsuranceRate: null }], ["rate 20", { nhisCoinsuranceRate: 20 }],
+    ["tier 'ZZZ'", { tier: "ZZZ" }], ["tier null", { tier: null }],
   ] as [string, Record<string, unknown>][]) {
     check(`급여 입원 + ${label} → 종전 그대로`, shape(call(inp(extra))) === baseInp, shape(call(inp(extra))));
+  }
+  // G-31로 바뀐 자리: 급여 입원에 실린 본인부담률은 값과 무관하게 거부한다.
+  for (const [label, v] of [["'abc'", "abc"], ["null", null], ["20", 20], ["0", 0], ["0.2", 0.2]] as [string, unknown][]) {
+    const r = call(inp({ nhisCoinsuranceRate: v }));
+    check(`급여 입원 + rate ${label} → G-31 거부`, !threw(r) && r.r.status === "PENDING_UNVERIFIED"
+      && notes(r).includes("급여 통원에서만 쓰입니다"), threw(r) ? r.threw : notes(r).slice(0, 60));
   }
   const nb = (extra: Record<string, unknown> = {}) => ({
     amount: 1_000_000, coverage: "non_benefit", nonBenefitItem: "general",
     severity: "critical", visit: "outpatient", ...extra,
   });
   const baseNb = shape(call(nb()));
+  // ⚠ 교체됨 (G-31). 종전 이 목록은 `nhisCoinsuranceRate`가 **비급여**에 실려도 "종전 그대로
+  //   계산된다"를 고정했다. 같은 이유로(조용한 폐기의 고정) 교체한다. `tier` 두 사례는 남긴다.
   for (const [label, extra] of [
     ["tier 'ZZZ'", { tier: "ZZZ" }], ["tier null", { tier: null }],
-    ["rate 'abc'", { nhisCoinsuranceRate: "abc" }], ["rate null", { nhisCoinsuranceRate: null }],
   ] as [string, Record<string, unknown>][]) {
     check(`비급여 중증 통원 + ${label} → 종전 그대로`, shape(call(nb(extra))) === baseNb, shape(call(nb(extra))));
+  }
+  for (const [label, v] of [["'abc'", "abc"], ["null", null], ["0", 0], ["0.2", 0.2]] as [string, unknown][]) {
+    const r = call(nb({ nhisCoinsuranceRate: v }));
+    check(`비급여 중증 통원 + rate ${label} → G-31 거부`, !threw(r) && r.r.status === "PENDING_UNVERIFIED"
+      && notes(r).includes("급여 통원 계산에만 쓰입니다"), threw(r) ? r.threw : notes(r).slice(0, 60));
   }
   // 비급여 중증 입원의 종별 미지정 안내가 그대로 우선한다.
   const nbInp = call({ amount: 1_000_000, coverage: "non_benefit", nonBenefitItem: "general",

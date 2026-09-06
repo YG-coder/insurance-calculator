@@ -396,7 +396,12 @@ console.log("\n[커밋 D·E] 계산·화면 무변경 (기준 30dee21)");
     //   ⚠ **유지한 계약**: 진료비·일수·두 금액 축의 검증과 안내(G-22·G-25·G-26),
     //     산식·1일 평균 한도·연간 한도·상한 절삭·0원 안내, 기존 13개 키의 거부와 순서,
     //     GEN2026-ROOM-CHARGE-DEDUCTIBLE-POOL HOLD.
-    "src/lib/insurance/engine/roomCharge2026.ts": "cc45f2d7ea3c29ddfa462e5d21d8b3d50a6d8b5b70b78a8ee96d8eb11035e58f",
+    // ⚠ G-31에서 **의도적으로** 갱신했다(종전 cc45f2d7…). `UNUSED_KEYS`의 **맨 끝**에
+    //   `nhisCoinsuranceRate`를 붙였다 — 이 진입점은 비급여만 받으므로 급여 본인부담률에
+    //   대응 축이 없는데, 종전에는 목록에 없어 **조용히 폐기**됐다(실측: 접근자 호출 0회).
+    //   맨 끝이라 기존 14개 키의 안내 우선순위는 그대로이고, 계산식·검증 순서·반환 계약은
+    //   한 글자도 바뀌지 않았다.
+    "src/lib/insurance/engine/roomCharge2026.ts": "2612ab56dfd797c41214432cf407f962dcfef289f94bee5dedfea13c996e864d",
     // ⚠ G-15에서 **의도적으로** 갱신했다(종전 2c019bb8…).
     //   급여 통원 분기가 `nhisCoinsuranceRate`·`tier`를 검증 없이 산식에 넣어, 타입을 우회한
     //   무효값이 `Math.max`/`md[tier]`에서 **NaN**이 되고 `settle()`의 유한성 폴백에 걸려
@@ -443,7 +448,13 @@ console.log("\n[커밋 D·E] 계산·화면 무변경 (기준 30dee21)");
     //     `Math.max(0, …)`·`remaining` 산식과 상한 500만원은 한 글자도 바뀌지 않았다.
     //     `tests/gen2026DeductiblePool.test.ts`의 480건 격자를 정상 무회귀 130건과
     //     의도된 거부 전환 350건으로 나눴다.
-    "src/lib/insurance/engine/generation2026.ts": "8170556714a5d8cc3f09f624d3dc74c80575b836c3a554410448de97a40104a7",
+    //   ⚠ G-31에서 다시 갱신했다(종전 81705567…). 미사용 **비금액** 축 세 개를 런타임에서
+    //     거부한다 — 급여의 `severity`·`nonBenefitItem`(둘 다 접근자 0회의 조용한 폐기),
+    //     급여 **입원**의 `nhisCoinsuranceRate`(같은 조용한 폐기), 비급여 전 경로의
+    //     `nhisCoinsuranceRate`(같은 조용한 폐기). 산식·상한·`ok()`/`pending()`의 반환값과
+    //     기존 안내 문구는 그대로이고, 비급여의 새 검사는 **종별 미지정을 후보로 남겨**
+    //     종별 preflight 안내가 종전대로 먼저 나간다.
+    "src/lib/insurance/engine/generation2026.ts": "72bd9b30b5d5936a9604ef12e3955b8e2bc47d017bfdb3bfbef51fc480df2759",
     "src/lib/insurance/engine/engine.ts": "da28c9f77d7d90ba1d0e18146d626c9ea7fc6a89013293a26ec50e223ee56c8e",
     "src/lib/insurance/engine/capLabels.ts": "23d0bc4b40a1b408cf74ec0189457e1a3c9f6bc75988e4bcde4e7c2c8554410d",
     // ⚠ G-14D에서 **의도적으로** 갱신했다(종전 c10d2fea…).

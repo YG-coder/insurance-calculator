@@ -73,6 +73,20 @@ const BENEFIT_UNUSED_MONEY_KEYS = [
   "priorAnnualInsurancePaid", "annualCoverageLimit", "outpatientCoverageLimit",
 ] as const;
 
+/**
+ * 급여 묶음에서 쓰이지 않는 **비금액** 축 (G-31).
+ *
+ * `severity`(중증/비중증)와 `nonBenefitItem`(비급여 치료유형)은 둘 다 **비급여 특별약관**이
+ * 만든 구분이다 — 특별약관1(중증)·2(비중증)가 비급여를 중증도로 나누고, 각 특약 제3조가
+ * 비급여를 보장종목으로 다시 나눈다. 급여에는 두 구분이 없다.
+ *   ⚠ 종전에는 급여 두 경로에서 **조용히 폐기**됐다(실측: 두 축 모두 접근자 호출 0회).
+ *   ⚠ `SPECIAL_ITEM_ONLY_KEYS`에 넣지 않는다 — 그 목록은 **어느 경로에서도** 쓰이지 않는
+ *     키이고, 이 둘은 비급여 묶음에서 **실제로 소비된다.** 합치면 정상 비급여가 막힌다.
+ *   ⚠ 금액 축 목록과도 합치지 않는다. 거부 사유가 다르고, 한쪽을 고치면 다른 쪽 안내가
+ *     조용히 따라 바뀐다.
+ */
+const BENEFIT_UNUSED_NON_MONEY_KEYS = ["severity", "nonBenefitItem"] as const;
+
 const SPECIAL_ITEM_ONLY_KEYS = [
   "priorAnnualInpatientDeductible", "priorAnnualCoveredCount", "priorAnnualTreatmentActCount",
   "approvedThroughVisit", "injectionPurpose", "item", "lines", "route", "stays",
@@ -283,6 +297,13 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
     totalAmount, totalOwnPay: null, totalInsurancePay: null, appliedCaps: [], notes,
   });
 
+  /**
+   * 검증 전이지만 **한 번만 읽은** 건강보험 본인부담률 (G-31).
+   *   ⚠ 급여 묶음에서만 채운다. 값 검증은 종전대로 `calc2026`이 첫 행에서 한다 —
+   *     여기서 하는 일은 "행마다 다시 읽지 않는 것"뿐이고 안내·순서는 그대로다.
+   */
+  let checkedNhis: unknown;
+
   // 두 통원 카운터는 **비급여 통원 전용**이다. 급여 묶음에 실려 오면 쓰이지 않는 입력이므로
   //   조용히 버리지 않는다. 타입에서는 never로 닫았지만 외부 런타임 데이터는 타입을 우회한다.
   if (bf) {
@@ -314,6 +335,42 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
         "급여의 본인부담금은 국민건강보험 본인부담률과 약관의 공제 기준으로 정해지며, 이 세 축을 쓰지 않습니다.",
         "쓰이지 않는 입력을 조용히 버리면 반영했다고 오해할 수 있어 계산하지 않았습니다.",
         `받은 값: ${showValue(got)}`,
+      ]);
+    }
+    // ── 급여 묶음의 미사용 비금액 축 stray 거부 (G-31) ───────────────
+    //   ⚠ **금액 축 루프 뒤**다. 두 가족이 동시에 실려도 배포된 G-30 안내가 먼저 나간다.
+    //   ⚠ 값이 `0`이어도 막는다 — 형제 축과 같은 계약이다.
+    //   ⚠ 각 키를 한 번만 읽고, 목록 순서대로 먼저 찾은 키만 안내한다.
+    for (const key of BENEFIT_UNUSED_NON_MONEY_KEYS) {
+      const got = readCount(bf, key);
+      if (got === undefined) continue;
+      return blocked([
+        `${key}은(는) 비급여 특별약관이 만든 구분이라 급여 계산에는 쓰이지 않습니다. 중증/비중증은 특별약관1·2가 비급여에 대해 나눈 것이고, 치료유형은 각 특약 제3조가 비급여를 보장종목으로 나눈 것입니다.`,
+        "급여의 본인부담금은 국민건강보험 본인부담률과 약관의 공제 기준으로 정해집니다.",
+        "쓰이지 않는 입력을 조용히 버리면 반영했다고 오해할 수 있어 계산하지 않았습니다.",
+        `받은 값: ${showValue(got)}`,
+      ]);
+    }
+    // ── 건강보험 본인부담률: **여기서 한 번만 읽는다** (G-31) ─────────
+    //   ⚠ 종전에는 아래 행 루프가 `bf?.nhisCoinsuranceRate`를 **행마다** 읽었다
+    //     (실측: 3행이면 3회, 5행이면 5회). 값이 달라지는 접근자에서 행마다 다른 요율이
+    //     적용됐다 — 실측: getter가 0.2/0.9/0.5를 차례로 돌려주면 30만원 3행의 총
+    //     자기부담금이 480,000원이 됐다(고정 0.2는 180,000원, 고정 0.9는 810,000원).
+    //     검증한 값과 계산에 쓰는 값이 갈리는 G-29·G-30과 같은 결함이다.
+    //   ⚠ 위 세 stray 뒤다 — 그 검사들이 결과를 정하는 경로에서는 이 이름을 읽지 않는다.
+    //   ⚠ 값 검증은 종전대로 `calc2026`이 한다(첫 행에서 `pending` → `blocked`).
+    //     여기서 검증을 앞당기면 안내 문구·순서가 바뀐다.
+    checkedNhis = readCount(bf, "nhisCoinsuranceRate");
+    // ── 급여 입원의 건강보험 본인부담률 (G-31) ───────────────────────
+    //   `calc2026`이 이 값을 읽는 곳은 급여 **통원** 분기뿐이다. 급여 입원은 약관이 정률
+    //   20%로 고정한다. 종전에는 이 묶음이 값을 읽어 `calc2026`에 넘기고 **거기서 무시**됐다
+    //   (실측: 행당 1회 읽고 결과는 미제공과 동일 — 조용한 폐기가 아니라 읽고 무시다).
+    //   ⚠ 조건은 소비 분기의 부정과 정확히 같다. 통원은 건드리지 않는다.
+    if (input.visit === "inpatient" && checkedNhis !== undefined) {
+      return blocked([
+        "건강보험 본인부담률(nhisCoinsuranceRate)은 급여 통원에서만 쓰입니다. 급여 입원의 자기부담률은 약관이 20%로 정하고 있어 이 값을 읽지 않습니다.",
+        "쓰이지 않는 입력을 조용히 버리면 반영했다고 오해할 수 있어 계산하지 않았습니다.",
+        `받은 값: ${showValue(checkedNhis)}`,
       ]);
     }
   }
@@ -513,6 +570,26 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
     }
   }
 
+  // ── E군: 비급여 묶음의 건강보험 본인부담률 stray 거부 (G-31) ────────
+  //   `nhisCoinsuranceRate`는 **국민건강보험이 정한 급여 항목의 본인부담률**이다. 비급여는
+  //   정의상 국민건강보험이 부담하지 않는 항목이라 이 비율이 존재하지 않고, 비급여의
+  //   자기부담률은 특별약관1·2 제3조가 보장종목별로 따로 정한다.
+  //   ⚠ 종전에는 비급여 **전 경로**에서 **조용히 폐기**됐다(실측: 접근자 호출 0회).
+  //   ⚠ **C군·D군 뒤**다. 배포된 안내 우선순위(치료유형 → 질환 구분 → 통원 카운터 →
+  //     누적 공제금액 → 통원 가입금액)를 새 검사가 밀어내지 않는다.
+  //   ⚠ 값이 `0`이어도 막는다. 급여 통원에서는 `0`이 유효값이지만 비급여에는 축이 없다.
+  //   ⚠ 한 번만 읽는다.
+  if (nb) {
+    const strayNhis = readCount(nb, "nhisCoinsuranceRate");
+    if (strayNhis !== undefined) {
+      return blocked([
+        "건강보험 본인부담률(nhisCoinsuranceRate)은 급여 통원 계산에만 쓰입니다. 비급여는 국민건강보험이 부담하지 않는 항목이라 이 비율이 없고, 자기부담률은 특별약관1·2 제3조가 보장종목별로 정합니다.",
+        "쓰이지 않는 입력을 조용히 버리면 반영했다고 오해할 수 있어 계산하지 않았습니다.",
+        `받은 값: ${showValue(strayNhis)}`,
+      ]);
+    }
+  }
+
   // ── 활성 지급보험금 누적 축의 값 검증 ─────────────────────────────
   //   종전 동작(기준선 5ce96c9 엔진 직접 호출로 실측): `nonNegInt()`가
   //   `Number.isFinite(v) ? Math.max(0, Math.floor(v)) : 0`이라 음수·`NaN`·`±Infinity`·문자열·
@@ -696,7 +773,9 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
           })
         : calc2026({
             amount, coverage: "benefit", visit: input.visit, tier: input.tier,
-            nhisCoinsuranceRate: bf?.nhisCoinsuranceRate,
+            // ⚠ 위에서 한 번 읽은 원값을 재사용한다(G-31). 종전에는 이 자리가 행마다
+            //   `bf?.nhisCoinsuranceRate`를 다시 읽어 행마다 다른 요율이 적용될 수 있었다.
+            nhisCoinsuranceRate: checkedNhis as number | undefined,
           });
       if (single.status !== "OK") return blocked(single.notes);
 

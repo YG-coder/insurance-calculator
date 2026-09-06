@@ -122,15 +122,18 @@ console.log("\n[가드] 소스에 종별 조건이 실제로 연결돼 있다");
   check("적용 대상 목록을 상수에서 읽는다", /n\.inpatientPerVisitLimitTiers/.test(eng));
   check("소스에 종별 목록을 다시 나열하지 않음", !/\["clinic"\]/.test(eng));
   const eng2 = eng;
-  // ⚠ **개수 앵커를 갱신했다(G-30, 2 → 3).** 위치·기존 의미("두 종별 preflight가 미지정을
-  //   막는다")는 그대로다. G-30이 `perVisitCoverageLimit` stray 검사를 넣으면서 **중증 입원의
-  //   종별 미지정을 소비 후보로 남기는** 같은 조건식을 한 번 더 쓴다 — 그래야 종별 preflight
-  //   안내가 종전대로 먼저 나간다. 두 preflight 자체는 손대지 않았다.
+  // ⚠ **개수 앵커를 갱신했다(G-30 2 → 3, G-31 3 → 4).** 위치·기존 의미("두 종별 preflight가
+  //   미지정을 막는다")는 그대로다. G-30이 `perVisitCoverageLimit` stray 검사를 넣으면서
+  //   **중증 입원의 종별 미지정을 소비 후보로 남기는** 같은 조건식을 한 번 더 썼고, G-31이
+  //   `nhisCoinsuranceRate` stray에도 같은 조건식을 한 번 더 쓴다 — 그래야 종별 preflight
+  //   안내가 종전대로 먼저 나간다. 두 preflight 자체는 어느 커밋도 손대지 않았다.
   check("중증 입원도 종별 미지정을 막는다",
-    /중증 비급여 입원: 의료기관 종별 미지정/.test(eng2) && (eng2.match(/input\.tier !== "clinic" && input\.tier !== "hospital"/g) ?? []).length === 3,
+    /중증 비급여 입원: 의료기관 종별 미지정/.test(eng2) && (eng2.match(/input\.tier !== "clinic" && input\.tier !== "hospital"/g) ?? []).length === 4,
     String((eng2.match(/input\.tier !== "clinic" && input\.tier !== "hospital"/g) ?? []).length));
   check("세 번째 자리는 stray 검사의 '후보로 남긴다' 조건이다(G-30)",
     /if \(input\.visit === "inpatient"\n\s*&& !\(input\.severity === "critical" && input\.tier !== "clinic" && input\.tier !== "hospital"\)\) \{/.test(eng2));
+  check("네 번째 자리는 nhis stray의 '후보로 남긴다' 조건이다(G-31)",
+    /const tierPendingAhead = input\.visit === "inpatient"\n\s*&& input\.tier !== "clinic" && input\.tier !== "hospital";/.test(eng2));
   const ui = [
     readFileSync("src/components/calculators/HealthCalc5th.tsx", "utf8"),
     readFileSync("src/components/calculators/HealthCalcMulti2026.tsx", "utf8"),

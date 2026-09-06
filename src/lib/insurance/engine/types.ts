@@ -82,12 +82,24 @@ export interface Gen2026BenefitInput extends Gen2026CommonInput {
   //   통과해 런타임이 **조용히 폐기**했다(실측: 접근자 호출 0회). 타입과 런타임을 함께 닫는다.
   priorAnnualDeductible?: never;
   perVisitCoverageLimit?: never;
+  // ⚠ 두 축은 비급여 특별약관이 만든 구분이라 급여에는 대응 축이 없다(G-31). 종전에는
+  //   선언 자체가 없어 리터럴만 막혔고(초과 속성 검사), 변수 경유·외부 데이터는 통과해
+  //   런타임이 **조용히 폐기**했다(실측: 접근자 호출 0회). 타입과 런타임을 함께 닫는다.
+  //   ⚠ `nhisCoinsuranceRate`는 여기서 닫지 못한다 — 급여 **통원**은 소비하고 **입원**은
+  //     쓰지 않는데, 유니온을 `visit`으로 쪼개면 호출부가 `visit`을 변수로 넘기므로 정상
+  //     화면이 `as` 없이 컴파일되지 않는다. 그 축은 런타임으로만 닫았다(G-30이 같은 이유로
+  //     `outpatientCoverageLimit`·`priorAnnualDeductible`을 런타임으로만 닫았다).
+  severity?: never;
+  nonBenefitItem?: never;
 }
 
 export interface Gen2026NonBenefitInput extends Gen2026CommonInput {
   coverage: "non_benefit";
   severity?: Severity;                    // 미지정 시 런타임에서 PENDING_UNVERIFIED
   nonBenefitItem: Gen2026NonBenefitItem;  // 필수
+  // ⚠ 국민건강보험이 정한 **급여** 항목의 본인부담률이라 비급여에는 대응 축이 없다(G-31).
+  //   종전에는 선언조차 없어 리터럴만 막혔고, 변수 경유는 통과해 조용히 폐기됐다.
+  nhisCoinsuranceRate?: never;
   // 특별약관1 제5조⑤ 500만원 상한의 연 누적 **공제금액**. 최종 자기부담금이 아니다.
   priorAnnualDeductible?: number;
   perVisitCoverageLimit?: number;
@@ -367,11 +379,18 @@ export interface Gen2026MultiBenefitInput extends Gen2026MultiCommonInput {
   //   급여에는 연간 횟수·일수 한도가 없다. 타입에서 닫고 런타임에서도 막는다.
   priorAnnualOutpatientVisits?: never;
   priorAnnualOutpatientDays?: never;
+  // ⚠ 중증/비중증 구분과 비급여 치료유형은 비급여 특별약관이 만든 축이다(G-31).
+  //   급여에는 두 구분이 없다. 종전에는 선언조차 없어 변수 경유가 통과했고 런타임이
+  //   **조용히 폐기**했다(실측: 접근자 호출 0회).
+  severity?: never;
+  nonBenefitItem?: never;
 }
 
 export interface Gen2026MultiNonBenefitInput extends Gen2026MultiCommonInput {
   coverage: "non_benefit";
   severity?: Severity;
+  /** ⚠ 급여 전용 축이라 비급여에는 대응 축이 없다(G-31). 런타임에서도 막는다. */
+  nhisCoinsuranceRate?: never;
   /** 제5조① — (1)상해비급여 / (2)질병비급여 각 축의 기존 지급보험금. 급여에는 없다. */
   priorAnnualInsurancePaid?: number;
   nonBenefitItem: Gen2026NonBenefitItem; // 필수
@@ -484,6 +503,11 @@ interface Gen2026SpecialBase {
   annualCoverageLimit?: never;
   outpatientCoverageLimit?: never;
   priorAnnualDeductible?: never;
+  // ⚠ 두 축도 이 경로에서 쓰이지 않는다(G-31). 보장종목은 `item`(+`injectionPurpose`)으로
+  //   정하고, 이 진입점은 비급여만 받으므로 급여 본인부담률에 대응 축이 없다.
+  //   종전에는 선언조차 없어 변수 경유가 통과했고 런타임이 **조용히 폐기**했다.
+  nhisCoinsuranceRate?: never;
+  nonBenefitItem?: never;
 }
 
 export interface Gen2026CriticalMskInput extends Gen2026SpecialBase {
@@ -665,6 +689,11 @@ export interface Gen2026RoomChargeInput {
   priorAnnualOutpatientVisits?: never;
   priorAnnualOutpatientDays?: never;
   priorAnnualTreatmentActCount?: never;
+  // ⚠ G-31. `nonBenefitItem`은 런타임 `UNUSED_KEYS`가 이미 막고 있었는데 타입에 선언이
+  //   없어 변수 경유가 컴파일을 통과했다(타입과 런타임이 어긋난 상태). `nhisCoinsuranceRate`는
+  //   양쪽 모두 비어 있어 **조용히 폐기**됐다(실측: 접근자 호출 0회). 둘 다 함께 닫는다.
+  nonBenefitItem?: never;
+  nhisCoinsuranceRate?: never;
 }
 
 export type Gen2026ItemClaimInput =

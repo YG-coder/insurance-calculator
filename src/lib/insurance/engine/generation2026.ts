@@ -115,12 +115,28 @@ const zeroOutpatientLimitNote = (unit: string): string =>
  * 급여 계산에서 쓰이지 않는 금액 축 (G-30). 둘 다 비급여 특별약관의 축이라 급여에 대응 축이 없고,
  * 종전에는 급여 두 경로에서 **조용히 폐기**됐다(실측: 두 축 모두 접근자 호출 0회).
  *   ⚠ 순서가 안내 우선순위다. 두 키가 동시에 실려도 먼저 찾은 키 하나만 안내한다.
- *   ⚠ **비급여**의 `priorAnnualDeductible` 미소비 조합(중증 통원·병의원급 입원·비중증)은
- *     이번 범위가 아니다 — 그쪽은 조용한 폐기가 아니라 **읽고 무시**이고(이름을 읽는다),
- *     거부를 세우려면 `tests/gen2026DeductiblePool.test.ts`의 480건 불변식 스윕이 고정한
- *     "다른 조합은 종전대로 계산된다"는 계약을 함께 바꿔야 한다. 후속 과제로 명시했다.
+ *   ⚠ **비급여**의 `priorAnnualDeductible` 미소비 조합(중증 통원·병의원급 입원·비중증)도
+ *     같은 커밋에서 닫았다. 아래 비급여 분기가 소비 조합만 통과시킨다.
+ *     (이 주석은 종전에 "이번 범위가 아니다 — 후속 과제"라고 적혀 있었다. 그 문장은
+ *      구현이 범위를 넓힌 뒤에도 남아 있던 낡은 기록이라 G-31에서 사실과 맞췄다.)
  */
 const BENEFIT_UNUSED_MONEY_KEYS = ["priorAnnualDeductible", "perVisitCoverageLimit"] as const;
+
+/**
+ * 급여 계산에서 쓰이지 않는 **비금액** 축 (G-31).
+ *
+ * `severity`(중증/비중증)와 `nonBenefitItem`(비급여 치료유형)은 둘 다 **비급여 특별약관**이
+ * 만든 구분이다. 특별약관1(중증)·특별약관2(비중증)이 비급여를 중증도로 나누고, 각 특약
+ * 제3조가 비급여를 보장종목으로 다시 나눈다(일반 (1)(2) / (3) 별도 보장종목).
+ * 급여에는 그 두 구분이 없다 — 급여의 본인부담금은 국민건강보험 본인부담률과 약관의 공제
+ * 기준만으로 정해진다.
+ *   ⚠ 종전에는 급여 두 경로에서 **조용히 폐기**됐다(실측: 두 축 모두 접근자 호출 0회 —
+ *     결과가 미제공과 완전히 같았던 이유는 반영돼서가 아니라 읽히지 않아서다).
+ *   ⚠ 순서가 안내 우선순위다. 두 키가 동시에 실려도 먼저 찾은 키 하나만 안내한다.
+ *   ⚠ 금액 축 목록(G-30)과 **합치지 않는다.** 거부 사유가 다르고, 한쪽 목록을 고치면
+ *     다른 쪽 안내가 조용히 따라 바뀐다.
+ */
+const BENEFIT_UNUSED_NON_MONEY_KEYS = ["severity", "nonBenefitItem"] as const;
 
 function pending(amount: number, reasons: string[]): CalcResult {
   return { status: "PENDING_UNVERIFIED", generation: "2026", amount,
@@ -189,6 +205,42 @@ export function calc2026(input: Gen2026ClaimInput): CalcResult {
         "쓰이지 않는 입력을 조용히 버리면 반영했다고 오해할 수 있어 계산하지 않았습니다.",
         `받은 값의 형식: ${typeof got}`,
       ]);
+    }
+    // ── 미사용 비금액 축 stray 거부 (G-31) ────────────────────────────
+    //   ⚠ **금액 축 루프 뒤**다. 두 가족이 동시에 실려도 종전(G-30) 안내가 먼저 나가도록
+    //     둔다 — 배포된 우선순위를 새 검사가 밀어내지 않는다.
+    //   ⚠ 값이 `0`이어도, 빈 문자열이어도 막는다. `undefined`만 미제공이다
+    //     (`in`이 아니라 `!== undefined`로 본다 — 호출부의 `{ ...base, key: undefined }`
+    //      패턴을 막지 않기 위해서다).
+    //   ⚠ 각 키를 **한 번만** 읽는다.
+    //   ⚠ 안내에 받은 값 자체를 넣지 않고 `typeof`만 넣는다(이 파일의 G-15 계약).
+    for (const key of BENEFIT_UNUSED_NON_MONEY_KEYS) {
+      const got: unknown = (input as unknown as Record<string, unknown>)[key];
+      if (got === undefined) continue;
+      return pending(amount, [
+        `5세대 급여: ${key}은(는) 비급여 특별약관이 만든 구분이라 급여 계산에는 쓰이지 않습니다. 중증/비중증 구분은 특별약관1·2가 비급여에 대해 나눈 것이고, 치료유형은 각 특약 제3조가 비급여를 보장종목으로 나눈 것입니다.`,
+        "급여의 본인부담금은 국민건강보험 본인부담률과 약관의 공제 기준으로 정해집니다.",
+        "쓰이지 않는 입력을 조용히 버리면 반영했다고 오해할 수 있어 계산하지 않았습니다.",
+        `받은 값의 형식: ${typeof got}`,
+      ]);
+    }
+    // ── 급여 입원의 건강보험 본인부담률 (G-31) ────────────────────────
+    //   이 엔진이 `nhisCoinsuranceRate`를 읽는 곳은 **급여 통원 분기뿐**이다
+    //   (`Math.max(nhis, floorRate)`). 급여 입원은 약관이 정률 20%로 고정하므로 이 축을
+    //   쓰지 않는다(GEN2026.benefit.inpatientRate).
+    //   ⚠ 종전에는 **조용히 폐기**됐다(실측: 급여 입원에서 접근자 호출 0회).
+    //   ⚠ 조건은 소비 분기의 부정과 정확히 같다 — `visit === "inpatient"`인 조합만 막고,
+    //     그 밖(통원, 그리고 무효한 visit이 통원으로 흐르는 종전 경로)은 건드리지 않는다.
+    //   ⚠ 값이 `0`이어도 막는다. `0`은 급여 통원에서는 유효값이지만 입원에서는 쓰이지 않는다.
+    if (input.visit === "inpatient") {
+      const strayNhisBenefit: unknown = (input as { nhisCoinsuranceRate?: unknown }).nhisCoinsuranceRate;
+      if (strayNhisBenefit !== undefined) {
+        return pending(amount, [
+          "건강보험 본인부담률(nhisCoinsuranceRate)은 급여 통원에서만 쓰입니다. 급여 입원의 자기부담률은 약관이 20%로 정하고 있어 이 값을 읽지 않습니다.",
+          "쓰이지 않는 입력을 조용히 버리면 반영했다고 오해할 수 있어 계산하지 않았습니다.",
+          `받은 값의 형식: ${typeof strayNhisBenefit}`,
+        ]);
+      }
     }
   }
 
@@ -324,6 +376,36 @@ export function calc2026(input: Gen2026ClaimInput): CalcResult {
       "누적 공제금액(priorAnnualDeductible)은 중증 비급여 입원 중 상급종합병원·종합병원에만 적용됩니다(특별약관1 제5조 제5항).",
       "이 조합에서는 계산에 쓰이지 않으므로, 조용히 버리지 않고 계산하지 않았습니다.",
       `받은 값의 형식: ${typeof rawDeductible}`,
+    ]);
+  }
+  // ── 비급여의 건강보험 본인부담률 stray 거부 (G-31) ──────────────────
+  //   `nhisCoinsuranceRate`는 **국민건강보험이 정한 급여 항목의 본인부담률**이다. 비급여는
+  //   정의상 국민건강보험이 부담하지 않는 항목이라 이 비율이 존재하지 않고, 비급여의
+  //   자기부담률은 특별약관1·2 제3조가 보장종목별로 따로 정한다.
+  //   ⚠ 종전에는 비급여 **전 경로**에서 **조용히 폐기**됐다(실측: 접근자 호출 0회 —
+  //     결과가 미제공과 완전히 같았던 이유는 반영돼서가 아니라 읽히지 않아서다).
+  //   ⚠ **금액 축 두 stray 뒤**다. 셋이 동시에 실려도 배포된 G-30 안내가 먼저 나간다.
+  //   ⚠ 치료유형·중증 구분 안내보다도 뒤다 — 그 셋이 정해지기 전에는 그 안내가 우선한다.
+  //   ⚠ 값이 `0`이어도 막는다. 급여 통원에서는 `0`이 유효값이지만 비급여에는 축 자체가 없다.
+  //   ⚠ 한 번만 읽고, 안내에는 `typeof`만 싣는다(이 파일의 G-15 계약).
+  //   ⚠ **종별 미지정(입원)은 후보로 남긴다.** 이 축의 소비 조건은 종별과 무관하지만, 그
+  //     조합에서는 아래 종별 preflight("의료기관 종별 미지정 → 계산 불가")가 배포된 선행
+  //     안내이고, 여기서 먼저 거부하면 "종별을 고르세요"라고 말해야 할 자리에 "이 필드를
+  //     쓰지 마세요"가 나간다(실측: 기준선 `daa7785` 대비 안내 1건 전환). 종별을 고른 뒤
+  //     같은 입력을 다시 넣으면 이 안내가 나온다. 형제 두 축(G-30)과 같은 계약이고,
+  //     조건식도 그 둘과 같은 모양으로 맞췄다.
+  //   ⚠ 종별 preflight를 제외한 나머지 자리에서는 형제 stray들과 같은 순서다 — 통원
+  //     가입금액의 **값 검증**보다 앞이다(그 둘도 이미 그 앞에 있다).
+  const tierPendingAhead = input.visit === "inpatient"
+    && input.tier !== "clinic" && input.tier !== "hospital";
+  const strayNhisNonBenefit: unknown = tierPendingAhead
+    ? undefined
+    : (input as { nhisCoinsuranceRate?: unknown }).nhisCoinsuranceRate;
+  if (strayNhisNonBenefit !== undefined) {
+    return pending(amount, [
+      "건강보험 본인부담률(nhisCoinsuranceRate)은 급여 통원 계산에만 쓰입니다. 비급여는 국민건강보험이 부담하지 않는 항목이라 이 비율이 없고, 자기부담률은 특별약관1·2 제3조가 보장종목별로 정합니다.",
+      "쓰이지 않는 입력을 조용히 버리면 반영했다고 오해할 수 있어 계산하지 않았습니다.",
+      `받은 값의 형식: ${typeof strayNhisNonBenefit}`,
     ]);
   }
   const priorDeductible = Math.max(0, (rawDeductible as number | undefined) ?? 0);

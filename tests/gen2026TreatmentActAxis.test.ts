@@ -428,8 +428,14 @@ console.log("\n[G-28] 7. 전달 검사 — 어느 진입점에 무엇이 넘어�
   check("일반 전환 stray 값을 한 번만 읽는다", /const strayActs: unknown = \(rest as \{ priorAnnualTreatmentActCount\?: unknown \}\)\.priorAnnualTreatmentActCount;/.test(code));
   const rcSrc = readFileSync("src/lib/insurance/engine/roomCharge2026.ts", "utf8");
   const rcCode = rcSrc.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
-  check("상급병실료 미사용 키 목록에 들어갔고 **맨 끝**이다",
-    /"priorAnnualOutpatientDays",\s*\n\s*"priorAnnualTreatmentActCount",\s*\n\] as const;/.test(rcCode), "목록 끝 아님");
+  // ⚠ 앵커를 갱신했다(G-31). 기존 의미는 "G-28이 넣은 `priorAnnualTreatmentActCount`가
+  //   **기존 13개 키 뒤**에 있어 그 키들의 안내 우선순위가 유지된다"였다. G-31이 같은 이유로
+  //   `nhisCoinsuranceRate`를 그 뒤에 붙였으므로, "맨 끝"이 아니라 **직전 키 바로 뒤**를
+  //   고정한다 — 지키려던 것(앞선 키들을 밀어내지 않는다)은 그대로다.
+  check("상급병실료 미사용 키 목록에서 승인 구간 축이 기존 13개 뒤에 있다",
+    /"priorAnnualOutpatientDays",\s*\n\s*"priorAnnualTreatmentActCount",/.test(rcCode), "직전 키 뒤 아님");
+  check("G-31의 nhisCoinsuranceRate가 그 뒤이자 목록 맨 끝이다",
+    /"priorAnnualTreatmentActCount",\s*\n\s*"nhisCoinsuranceRate",\s*\n\] as const;/.test(rcCode), "목록 끝 아님");
   check("상급병실료 미사용 키 루프가 한 번만 읽는다",
     /const got: unknown = raw\[key\];\n\s*if \(got !== undefined\) return rejected\(`상급병실료 차액 계산에 쓰이지 않는 입력\(\$\{key\}\)`, got\);/.test(rcCode));
   const mcSrc = readFileSync("src/lib/insurance/engine/multiClaim2026.ts", "utf8");

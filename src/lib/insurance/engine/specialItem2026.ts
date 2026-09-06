@@ -130,6 +130,22 @@ const SPECIAL_ITEM_UNUSED_MONEY_KEYS = [
   "annualCoverageLimit", "outpatientCoverageLimit", "priorAnnualDeductible",
 ] as const;
 
+/**
+ * 이 진입점의 **어느 경로에서도** 쓰이지 않는 비금액 축 (G-31).
+ *
+ *   `nhisCoinsuranceRate` 국민건강보험이 정한 **급여** 항목의 본인부담률이다. 이 진입점은
+ *                         `coverage: "non_benefit"`만 받으므로 어느 경로에도 대응 축이 없다.
+ *   `nonBenefitItem`      일반 (1)(2)의 치료유형 축이다. 이 진입점은 보장종목을 `item`
+ *                         (+`injectionPurpose`)으로 정하고, `route`가 일반으로 되돌아가는
+ *                         조합에서도 그 둘로 판정한다. 두 이름을 섞으면 어느 쪽이 결과를
+ *                         정했는지 알 수 없게 된다.
+ *   ⚠ 종전에는 두 경로 모두에서 **조용히 폐기**됐다(실측: 접근자 호출 0회).
+ *   ⚠ `SPECIAL_ITEM_UNUSED_MONEY_KEYS`와 합치지 않는다 — 그쪽은 `route === "special_item"`
+ *     전용이고 이쪽은 두 경로 공통이다. 합치면 한쪽 조건이 다른 쪽을 조용히 바꾼다.
+ *   ⚠ `roomCharge2026`의 `UNUSED_KEYS`와도 합치지 않는다(그 파일이 자기 목록을 갖는다).
+ */
+const ITEM_UNUSED_NON_MONEY_KEYS = ["nhisCoinsuranceRate", "nonBenefitItem"] as const;
+
 const SPECIAL_ITEM_VALUES: readonly string[] = Object.keys(GEN2026_SPECIAL_ITEM_LABEL);
 const PURPOSE_VALUES: readonly string[] = Object.keys(GEN2026_INJECTION_PURPOSE_LABEL);
 
@@ -328,6 +344,26 @@ function validateItemInput(
         got,
       );
     }
+  }
+
+  // ── 두 경로 공통의 미사용 비금액 축 stray 거부 (G-31) ──────────────
+  //   ⚠ **경로 대조 뒤**다(G-28 P1의 계약). 경로가 틀린 입력에서는 여기에 닿지 않으므로
+  //     경로 불일치 안내가 그대로 먼저 나가고, 이 이름들은 읽히지도 않는다.
+  //   ⚠ **금액 축 stray 뒤**다. 배포된 G-30 안내 우선순위를 새 검사가 밀어내지 않는다.
+  //   ⚠ `route === "general"`에서도 본다 — 그 경로에서도 두 축은 쓰이지 않는다. 위 금액 축
+  //     루프처럼 `special_item`으로 좁히면 일반으로 되돌아온 조합에서 조용히 버려진다.
+  //   ⚠ 값이 `0`이어도, 빈 문자열이어도 막는다. `undefined`만 미제공이다.
+  //   ⚠ 각 키를 한 번만 읽고, 목록 순서대로 먼저 찾은 키만 안내한다.
+  //   ⚠ 안내의 '받은 값'은 이 파일의 기존 계약대로 공용 `rejected()`가 안전 표시한다.
+  for (const key of ITEM_UNUSED_NON_MONEY_KEYS) {
+    const got: unknown = raw[key];
+    if (got === undefined) continue;
+    return rejected(
+      key === "nhisCoinsuranceRate"
+        ? "건강보험 본인부담률(nhisCoinsuranceRate)은 급여 통원 계산에만 쓰입니다. 이 진입점은 비급여만 계산하므로 대응 축이 없습니다 —"
+        : "치료유형(nonBenefitItem)은 일반 상해·질병 비급여의 축입니다. 이 진입점은 보장종목을 item(과 injectionPurpose)으로 정하므로 이 축을 읽지 않습니다 —",
+      got,
+    );
   }
 
   if (raw.route === "special_item") {

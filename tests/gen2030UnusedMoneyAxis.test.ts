@@ -96,7 +96,10 @@ const G26M: Record<string, (e?: Any) => Any> = {
   "비급여 통원": (e = {}) => ({ cause: "disease", coverage: "non_benefit", visit: "outpatient", tier: "clinic", severity: "non_critical", nonBenefitItem: "general", amounts: [AMT], priorAnnualOutpatientDays: 0, ...e }),
   "비급여 입원": (e = {}) => ({ cause: "disease", coverage: "non_benefit", visit: "inpatient", tier: "hospital", severity: "critical", nonBenefitItem: "general", amounts: [BIG], ...e }),
   "급여 통원": (e = {}) => ({ cause: "disease", coverage: "benefit", visit: "outpatient", tier: "clinic", nhisCoinsuranceRate: 0.4, amounts: [AMT], ...e }),
-  "급여 입원": (e = {}) => ({ cause: "disease", coverage: "benefit", visit: "inpatient", tier: "hospital", nhisCoinsuranceRate: 0.4, amounts: [AMT], ...e }),
+  // ⚠ 픽스처 갱신(G-31). 종전에는 `nhisCoinsuranceRate: 0.4`를 실었는데, 급여 **입원**은
+  //   이 축을 소비하지 않는다(당시에는 읽고 무시됐다). G-31이 그 조합을 거부하므로 픽스처에서
+  //   뺀다 — 이 절이 고정하려는 것은 급여 묶음의 **금액 축** 계약이라 의미는 그대로다.
+  "급여 입원": (e = {}) => ({ cause: "disease", coverage: "benefit", visit: "inpatient", tier: "hospital", amounts: [AMT], ...e }),
 };
 // ── 5세대 별도 보장종목 4경로 + 일반 전환 3경로 + 상급병실료 ─────────
 const G26I: Record<string, (e?: Any) => Any> = {

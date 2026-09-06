@@ -188,9 +188,53 @@ check("5세대 UI: 낡은 보류 안내 제거", !gen5.includes("기산점은 �
 
 // 통원 가입금액은 약관상 20만원 "이내에서 계약자가 선택한 금액"이라 상수로 단정하지 않는다.
 check("5세대 UI: 통원 가입금액은 계약 시 정한 금액임을 명시", gen5.includes("계약 시 정한 금액"));
-check("5세대 UI: 미입력 시 미적용", gen5.includes("입력하지 않으면 적용하지 않"));
-// 0원을 실제 한도로 조용히 적용하지 않는다는 정책이 화면에도 드러나야 한다.
-check("5세대 UI: 0원은 미입력 처리 안내", gen5.includes("0원을 입력해도 미입력으로 처리"));
+
+// ── 통원 가입금액의 빈 값·0원 설명 (G-24a) ──────────────────────────
+//   ⚠ **낡은 계약 3건을 교체했다.** 종전 화면 문구는 "입력하지 않으면 적용하지 않으며,
+//     0원을 입력해도 미입력으로 처리합니다"였고, 무효 안내는 "이 한도를 적용하지 않으려면
+//     완전히 비워 두세요"였다. G-24가 명시적 `0`에 **미입력과 분리된 결과 안내**를 붙이면서
+//     두 문구가 결과 화면과 어긋났다 — "미입력으로 처리"는 0을 미입력과 같다고 말하고,
+//     "완전히 비워"는 비우는 것만이 미적용 방법이라고 말하는데, 실제로는 **둘 다 미적용**이고
+//     **0만 결과 안내에 따로 표시**된다. 계산은 두 경우 모두 종전 그대로다.
+//   ⚠ 단건·다회의 도움말·무효 안내·결과 안내가 **같은 말을 하는지**를 고정한다.
+//   ⚠ **화면에 실제로 보이는 문장**으로 검사한다. 소스에는 `<b>` 태그와 줄바꿈, 그리고
+//     이 결정을 설명하는 주석이 섞여 있어 소스 문자열을 그대로 찾으면 통과·실패가 모두
+//     엉뚱해진다(주석이 옛 문구를 인용하기만 해도 금지형 검사가 걸린다).
+const rendered = (src: string) => src
+  .replace(/\{\/\*[\s\S]*?\*\/\}/g, " ")   // JSX 주석
+  .replace(/\/\*[\s\S]*?\*\//g, " ")         // 블록 주석
+  .replace(/^\s*\/\/.*$/gm, " ")               // 줄 주석
+  .replace(/<\/?b>/g, "")                       // 강조 태그
+  .replace(/\s+/g, " ");
+const gen5Text = rendered(gen5), gen5MultiText = rendered(gen5Multi);
+const ZERO_OR_EMPTY = "완전히 비우거나 0원을 입력하면 계산기에서는 이 한도를 적용하지 않습니다.";
+const ZERO_SHOWN = "0원을 입력한 경우 그 사실을 결과 안내에 따로 표시합니다.";
+const countOf = (hay: string, needle: string) => hay.split(needle).length - 1;
+check("5세대 단건 UI: 도움말과 무효 안내가 **둘 다** 빈 값과 0원을 함께 설명",
+  countOf(gen5Text, ZERO_OR_EMPTY) === 2 && countOf(gen5Text, ZERO_SHOWN) === 2,
+  `${countOf(gen5Text, ZERO_OR_EMPTY)} / ${countOf(gen5Text, ZERO_SHOWN)}`);
+check("5세대 다회 UI: 통원 가입금액 무효 안내가 같은 설명을 쓴다",
+  gen5MultiText.includes(ZERO_OR_EMPTY) && gen5MultiText.includes(ZERO_SHOWN));
+// 옛 두 표현이 다시 등장하면 결과 안내와 어긋난다.
+check("5세대 단건 UI: '0원을 입력해도 미입력으로 처리' 문구가 없다",
+  !gen5Text.includes("0원을 입력해도 미입력으로 처리"));
+// ⚠ 다회 안내에는 라벨과 "올바르게 입력해 주세요" 사이에 JSX 식(보장축 이름)이 끼어 있어
+//   한 문장으로 이어 찾을 수 없다. 두 화면 모두 **"통원 가입금액"이 나오는 모든 자리**에서
+//   뒤따르는 설명에 배타 표현이 없는지 본다.
+for (const [label, txt] of [["단건", gen5Text], ["다회", gen5MultiText]] as [string, string][]) {
+  const spots: number[] = [];
+  for (let i = txt.indexOf("통원 가입금액"); i !== -1; i = txt.indexOf("통원 가입금액", i + 1)) spots.push(i);
+  check(`5세대 ${label} UI: 통원 가입금액 설명이 화면에 있다`, spots.length > 0);
+  const bad = spots.filter((i) => txt.slice(i, i + 400).includes("완전히 비워"));
+  check(`5세대 ${label} UI: 통원 가입금액 설명에 '완전히 비워' 배타 표현이 없다`,
+    bad.length === 0, bad.map((i) => txt.slice(i, i + 90)).join(" ||| "));
+}
+// ⚠ 0원의 약관상 의미는 화면에서도 단정하지 않는다 — 계산기의 처리만 말한다.
+for (const banned of ["0원 가입은 무효", "0원 가입도 유효", "약관상 0원", "실제 한도가 0원",
+  "0원은 미입력과 같", "0원은 법적으로"]) {
+  check(`5세대 UI: 0원의 약관상 의미 단정 "${banned}" 없음`,
+    !gen5Text.includes(banned) && !gen5MultiText.includes(banned));
+}
 check("5세대 다회 UI: 연간 가입금액도 계약 시 정한 금액임을 명시", gen5Multi.includes("이내에서 계약 시 정한 금액"));
 
 // 다회 화면도 같은 근거 수준을 유지한다.

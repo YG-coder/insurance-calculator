@@ -428,14 +428,19 @@ console.log("\n[가드] 축·문구·출처의 금지형");
   check("특별약관 계산부가 cause를 읽지 않음", !/\.cause\b|cause:/.test(specialPart), (specialPart.match(/.{0,40}(\.cause|cause:).{0,40}/) ?? [""])[0]);
   check("일반 경로 전환부는 cause를 넘긴다", /cause: input\.cause/.test(eng));
   check("일반 경로 전환이 기존 엔진을 호출", /calculateMany2026\(\{/.test(eng));
-  check("전환 경로가 결과 금액을 손대지 않음", !/totalInsurancePay:/.test(eng.split("calculateRoutedGeneral2026")[1] ?? ""));
+  // ⚠ 함수 **선언**을 기준으로 자른다. 이름이 주석이나 호출부에 먼저 나오면 첫 번째 split이
+  //   엉뚱한 지점을 잡아 blocked()의 `totalInsurancePay: null`까지 범위에 들어온다(G-23에서 실제로 그랬다).
+  check("전환 경로가 결과 금액을 손대지 않음",
+    !/totalInsurancePay:/.test(eng.split("function calculateRoutedGeneral2026(")[1] ?? ""));
   check("승인 부족은 blocked로 처리", /needApproval > approved[\s\S]{0,200}return blocked/.test(eng));
   check("승인 부족에 covered:false를 쓰지 않음", !/needApproval[\s\S]{0,300}covered: false/.test(eng));
   check("50회 초과만 covered:false", /count >= spec\.annualVisits[\s\S]{0,400}covered: false/.test(eng));
   check("pool 분기가 항목 자격을 먼저 본다", /if \(spec\.poolEligible && line\.visit === "inpatient" && line\.tier === "hospital"\)/.test(eng));
   check("근골격계·주사료 행 타입에 tier가 없음", /interface Gen2026SpecialLine \{\s*amount: number;\s*visit: Visit;\s*\}/.test(types));
   check("보상 제외 행의 공제·pool이 0으로 고정", /deductibleBeforeAnnualCap: 0, deductibleApplied: 0, excessOwnPay: amount, poolUsedAfter: null/.test(eng));
-  check("0원 해석을 두 번 계산해 비교", /runOnce\(input, spec, true\)[\s\S]{0,400}runOnce\(input, spec, false\)/.test(eng));
+  // ⚠ 계약 갱신(G-23): 두 해석이 **같은 원값**에서 출발하도록 검증된 지급보험금을 인자로 받는다.
+  check("0원 해석을 두 번 계산해 비교 · 두 해석이 같은 원값을 받는다",
+    /runOnce\(input, spec, true, priorPaid\)[\s\S]{0,400}runOnce\(input, spec, false, priorPaid\)/.test(eng));
   check("UI가 라우팅을 엔진 함수로 판정", ui.includes("routeOfGen2026Item("));
   check("UI가 route로 좁혀 특별 결과를 읽음", ui.includes('itemResult.route === "special_item"'));
   check("UI에 as 단언으로 특별 결과를 읽는 코드가 없음", !/as Gen2026SpecialItemResult/.test(ui));

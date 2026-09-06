@@ -264,11 +264,16 @@ console.log("\n[G-14B] 9. 소스 계약");
 {
   const src = readFileSync("src/lib/insurance/engine/specialItem2026.ts", "utf8");
   const body = src.split("\n").filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join("\n");
-  // acts 1 + covered 1 + pool 1 = 3. 하나라도 사라지면 개수가 줄어든다.
-  check("두 필드 모두 안전 정수 검사",
+  // acts 1 + covered 1 + pool 1 + 기존 지급보험금 1 = 4. 하나라도 사라지면 개수가 줄어든다.
+  //   ⚠ 앞의 셋은 `validateItemInput`에 있고, 기존 지급보험금(priorAnnualInsurancePaid)은
+  //     G-23에서 `calculateSpecialItem2026`의 **preflight 뒤**에 들어왔다(소비 직전에 한 번
+  //     읽어 검증한다). 이 검사는 파일 전체의 개수만 보고, 위치 계약은
+  //     `tests/gen2026SpecialItemPaidValue.test.ts`가 따로 고정한다.
+  check("네 필드 모두 안전 정수 검사(셋은 validateItemInput · 지급보험금은 preflight 뒤)",
     body.includes("priorAnnualCoveredCount)는 0 이상의 정수여야 합니다")
     && body.includes("priorAnnualInpatientDeductible)은 0 이상의 정수여야 합니다")
-    && (body.match(/Number\.isSafeInteger/g) ?? []).length === 3,
+    && body.includes("priorAnnualInsurancePaid)은 0 이상의 정수여야 합니다")
+    && (body.match(/Number\.isSafeInteger/g) ?? []).length === 4,
     String((body.match(/Number\.isSafeInteger/g) ?? []).length));
   check("pool 행 조건은 some (every 아님)",
     /const eligible = lines\.some\(/.test(body)

@@ -52,6 +52,19 @@ export const GEN2026_INJECTION_GENERAL_ROUTE_DRUGS: readonly Gen2026InjectionPur
 export const GEN2026_MSK_APPROVED_THROUGH_VALUES: readonly Gen2026MskApprovedThrough[] =
   [10, 20, 30, 40, 50];
 
+/**
+ * 미입력(undefined)을 0으로 시작시키는 기본값 헬퍼.
+ *
+ * ⚠ 남은 사용처는 `runOnce()`의 **두 곳뿐**이다 — `priorAnnualCoveredCount`,
+ *   `priorAnnualInpatientDeductible`. 두 축 모두 `validateItemInput()`이 먼저
+ *   `Number.isSafeInteger(v) && v >= 0`으로 막으므로, 여기 도달하는 값은 이미 0 이상의
+ *   안전한 정수이거나 `undefined`다. 즉 이 함수가 무효값을 세탁하는 자리는 남아 있지 않다.
+ * ⚠ 지급보험금(`priorAnnualInsurancePaid`)은 더 이상 여기를 지나지 않는다.
+ *   `calculateSpecialItem2026()`이 preflight 뒤에서 한 번 읽어 검증하고 인자로 넘긴다(G-23).
+ * ⚠ 새 축을 이 함수에 태우지 않는다. 값 검증은 그 축이 소비되는 자리 앞에서 한다 —
+ *   경로·조합에 따라 결정되는 축은 `validateItemInput()`, preflight를 통과해야 소비되는
+ *   축은 `calculateSpecialItem2026()`의 preflight 뒤다.
+ */
 const nonNegInt = (v: number | undefined) =>
   v !== undefined && Number.isFinite(v) ? Math.max(0, Math.floor(v)) : 0;
 
@@ -237,6 +250,11 @@ function validateItemInput(input: Exclude<Gen2026ItemClaimInput, Gen2026RoomChar
     if (approved !== undefined && !(typeof approved === "number" && (GEN2026_MSK_APPROVED_THROUGH_VALUES as readonly number[]).includes(approved))) {
       return rejected("보상 승인 회차(approvedThroughVisit)", approved);
     }
+
+    // ⚠ 기존 지급보험금(priorAnnualInsurancePaid)은 **여기서 보지 않는다.** 이 축은
+    //   `calculateSpecialItem2026`의 preflight를 통과한 뒤에만 소비되므로, 검증도 그 뒤에서
+    //   한다. 여기서 읽으면 preflight가 이미 결과를 정한 입력에서까지 접근자가 실행되어
+    //   종전에 안전하게 차단되던 입력에 새 런타임 예외가 생긴다.
     return null;
   }
 
@@ -266,6 +284,8 @@ function validateItemInput(input: Exclude<Gen2026ItemClaimInput, Gen2026RoomChar
   //   **totalAmount가 0으로 보고되어** 차단 결과의 계약(진료비 합계는 유지)이 깨진다.
   //   ⚠ 검증을 없앤 것이 아니라 한 곳으로 모은 것이다. 두 진입점이 서로 다른 계약을
   //     갖지 않도록, 이 경로에는 검증을 우회하는 두 번째 공개 진입점을 만들지 않는다.
+  //   ⚠ 지급보험금(priorAnnualInsurancePaid)도 같은 이유로 여기서 읽지 않는다.
+  //     `calculateRoutedGeneral2026`이 `calculateMany2026`으로 그대로 넘긴다.
   return null;
 }
 
@@ -301,8 +321,11 @@ const ZERO_PAY_HOLD_NOTES = [
 /** 한 해석(countZeroPay)으로 전 행을 계산한다. */
 function runOnce(
   input: Gen2026SpecialItemInput, spec: ItemSpec, countZeroPay: boolean,
+  priorPaid: number | undefined,
 ): Gen2026SpecialItemResult {
-  let paid = nonNegInt(input.priorAnnualInsurancePaid);
+  // ⚠ 검증된 원값을 인자로 받는다. 여기서 input을 다시 읽으면 두 해석이 서로 다른 값에서
+  //   출발할 수 있다(값이 달라지는 getter). 미입력은 종전대로 0에서 시작한다.
+  let paid = priorPaid ?? 0;
   let count = nonNegInt(
     (input as { priorAnnualCoveredCount?: number }).priorAnnualCoveredCount,
   );
@@ -409,7 +432,9 @@ const fingerprint = (r: Gen2026SpecialItemResult) => JSON.stringify(
 );
 
 /** ⚠ export하지 않는다. 검증을 우회하는 두 번째 입구를 만들지 않기 위해서다. */
-function calculateSpecialItem2026(input: Gen2026SpecialItemInput): Gen2026SpecialItemResult {
+function calculateSpecialItem2026(
+  input: Gen2026SpecialItemInput,
+): Gen2026SpecialItemResult | Gen2026RejectedResult {
   const lines = input.lines ?? [];
   const totalAmount = lines.reduce((a, l) => a + normalizeAmount(l.amount), 0);
   const spec = specOf(input);
@@ -470,9 +495,38 @@ function calculateSpecialItem2026(input: Gen2026SpecialItemInput): Gen2026Specia
 
   // ── 지급 0원 행위의 횟수 소진 (HOLD) ──
   //   두 해석을 모두 계산해 결과가 갈리는 경우에만 막는다. 내부 두 세트는 노출하지 않는다.
-  const counted = runOnce(input, spec, true);
+  // ── 기존 지급보험금(priorAnnualInsurancePaid) ────────────────────────
+  //   <표1>의 **항목별 연간 보장한도**에서 이미 지급된 금액을 빼는 축이다. 세 항목 모두
+  //   아래 `runOnce()`가 소비한다(근골격계 350만·주사료 250만·중증 MRI 300만·비중증 MRI 200만).
+  //
+  // ⚠ **위치가 계약이다 — preflight 뒤, 계산 앞.**
+  //   위 두 preflight는 "값이 틀렸다"가 아니라 **확인 불가**를 알리는 자리이고, 그 안내가
+  //   나가는 입력에서는 이 축이 어디에도 쓰이지 않는다. 그러므로 읽지도 않는다. 이 검증을
+  //   `validateItemInput`(형식 검증 층)으로 올리면 세 가지가 함께 깨진다.
+  //     1) 승인 회차·MRI 종별 preflight 안내가 형식 거부로 바뀐다.
+  //     2) preflight가 이미 결과를 정한 입력에서 접근자가 실행된다.
+  //     3) 던지는 접근자에서 **종전에 안전하게 차단되던 입력에 새 런타임 예외**가 생긴다.
+  //   형제 축(보상한 횟수·누적 공제금액)이 형식 검증 층에 있다는 일관성보다 위 계약이 앞선다.
+  //
+  // ⚠ 여기서 **한 번만** 읽고 두 해석에 같은 원값을 넘긴다. `runOnce()`가 각자 다시 읽으면
+  //   호출마다 값이 달라지는 접근자에서 두 해석이 서로 다른 값에서 출발해, 실제 계산 차이가
+  //   없는데도 `fingerprint()` 비교가 갈려 잘못된 지급 0원 HOLD 차단이 난다(G-23 이전 실측:
+  //   `[0, 9000000]`을 번갈아 돌려주는 getter).
+  // ⚠ 무효값을 0·미입력·내림값으로 바꾸지 않는다. 종전에는 `nonNegInt()`가 음수·소수·
+  //   NaN·Infinity·문자열을 모두 0으로 만들어, 이미 한도를 소진한 청구에서 보험금이 과다
+  //   산출됐다(실측: 주사료 정답 200,000 → 700,000).
+  // ⚠ 항목별 한도를 넘는 값과 `MAX_SAFE`는 유효한 과거 상태다. 절삭하지 않는다 —
+  //   한도 판정은 산식이 `Math.max(limit - paid, 0)`으로 한다.
+  const paidRaw: unknown = (input as { priorAnnualInsurancePaid?: unknown }).priorAnnualInsurancePaid;
+  if (paidRaw !== undefined
+    && !(typeof paidRaw === "number" && Number.isSafeInteger(paidRaw) && paidRaw >= 0)) {
+    return rejected("기존 지급보험금(priorAnnualInsurancePaid)은 0 이상의 정수여야 합니다 —", paidRaw);
+  }
+  const priorPaid = paidRaw as number | undefined;
+
+  const counted = runOnce(input, spec, true, priorPaid);
   if (spec.annualVisits === null) return counted; // MRI는 횟수 한도가 없어 해석 차이가 없다
-  const notCounted = runOnce(input, spec, false);
+  const notCounted = runOnce(input, spec, false, priorPaid);
   if (fingerprint(counted) !== fingerprint(notCounted)) return blocked(totalAmount, ZERO_PAY_HOLD_NOTES);
   // 결과는 같지만 "몇 회째"는 해석에 따라 다를 수 있다. 다른 행은 null로 두고 단정하지 않는다.
   return {

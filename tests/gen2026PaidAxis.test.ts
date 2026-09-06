@@ -575,16 +575,18 @@ console.log("\n[소스] 축 키는 기존 라우팅 결과에서만 만든다");
     && /const positiveDays = \(v: string\): number \| null =>/.test(code));
   const eng = readFileSync("src/lib/insurance/engine/multiClaim2026.ts", "utf8");
   const item = readFileSync("src/lib/insurance/engine/specialItem2026.ts", "utf8");
-  // ⚠ **낡은 계약을 교체했다.** G-8 시점에는 세 누적 축이 모두 `nonNegInt`의 관용을 썼고
-  //   그 모양을 한 줄로 고정했다. G-20이 5세대 **다회**의 기존 지급보험금 축만 엄격 검증으로
-  //   옮겼으므로, 그 축은 새 모양으로 옮기고 나머지 둘(다회의 누적 공제금액, 별도 보장종목의
-  //   기존 지급보험금)이 **아직 관용을 쓴다**는 사실은 그대로 남긴다 — 후속 과제의 표지다.
+  // ⚠ **낡은 계약을 두 번째로 교체했다.** G-8 시점에는 세 누적 축이 모두 `nonNegInt`의 관용을
+  //   썼다. G-20이 5세대 **다회**의 기존 지급보험금을, G-23이 **별도 보장종목**의 기존
+  //   지급보험금을 엄격 검증으로 옮겼다. 남은 관용은 다회의 누적 공제금액 한 축뿐이며
+  //   그 사실을 그대로 남긴다 — 후속 과제의 표지다.
   check("다회 기존 지급보험금 축은 검증된 원값을 쓴다(G-20)",
     /let insurancePaid = \(paidRaw as number \| undefined\) \?\? 0;/.test(eng)
     && /const paidRaw = readCount\(nb, "priorAnnualInsurancePaid"\);/.test(eng));
-  check("나머지 두 누적 축은 아직 관용을 쓴다(후속 과제)",
-    /let deductiblePaid = nonNegInt\(nb\?\.priorAnnualDeductible\);/.test(eng)
-    && /let paid = nonNegInt\(input\.priorAnnualInsurancePaid\);/.test(item));
+  check("별도 보장종목 기존 지급보험금 축은 검증된 원값을 인자로 받는다(G-23)",
+    /let paid = priorPaid \?\? 0;/.test(item)
+    && !/nonNegInt\(input\.priorAnnualInsurancePaid\)/.test(item));
+  check("남은 관용은 다회의 누적 공제금액 한 축뿐이다(후속 과제)",
+    /let deductiblePaid = nonNegInt\(nb\?\.priorAnnualDeductible\);/.test(eng));
   check("4세대 축 타입을 재사용하지 않는다", !/Gen2021PaidAxis/.test(code) && !/gen2021Money/.test(code));
 }
 

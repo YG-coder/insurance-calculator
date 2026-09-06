@@ -306,8 +306,14 @@ console.log("\n[G-20] 10. 다른 진입점·다른 축·HOLD 무변경");
     severity: "critical", item: "injection", injectionPurpose: "general",
     lines: [{ amount: AMT, visit: "outpatient", tier: "clinic" }], priorAnnualCoveredCount: 0,
     priorAnnualInsurancePaid: v } as never));
-  check("별도 보장종목: 무효값이 종전대로 통과한다(후속 과제)",
-    statusOf(item("9900000")) === "OK", shape(item("9900000")));
+  // ⚠ **낡은 계약을 교체했다.** G-20 시점에는 별도 보장종목의 같은 이름이 아직 관용을 써서
+  //   무효값이 통과했다. G-23이 그 축을 닫았으므로 확인 대상을 새 계약으로 옮긴다.
+  check("별도 보장종목: 무효값도 이제 막힌다(G-23)",
+    statusOf(item("9900000")) === "PENDING_UNVERIFIED"
+    && shape(item("9900000")).includes("amt=0"), // rejected()는 총액을 만들지 않는다
+    shape(item("9900000")));
+  check("별도 보장종목: 정상값·undefined·0은 그대로 계산된다",
+    statusOf(item(400_000)) === "OK" && statusOf(item(0)) === "OK" && statusOf(item(undefined)) === "OK");
   // 다른 축은 그대로다.
   // ⚠ **낡은 계약을 교체했다.** G-20 시점에는 `annualCoverageLimit`이 아직 관용을 써서 그 사실을
   //   후속 과제 표지로 고정했다. G-21이 그 축도 검증으로 바꿨으므로, 확인 대상을 "두 축이
@@ -369,7 +375,14 @@ console.log("\n[G-20] 11. 소스 계약");
     `${iLegacy}/${iStray}/${iProbe}/${iDays}/${iDeduct}/${iPaid}/${iLimit}/${iRun}`);
   // 범위 밖 파일은 그대로다.
   const si = readFileSync("src/lib/insurance/engine/specialItem2026.ts", "utf8");
-  check("specialItem2026은 자기 nonNegInt를 그대로 쓴다", /let paid = nonNegInt\(input\.priorAnnualInsurancePaid\);/.test(si));
+  // ⚠ 계약 갱신(G-23): 별도 보장종목의 지급보험금도 검증된 원값을 쓰게 바뀌었다. 이 커밋이
+  //   손대지 않았다는 요지는 같으므로 확인 대상을 새 모양으로 옮긴다. `nonNegInt` 자체는
+  //   형제 축(보상한 횟수·누적 공제금액)의 미입력 기본값으로 그 파일에 남아 있다.
+  check("specialItem2026은 검증된 원값을 인자로 받는다(G-23) · nonNegInt는 두 곳에 남는다",
+    /let paid = priorPaid \?\? 0;/.test(si)
+    && !/nonNegInt\(input\.priorAnnualInsurancePaid\)/.test(si)
+    && (si.split("\n").filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join("\n")
+      .match(/nonNegInt\(/g) ?? []).length === 2);
   const rc = readFileSync("src/lib/insurance/engine/roomCharge2026.ts", "utf8");
   // ⚠ 계약 갱신(G-22): 상급병실료도 검증된 원값을 쓰게 바뀌었다. 이 커밋이 손대지 않았다는
   //   요지는 같으므로 확인 대상을 새 모양으로 옮긴다.

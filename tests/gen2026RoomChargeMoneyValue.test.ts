@@ -229,11 +229,14 @@ console.log("\n[G-22] 8. 다른 진입점·다른 축·HOLD 무회귀");
     severity: "critical", item: "injection", injectionPurpose: "general",
     lines: [{ amount: 400_000.9, visit: "outpatient", tier: "clinic" }], priorAnnualCoveredCount: 0 } as never));
   check("별도 보장종목: 소수 진료비가 종전대로 내림된다(후속 과제)", statusOf(fracAmount) === "OK");
+  // ⚠ **낡은 계약을 교체했다.** G-22 시점에는 별도 보장종목의 지급보험금이 아직 관용을 써서
+  //   음수가 통과했다. G-23이 그 축을 닫았으므로 확인 대상을 새 계약으로 옮긴다.
+  //   이 파일의 요지(상급병실료 진료비 두 축은 그대로다)는 아래 두 검사가 계속 고정한다.
   const negPaidItem = wrap(() => calculateGen2026Item({ route: "special_item", coverage: "non_benefit",
     severity: "critical", item: "injection", injectionPurpose: "general",
     lines: [{ amount: 1_000_000, visit: "outpatient", tier: "clinic" }], priorAnnualCoveredCount: 0,
     priorAnnualInsurancePaid: -400_000 } as never));
-  check("별도 보장종목: 음수 지급보험금이 종전대로 통과한다(후속 과제)", statusOf(negPaidItem) === "OK");
+  check("별도 보장종목: 음수 지급보험금도 이제 막힌다(G-23)", isRejected(negPaidItem), shape(negPaidItem));
   // 이 파일의 진료비 축도 그대로다.
   check("상급병실료 진료비: 소수는 종전대로 통과·내림",
     statusOf(wrap(() => calculateRoomCharge2026({ ...RC(), stays: [{ roomChargeTotal: 400_000.9, inpatientDays: 10 }] } as never))) === "OK");

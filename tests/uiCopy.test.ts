@@ -7,6 +7,9 @@
 //
 // 이 테스트가 실패하면 문구를 되돌리기 전에 먼저 약관 근거가 확보됐는지 확인할 것.
 import { readFileSync, readdirSync } from "node:fs";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { ZeroLimitPolicy } from "../src/components/calculators/HealthCalcMulti2026";
 
 let pass = 0, fail = 0;
 function check(name: string, cond: boolean, detail = "") {
@@ -205,6 +208,7 @@ const rendered = (src: string) => src
   .replace(/\/\*[\s\S]*?\*\//g, " ")         // 블록 주석
   .replace(/^\s*\/\/.*$/gm, " ")               // 줄 주석
   .replace(/<\/?b>/g, "")                       // 강조 태그
+  .replace(/\{" "\}/g, " ")                     // JSX 공백 표현식
   .replace(/\s+/g, " ");
 const gen5Text = rendered(gen5), gen5MultiText = rendered(gen5Multi);
 const ZERO_OR_EMPTY = "완전히 비우거나 0원을 입력하면 계산기에서는 이 한도를 적용하지 않습니다.";
@@ -237,6 +241,82 @@ for (const banned of ["0원 가입은 무효", "0원 가입도 유효", "약관�
 }
 check("5세대 다회 UI: 연간 가입금액도 계약 시 정한 금액임을 명시", gen5Multi.includes("이내에서 계약 시 정한 금액"));
 
+// ── 연간 보험가입금액의 빈 값·0원 설명 (G-24b) ───────────────────────
+//   ⚠ **낡은 계약을 교체했다.** 두 화면의 무효 안내가 "한도를 적용하지 않으려면 완전히 비워
+//     두세요"라고 배타적으로 말했는데, 엔진은 숫자 `0`도 한도 미적용으로 처리하고
+//     **미입력과 분리된 0원 전용 결과 안내**를 이미 낸다(5세대 G-21 · 4세대 G-18).
+//     4세대 도움말의 "비우면 … 적용하지 않습니다"도 같은 배타 표현이었다.
+//   ⚠ **상급병실료 폼은 예외다.** 5세대 다회의 무효 안내는 폼 게이트가 없어 일반 경로와
+//     상급병실료 경로가 **함께 쓰고**, `roomCharge2026`에는 0원 전용 결과 안내가 아직 없다
+//     (G-25 대상, 엔진 직접 호출로 실측). 그래서 "결과 안내에 따로 표시합니다"는
+//     `showRoomChargeForm`이 아닐 때만 말한다 — **없는 표시를 있다고 말하지 않는다.**
+const gen4Multi = readFileSync("src/components/calculators/HealthCalcMulti2021.tsx", "utf8");
+const gen4MultiText = rendered(gen4Multi);
+// ⚠ **파일 안에 한 번이라도 있으면 통과**하는 검사는 한 자리가 지워져도 잡지 못한다
+//   (변조 ④에서 실제로 통과했다). 각 자리를 **앞 문장까지 붙인 앵커**로 따로 고정한다.
+const HELP_ANCHOR = "입원과 통원은 이 축 안에서 합산합니다. ";
+const INVALID_ANCHOR = "50,000,000 형식입니다. ";
+check("4세대 다회 UI: 연간 가입금액 **도움말**이 빈 값과 0원을 함께 설명",
+  gen4MultiText.includes(`${HELP_ANCHOR}${ZERO_OR_EMPTY} ${ZERO_SHOWN}`));
+check("4세대 다회 UI: 연간 가입금액 **무효 안내**가 빈 값과 0원을 함께 설명",
+  gen4MultiText.includes(`${INVALID_ANCHOR}${ZERO_OR_EMPTY} ${ZERO_SHOWN}`));
+check("5세대 다회 UI: 일반 폼 **도움말**이 빈 값과 0원을 함께 설명",
+  gen5MultiText.includes(`${HELP_ANCHOR}${ZERO_OR_EMPTY} ${ZERO_SHOWN}`));
+// ⚠ **실제 렌더로 본다.** 이 자리는 경로에 따라 문장이 갈리므로 소스 문자열 검사로는
+//   "무엇이 화면에 나오는지"를 확인할 수 없다(G-24b 리뷰 지적). 두 상태를 각각 렌더한다.
+const renderText = (withZeroNotice: boolean) =>
+  renderToStaticMarkup(createElement(ZeroLimitPolicy, { withZeroNotice }))
+    .replace(/<\/?b>/g, "").replace(/\s+/g, " ").trim();
+const generalRendered = renderText(true);   // 일반 폼 — multiClaim2026이 0원 안내를 낸다
+const roomRendered = renderText(false);     // 상급병실료 폼 — roomCharge2026은 아직 내지 않는다
+check("5세대 다회 렌더: 일반 폼 무효 안내에 **두 문장 모두** 나온다",
+  generalRendered === `${ZERO_OR_EMPTY} ${ZERO_SHOWN}`, generalRendered);
+check("5세대 다회 렌더: 상급병실료 폼 무효 안내에는 **첫 문장만** 나온다",
+  roomRendered === ZERO_OR_EMPTY, roomRendered);
+check("5세대 다회 렌더: 상급병실료 폼은 0원 결과 안내를 약속하지 않는다",
+  !roomRendered.includes(ZERO_SHOWN) && !roomRendered.includes("결과 안내"), roomRendered);
+check("5세대 다회 렌더: 두 상태 모두 배타 표현이 없다",
+  !/완전히 비워|비우면/.test(generalRendered) && !/완전히 비워|비우면/.test(roomRendered));
+// 화면이 그 컴포넌트를 **실제로** 두 경로에 맞게 쓰는지도 고정한다.
+check("5세대 다회: 연간 가입금액 무효 안내가 경로에 따라 갈린다",
+  /<ZeroLimitPolicy withZeroNotice=\{!showRoomChargeForm\} \/>/.test(gen5Multi));
+check("5세대 다회: 통원 가입금액 무효 안내는 항상 두 문장이다",
+  /<ZeroLimitPolicy withZeroNotice \/>/.test(gen5Multi));
+for (const [label, txt] of [["5세대 다회", gen5MultiText],
+  ["4세대 다회", gen4MultiText]] as [string, string][]) {
+  // 옛 배타 표현이 이 필드 주변에 없다.
+  const spots: number[] = [];
+  for (let i = txt.indexOf("연간 보험가입금액"); i !== -1; i = txt.indexOf("연간 보험가입금액", i + 1)) spots.push(i);
+  for (let i = txt.indexOf("연간 가입금액"); i !== -1; i = txt.indexOf("연간 가입금액", i + 1)) spots.push(i);
+  check(`${label} UI: 연간 가입금액 설명에 배타 표현이 없다`,
+    spots.length > 0 && !spots.some((i) => /완전히 비워|비우면/.test(txt.slice(i, i + 400))),
+    spots.filter((i) => /완전히 비워|비우면/.test(txt.slice(i, i + 400))).map((i) => txt.slice(i, i + 80)).join(" ||| "));
+}
+// 상급병실료 경로에서는 0원 표시 문장을 말하지 않는다(엔진에 그 안내가 없다).
+check("5세대 다회 UI: 상급병실료 도움말은 0원 표시를 약속하지 않는다",
+  gen5MultiText.includes("완전히 비우거나 0원을 입력하면 계산기에서는 이 한도를 적용하지 않습니다. 상급병실료 차액은"));
+// 엔진의 0원 전용 결과 안내가 그대로 있어야 화면 설명이 참이 된다.
+const eng2026 = readFileSync("src/lib/insurance/engine/multiClaim2026.ts", "utf8");
+const eng2021 = readFileSync("src/lib/insurance/engine/multiClaim2021.ts", "utf8");
+const ENGINE_ZERO = "연간 보험가입금액을 0원으로 입력하셔서 계산기에서는 연간 지급 한도를 적용하지 않았습니다. 실제 가입금액이 있으면 증권의 금액을 입력해 주세요.";
+check("5세대 엔진: 연간 가입금액 0원 전용 결과 안내가 그대로", eng2026.includes(ENGINE_ZERO));
+check("4세대 엔진: 연간 가입금액 0원 전용 결과 안내가 그대로", eng2021.includes(ENGINE_ZERO));
+// 미입력 결과 안내와 0원 결과 안내는 서로 다른 문장이어야 한다.
+check("5세대 엔진: 미입력 안내와 0원 안내가 구분된다",
+  eng2026.includes("연간 보험가입금액도 계약자가 선택한 값이라 입력하지 않으면 적용하지 않습니다") && eng2026.includes(ENGINE_ZERO));
+check("4세대 엔진: 미입력 안내와 0원 안내가 구분된다",
+  eng2021.includes("증권의 금액을 입력하지 않아 연간 지급 한도는 적용하지 않았습니다") && eng2021.includes(ENGINE_ZERO));
+// 0원의 약관상 의미는 두 화면에서도 단정하지 않는다.
+for (const banned of ["0원 가입은 무효", "0원 가입도 유효", "약관상 0원", "실제 한도가 0원",
+  "0원은 미입력과 같", "0원은 법적으로"]) {
+  check(`4세대 다회 UI: 0원의 약관상 의미 단정 "${banned}" 없음`, !gen4MultiText.includes(banned));
+}
+// 다른 축의 문구는 건드리지 않았다.
+check("5세대 다회 UI: 통원 가입금액 설명은 G-24a 그대로",
+  gen5MultiText.includes(ZERO_OR_EMPTY) && gen5MultiText.includes(ZERO_SHOWN));
+check("5세대 단건 UI: 급여 본인부담률 안내는 그대로다(0%가 유효값이라 배타 표현이 맞다)",
+  gen5Text.includes("건강보험 본인부담률을 올바르게 입력해 주세요") && gen5Text.includes("모르면 완전히 비워 두세요"));
+
 // 다회 화면도 같은 근거 수준을 유지한다.
 // "역년 기준이 아닙니다" 같은 부정문은 오히려 지켜야 할 문구이므로, 단정형만 금지한다.
 for (const banned of ["올해", "1월 1일부터", "역년 기준으로"]) {
@@ -267,6 +347,11 @@ for (const banned of ["모든 같은 날", "같은 날이면 무조건"]) {
 check("5세대 다회 UI: 미지원 고지 제거", !gen5Multi.includes("현재 지원하지 않습니다"));
 
 const std = readFileSync("src/components/calculators/HealthCalcStandardized.tsx", "utf8");
+// ⚠ G-24b 범위 밖 확인 — 2·3세대의 회(건)당 가입금액은 그 엔진에 0원 전용 결과 안내가
+//   **없어서** 배타 표현이 사실과 맞다. 이 커밋이 잘못 건드리지 않았는지 본다.
+check("2·3세대 UI: 회(건)당 가입금액 안내는 그대로다(그 엔진에는 0원 전용 안내가 없다)",
+  rendered(std).includes("이 한도를 적용하지 않으려면 완전히 비워 두세요")
+  && !readFileSync("src/lib/insurance/engine/generationStandardized.ts", "utf8").includes("0원으로 입력하셔서"));
 
 // 2·3세대 UI: 표준형/선택형은 계약일로 추정하지 않는다는 규약이 문구로 남아 있어야 한다.
 //   2012.12.28 세칙 개정의 시행일을 확인하지 못했고, 애초에 계약일이 아니라 가입 상품이 정하는 값이다.

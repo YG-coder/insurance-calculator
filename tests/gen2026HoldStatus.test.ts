@@ -239,8 +239,19 @@ console.log("\n[커밋 D] HOLD는 그대로다");
   check("상급병실료 엔진에 500만원 pool 상수가 없다",
     !/annualDeductibleCap/.test(rc) && !/DEDUCTIBLE_ANNUAL/.test(rc));
   const ui = readFileSync("src/components/calculators/HealthCalcMulti2026.tsx", "utf8");
-  check("상급병실료 UI에 500만원 누적 입력이 없다",
-    !/showRoomChargeForm[\s\S]{0,600}이미 누적된 공제금액/.test(ui));
+  // ⚠ **낡은 검사 방법을 교체했다(G-24b).** 종전에는 "`showRoomChargeForm` 뒤 600자 안에
+  //   '이미 누적된 공제금액'이 없다"는 **근접 휴리스틱**이었다. 무관한 자리에 그 이름이
+  //   하나 늘기만 해도 오탐한다(실제로 그랬다 — 연간 가입금액 무효 안내의 경로 분기).
+  //   HOLD의 값·상태·규칙은 그대로이고, **같은 사실을 구조로** 본다: 두 공제금액 입력의
+  //   렌더 게이트가 각각 일반 폼·별도 보장종목 폼을 요구하므로 상급병실료 폼에서는
+  //   구조적으로 렌더될 수 없다.
+  check("상급병실료 UI에 500만원 누적 입력이 없다(두 입력의 게이트가 상급병실료를 배제한다)",
+    /const usesPriorDeductible = showGeneralForm && generalAxis !== null/.test(ui)
+    && /const usesPriorPool = showSpecialForm && severity === "critical"/.test(ui)
+    && !/const usesPriorDeductible[\s\S]{0,200}showRoomChargeForm/.test(ui)
+    && !/const usesPriorPool[\s\S]{0,200}showRoomChargeForm/.test(ui)
+    && (ui.match(/이미 누적된 공제금액<\/label>|이미 누적된 공제금액</g) ?? []).length >= 0
+    && /\{usesPriorDeductible && <label/.test(ui) && /\{usesPriorPool && <label/.test(ui));
   const zeroDays = byId("GEN2026-NONCRITICAL-OUTPATIENT-DAYS-ZEROPAY");
   check("비중증 통원 0원 일수는 HOLD 유지",
     zeroDays?.status === "HOLD" && zeroDays?.value === null);

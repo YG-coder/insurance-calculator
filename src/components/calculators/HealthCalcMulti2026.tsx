@@ -205,6 +205,26 @@ const roomChargeAmount = (v: string): number | null => {
  *   소수(`1.5`·`1.`·`.5`), 지수 표기(`1e3`), 잘못된 쉼표(`1,0`·`1,00,000`·`,300`·`300,`),
  *   안전 정수 범위(2^53−1) 초과.
  */
+/**
+ * 가입금액 축의 **빈 값·0원 정책 문장**. 무효 입력 안내에서 쓴다.
+ *
+ * ⚠ **왜 컴포넌트로 뺐나** — 이 문장은 경로에 따라 갈린다. 인라인 삼항으로 두면 화면 문구
+ *   검사가 소스 문자열만 보게 되어 **실제로 무엇이 렌더되는지 확인하지 못한다**(G-24b 리뷰에서
+ *   지적받은 자리다). 분리해 두면 테스트가 두 상태를 각각 렌더해 텍스트로 확인할 수 있다.
+ * @param withZeroNotice 이 경로의 엔진이 **0원 전용 결과 안내를 내는가.**
+ *   일반 비급여 경로(`multiClaim2026`)는 낸다(G-21). 상급병실료 경로(`roomCharge2026`)는
+ *   아직 내지 않으므로(G-25 대상) 두 번째 문장을 말하지 않는다 — 없는 표시를 약속하지 않는다.
+ * ⚠ 0원 가입이 약관상 유효한지·무효인지는 단정하지 않는다. 계산기의 처리만 말한다.
+ */
+export function ZeroLimitPolicy({ withZeroNotice }: { withZeroNotice: boolean }) {
+  return (
+    <>
+      <b>완전히 비우거나 0원을 입력하면</b> 계산기에서는 이 한도를 적용하지 않습니다.
+      {withZeroNotice ? " 0원을 입력한 경우 그 사실을 결과 안내에 따로 표시합니다." : null}
+    </>
+  );
+}
+
 const GEN2026_AMOUNT_FORMAT = /^(?:[0-9]+|[1-9][0-9]{0,2}(?:,[0-9]{3})+)$/;
 const gen2026Amount = (v: string): number | null => {
   if (!GEN2026_AMOUNT_FORMAT.test(v)) return null;
@@ -843,7 +863,7 @@ export default function HealthCalcMulti2026() {
         ariaLabel={`통원 가입금액 (${generalAxisLabel(generalAxis)} 보장축)`} /></div><span className="mt-2 block text-xs font-normal text-slate-500">약관상 20만 원 이내에서 계약 시 정한 금액이며 <b>{generalAxisLabel(generalAxis)}</b> 보장축에 대해 따로 정해집니다(특별약관1·2 제5조 제3항). 중증은 <b>1회당</b>, 비중증은 <b>1일당</b>으로 단위가 다릅니다. 입력하지 않으면 적용하지 않습니다.</span></label>}
     {showGeneralForm && generalAxis !== null && <label className="mt-4 block max-w-sm text-sm font-semibold">연간 보험가입금액 ({generalAxisLabel(generalAxis)} 보장축, 선택)<div className="mt-1"><RawAmountInput id="gen2026-annual-limit" value={annualLimit}
         onChange={setAnnualLimit} placeholder={severity === "critical" ? "예: 50000000 — 모르면 비워두세요" : "예: 10000000 — 모르면 비워두세요"}
-        ariaLabel={`연간 보험가입금액 (${generalAxisLabel(generalAxis)} 보장축)`} /></div><span className="mt-2 block text-xs font-normal text-slate-500">약관은 {severity === "critical" ? "5천만" : "1천만"} 원 <b>이내에서 계약 시 정한 금액</b>으로 규정하며, <b>{generalAxisLabel(generalAxis)}</b> 보장축에 대해 따로 정해집니다(특별약관1·2 제5조 제1항). 입원과 통원은 이 축 안에서 합산합니다. 입력하지 않으면 적용하지 않습니다.</span></label>}
+        ariaLabel={`연간 보험가입금액 (${generalAxisLabel(generalAxis)} 보장축)`} /></div><span className="mt-2 block text-xs font-normal text-slate-500">약관은 {severity === "critical" ? "5천만" : "1천만"} 원 <b>이내에서 계약 시 정한 금액</b>으로 규정하며, <b>{generalAxisLabel(generalAxis)}</b> 보장축에 대해 따로 정해집니다(특별약관1·2 제5조 제1항). 입원과 통원은 이 축 안에서 합산합니다. 완전히 비우거나 0원을 입력하면 계산기에서는 이 한도를 적용하지 않습니다. 0원을 입력한 경우 그 사실을 결과 안내에 따로 표시합니다.</span></label>}
     {showGeneralForm && severity === "non_critical" && visit === "inpatient" && <div className="mt-4"><NoticeBox variant="info">비중증 입원의 <b>1회당 300만 원 한도</b>는 「의료법」 제3조제2항 의료기관 중 <b>종합병원을 제외한 곳</b>(병·의원급)에서 발생한 비급여 의료비에만 적용됩니다(특별약관2 제3조 (1)제1항·(2)제1항). 상급종합·종합병원 입원에는 적용하지 않습니다.</NoticeBox></div>}
     {showGeneralForm && severity === "critical" && visit === "outpatient" && <label className="mt-4 block max-w-sm text-sm font-semibold">계약해당일 기준 1년간 이미 사용한 통원 횟수<input className="input-base mt-1" inputMode="numeric" value={priorVisits} onChange={(e) => setPriorVisits(e.target.value)} placeholder="이전 통원이 없으면 0" /><span className="mt-2 block text-xs font-normal text-slate-500">중증 통원은 약관상 <b>계약일 또는 매년 계약해당일부터 1년간 통원 {GEN2026.nonBenefit.critical.outpatientAnnualVisits}회</b>가 한도입니다(특별약관1 제3조 (1)제1항·(2)제1항). 보상 단위가 <b>1회의 통원</b>이므로, ①같은 의료기관에서 같은 날 받은 외래와 처방조제, ②하루에 같은 치료를 목적으로 2회 이상 받은 통원만 <b>한 행으로 합쳐</b> 입력해 주세요.</span></label>}
     {showGeneralForm && severity === "non_critical" && visit === "outpatient" && <label className="mt-4 block max-w-sm text-sm font-semibold">계약해당일 기준 1년간 이미 사용한 통원일수<input className="input-base mt-1" inputMode="numeric" value={priorOutDays} onChange={(e) => setPriorOutDays(e.target.value)} placeholder="이전 통원이 없으면 0" /><span className="mt-2 block text-xs font-normal text-slate-500">비중증 통원은 약관상 <b>계약일 또는 매년 계약해당일부터 1년간 통원 {GEN2026.nonBenefit.nonCritical.outpatientAnnualDays}일</b>이 한도입니다(특별약관2 제3조 (1)제1항·(2)제1항). 보상 단위가 <b>통원 1일당</b>이므로, 같은 날 외래와 처방·조제비는 <b>한 행으로 합쳐</b> 입력해 주세요. 같은 날을 여러 행으로 나누면 일수가 실제보다 빨리 소진됩니다.</span></label>}
@@ -918,7 +938,7 @@ export default function HealthCalcMulti2026() {
       <label className="text-sm font-semibold">연간 보험가입금액 ({generalAxis === null ? "" : generalAxisLabel(generalAxis)} 보장축, 선택)<div className="mt-1"><RawAmountInput id="gen2026-annual-limit" value={annualLimit}
         onChange={setAnnualLimit} placeholder={severity === "critical" ? "예: 50000000 — 모르면 비워두세요" : "예: 10000000 — 모르면 비워두세요"}
         ariaLabel={`연간 보험가입금액 (${generalAxis === null ? "" : generalAxisLabel(generalAxis)} 보장축)`} /></div></label>
-      <p className="text-xs text-slate-500 sm:col-span-2">약관은 {severity === "critical" ? "5천만" : "1천만"} 원 <b>이내에서 계약 시 정한 금액</b>으로 규정합니다. 입력하지 않으면 적용하지 않습니다. 상급병실료 차액은 (1)(2) 표 안의 한 행이라 <b>일반 입원·통원과 같은 연간 보험가입금액을 공유</b>합니다. 그래서 위 두 값은 <b>일반 화면과 같은 보장축 상태</b>이며, 기존 지급보험금에는 <b>같은 축의 일반 입원·통원과 상급병실료 지급액을 모두 포함</b>해 주세요.</p>
+      <p className="text-xs text-slate-500 sm:col-span-2">약관은 {severity === "critical" ? "5천만" : "1천만"} 원 <b>이내에서 계약 시 정한 금액</b>으로 규정합니다. 완전히 비우거나 0원을 입력하면 계산기에서는 이 한도를 적용하지 않습니다. 상급병실료 차액은 (1)(2) 표 안의 한 행이라 <b>일반 입원·통원과 같은 연간 보험가입금액을 공유</b>합니다. 그래서 위 두 값은 <b>일반 화면과 같은 보장축 상태</b>이며, 기존 지급보험금에는 <b>같은 축의 일반 입원·통원과 상급병실료 지급액을 모두 포함</b>해 주세요.</p>
     </div>}
     {showSpecialForm && <div className="mt-5 grid gap-3 sm:grid-cols-2">
       <label className="text-sm font-semibold">계약해당일 기준 1년간 이 보장종목의 기존 지급보험금 ({itemAxis === null ? "" : GEN2026_ITEM_AXIS_LABEL[itemAxis]})<div className="mt-1"><RawAmountInput id="gen2026-prior-insurance" value={priorInsurance}
@@ -966,10 +986,10 @@ export default function HealthCalcMulti2026() {
       <b>기존 지급보험금</b>{paidAxis === null ? null : <>({showSpecialForm ? (itemAxis === null ? "" : GEN2026_ITEM_AXIS_LABEL[itemAxis]) : (generalAxis === null ? "" : `${generalAxisLabel(generalAxis)} 보장축`)})</>}을 올바르게 입력해 주세요. <b>0 이상의 정수</b>만 받습니다 — <b>3000000</b> 또는 <b>3,000,000</b> 형식입니다. 이 축에 이미 지급된 보험금이 없으면 <b>0</b>을 입력하세요. 공백만 입력한 값은 빈 값으로 보지 않습니다. 음수·소수·문자·지수 표기·잘못된 쉼표는 계산기가 임의로 고치지 않습니다.
     </NoticeBox></div>}
     {submitted && annualLimitInvalid && <div className="mt-5"><NoticeBox variant="warning">
-      <b>연간 보험가입금액</b>({generalAxis === null ? "" : `${generalAxisLabel(generalAxis)} 보장축`})을 올바르게 입력해 주세요. <b>0 이상의 정수</b>만 받습니다 — <b>50000000</b> 또는 <b>50,000,000</b> 형식입니다. 이 한도를 적용하지 않으려면 <b>완전히 비워</b> 두세요. 공백만 입력한 값은 빈 값으로 보지 않습니다. 음수·소수·문자·지수 표기·잘못된 쉼표는 계산기가 임의로 고치지 않습니다.
+      <b>연간 보험가입금액</b>({generalAxis === null ? "" : `${generalAxisLabel(generalAxis)} 보장축`})을 올바르게 입력해 주세요. <b>0 이상의 정수</b>만 받습니다 — <b>50000000</b> 또는 <b>50,000,000</b> 형식입니다. <ZeroLimitPolicy withZeroNotice={!showRoomChargeForm} /> 공백만 입력한 값은 빈 값으로 보지 않습니다. 음수·소수·문자·지수 표기·잘못된 쉼표는 계산기가 임의로 고치지 않습니다.
     </NoticeBox></div>}
     {submitted && outpatientLimitInvalid && <div className="mt-5"><NoticeBox variant="warning">
-      <b>통원 가입금액</b>({generalAxis === null ? "" : `${generalAxisLabel(generalAxis)} 보장축`})을 올바르게 입력해 주세요. <b>0 이상의 정수</b>만 받습니다 — <b>200000</b> 또는 <b>200,000</b> 형식입니다. <b>완전히 비우거나 0원을 입력하면</b> 계산기에서는 이 한도를 적용하지 않습니다. 0원을 입력한 경우 그 사실을 결과 안내에 따로 표시합니다. 공백만 입력한 값은 빈 값으로 보지 않습니다. 음수·소수·문자·지수 표기·잘못된 쉼표는 계산기가 임의로 고치지 않습니다.
+      <b>통원 가입금액</b>({generalAxis === null ? "" : `${generalAxisLabel(generalAxis)} 보장축`})을 올바르게 입력해 주세요. <b>0 이상의 정수</b>만 받습니다 — <b>200000</b> 또는 <b>200,000</b> 형식입니다. <ZeroLimitPolicy withZeroNotice /> 공백만 입력한 값은 빈 값으로 보지 않습니다. 음수·소수·문자·지수 표기·잘못된 쉼표는 계산기가 임의로 고치지 않습니다.
     </NoticeBox></div>}
     {submitted && priorDeductibleInvalid && <div className="mt-5"><NoticeBox variant="warning">
       <b>이미 누적된 공제금액</b>(중증 비급여 입원, 500만 원 상한)을 올바르게 입력해 주세요. <b>0 이상의 정수</b>만 받습니다 — <b>3000000</b> 또는 <b>3,000,000</b> 형식입니다. 이미 누적된 공제금액이 없으면 <b>0</b>을 입력하세요(완전히 비운 값도 0으로 봅니다). 공백만 입력한 값은 빈 값으로 보지 않습니다. 음수·소수·문자·지수 표기·잘못된 쉼표는 계산기가 임의로 고치지 않습니다. 500만 원을 넘는 값도 그대로 받습니다 — 상한 처리는 약관 산식이 합니다.

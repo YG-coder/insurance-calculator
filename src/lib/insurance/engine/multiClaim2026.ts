@@ -1,4 +1,9 @@
-import { normalizeAmount } from "../common/settle";
+// ⚠ `normalizeAmount`를 더 이상 import하지 않는다(G-27). 진료비를 조용히 고치던 유일한
+//   자리(`(input.amounts ?? []).map(normalizeAmount)`)가 엄격 검증으로 바뀌어 사용처가
+//   사라졌다. 남겨 두면 다음에 추가되는 금액 축이 다시 조용히 변형될 자리가 생긴다.
+//   ⚠ 함수 자체는 한 글자도 바꾸지 않았다. 다른 엔진(`multiClaim.ts`·`generation*.ts`)이
+//     각자의 계약으로 쓰고 있고 이번 범위가 아니다. 4세대 `multiClaim2021.ts`도 G-16에서
+//     같은 이유로 import를 지웠다.
 import { GEN2026 } from "./constants";
 import { calc2026 } from "./generation2026";
 import { CapCode, ClaimLineResult, Gen2026MultiClaimInput, Gen2026NonBenefitItem, MultiClaimResult, Severity } from "./types";
@@ -30,6 +35,24 @@ const nonNegInt = (v: number | undefined) =>
  */
 const badCount = (v: unknown): boolean =>
   !(typeof v === "number" && Number.isSafeInteger(v) && v >= 0);
+
+/**
+ * 진료비 원소의 형식 검증 — 0 이상의 안전한 정수.
+ *
+ * ⚠ `itemGuards.isClaimAmount`와 **본문이 한 글자도 다르지 않다.** 그런데도 import하지 않고
+ *   이 파일에 두는 이유는 **모듈 경계 계약**이 먼저이기 때문이다 — `itemGuards`는 항목별
+ *   진입점(`specialItem2026`·`roomCharge2026`)의 leaf 가드이고, 그 파일이 함께 내보내는
+ *   `rejected()`·`showValue()`는 이 엔진의 반환 계약(`blocked()` — 진료비 합계 보존)과
+ *   **다른 계약**이다. 이 파일이 `itemGuards`를 import하지 않는다는 계약은 G-14D부터
+ *   검사로 고정돼 있고(tests/gen2026RejectedSafeDisplay), 술어 하나를 아끼려고 그 경계를
+ *   허물면 다음에 `rejected()`가 딸려 들어올 자리가 생긴다.
+ *   ⚠ 대신 두 정의가 **조용히 갈라지지 못하도록** 회귀검사가 두 파일의 본문을 서로 대조한다.
+ * ⚠ `badCount`(통원 카운터)와 술어가 같아 보여도 축이 다르다. 단위·안내·근거 조문이 모두
+ *   다르므로 서로 대신 쓰지 않는다(G-22가 세운 판단 그대로다).
+ * ⚠ 숫자 `0`은 **유효한 진료비 행**이다. 거부하지 않는다.
+ */
+const isClaimAmount = (v: unknown): v is number =>
+  typeof v === "number" && Number.isSafeInteger(v) && v >= 0;
 const readCount = (o: object | undefined, key: string): unknown =>
   (o as Record<string, unknown> | undefined)?.[key];
 
@@ -174,12 +197,79 @@ function buildNotes(
 }
 
 export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResult {
-  const amounts = (input.amounts ?? []).map(normalizeAmount);
+  /**
+   * 신뢰할 수 있는 총액이 **없을 때**의 차단 (G-27).
+   *   ⚠ 아래 `blocked()`와 다르다. `blocked()`는 진료비가 이미 검증된 뒤 횟수·일수·치료유형
+   *     같은 **다른 이유**로 계산을 막는 자리이고 진료비 합계를 보존한다. 진료비 자체가
+   *     무효이면 그 합계를 만들 수 없다 — `[300000, "abc"]`에서 `totalAmount: 300000`을
+   *     돌려주면 "무효 행을 뺀 합계"라는 새 계약이 생긴다. 총액을 0으로 통일한다.
+   *   ⚠ 4세대 G-16의 `unusable()`과 같은 형태다. 반환 객체의 모양은 공개 타입
+   *     `MultiClaimResult` 그대로이고 상태도 기존 `PENDING_UNVERIFIED`다.
+   */
+  const unusable = (notes: string[]): MultiClaimResult => ({
+    status: "PENDING_UNVERIFIED", generation: "2026", lines: [],
+    totalAmount: 0, totalOwnPay: null, totalInsurancePay: null, appliedCaps: [], notes,
+  });
+
+  // ── 진료비: 컨테이너 → 원소 → 합계 (G-27) ──────────────────────────
+  //   ⚠ **어떤 검사보다 먼저**다. 종전에는 첫 줄의 `(input.amounts ?? []).map(normalizeAmount)`가
+  //     값을 조용히 고쳐, 잘못된 금액이 **0원 행**이 되어 계산에 들어갔다(엔진 직접 호출로
+  //     실측: 음수·소수·NaN·±Infinity·문자열·불리언·객체·배열·bigint·Symbol·함수·순환 참조·
+  //     `null`·`undefined`가 전부 0원 행, `300000.9`는 300,000으로 내림, `MAX_SAFE+1`은
+  //     무검증 통과). `[300000, "abc"]`는 **부분합 300,000과 없던 0원 행**을 함께 노출했다.
+  //   ⚠ 그리고 그 합계가 아래 `blocked()`의 `totalAmount`로 그대로 나갔다 — 검증되지 않은
+  //     입력에서 만든 부분합이 차단 결과에 실렸다는 뜻이다. 그래서 이 검사가 **모든
+  //     preflight보다 앞**에 와야 한다. 4세대 G-16이 같은 이유로 같은 자리를 골랐다.
+  //   ⚠ **안내 우선순위가 바뀐다.** 종전에는 진료비가 무효여도 stray 키·치료유형·통원 카운터
+  //     안내가 먼저 나갔다(진료비 검사가 없었으므로). 이제는 진료비가 먼저다. 이 전환은
+  //     의도한 것이고 차분에서 별도 버킷으로 집계한다.
+  //   ⚠ `amounts ?? []` 폴백을 제거했다. 타입은 `amounts: number[]`로 **필수**이고,
+  //     미제공을 빈 묶음으로 보면 "넘기지 않았다"와 "청구가 없다"가 같은 상태가 된다.
+  //   ⚠ 명시적으로 입력한 숫자 `0` 행의 기존 처리(계산 포함)는 그대로다. 5세대에서 0원 행은
+  //     통원 횟수·일수를 **소진하지 않는다**(4세대와 반대다). 이번에 바꾸지 않았다.
+  //   ⚠ 안내에 받은 값 자체를 넣지 않고 `typeof`만 넣는다. 형식만 알려도 충분한 자리이고,
+  //     무효 입력을 템플릿 리터럴에 그대로 끼우면 `Symbol`이나 `toString()`이 던지는 객체에서
+  //     안내를 만드는 중에 예외가 난다. (이 파일의 다른 안내 11곳은 값 자체가 단서가 되는
+  //     자리라 지역 `showValue()`를 쓴다. 두 방식 모두 예외를 내지 않는다.)
+  const rawAmounts: unknown = (input as { amounts?: unknown }).amounts;
+  if (!Array.isArray(rawAmounts)) {
+    return unusable([
+      "진료비 목록(amounts)은 배열이어야 합니다. 청구가 없는 묶음은 빈 배열로 넘겨 주세요.",
+      "미입력·null을 빈 묶음으로 보지 않습니다 — 넘기지 않은 것과 청구가 없다는 것은 다른 상태입니다.",
+      `받은 값의 형식: ${typeof rawAmounts}`,
+    ]);
+  }
+  // ⚠ 각 원소를 **정확히 한 번** 읽고, 검증한 값을 아래 계산이 그대로 쓴다. 값이 달라지는
+  //   접근자에서 검증한 값과 계산에 쓰는 값이 갈리지 않게 하기 위해서다.
+  const amounts: number[] = [];
+  for (let i = 0; i < rawAmounts.length; i++) {
+    const v: unknown = rawAmounts[i];
+    if (!isClaimAmount(v)) {
+      return unusable([
+        `${i + 1}번째 진료비는 0 이상의 안전한 정수여야 합니다. 음수·소수·NaN·Infinity·안전 정수 범위를 넘는 값·문자열·객체는 계산하지 않습니다.`,
+        "잘못된 값을 0원으로 바꾸지 않습니다 — 입력하지 않은 0원 행이 생겨 총액과 행 목록이 입력과 달라집니다.",
+        `${i + 1}번째 받은 값의 형식: ${typeof v}`,
+      ]);
+    }
+    amounts.push(v);
+  }
+  // ⚠ 원소가 모두 안전한 정수여도 **합계**는 범위를 벗어날 수 있다([MAX_SAFE, 1]).
+  //   그 뒤의 누적(지급보험금·연간 한도 비교)이 정밀도를 잃으므로 계산하지 않는다.
+  const totalAmount = amounts.reduce((s, x) => s + x, 0);
+  if (!Number.isSafeInteger(totalAmount)) {
+    return unusable([
+      "진료비 합계가 안전한 정수 범위를 벗어나 계산하지 않았습니다. 각 행이 안전한 정수여도 합계는 벗어날 수 있습니다.",
+      `받은 행 수: ${amounts.length}`,
+    ]);
+  }
+  // ⚠ `normalizeAmount`를 다시 걸지 않는다. 위 검사를 통과한 값에 대해 그 함수는 항등이며
+  //   (`Math.max(0, Math.floor(v))`), 다시 걸면 "여기서도 값을 고친다"고 읽힌다.
+
   // 유니온 내로잉. 급여 묶음에는 비급여 전용 축이 없다.
   const nb = input.coverage === "non_benefit" ? input : undefined;
   const bf = input.coverage === "benefit" ? input : undefined;
   const severity: Severity | undefined = nb?.severity;
-  const totalAmount = amounts.reduce((s, x) => s + x, 0);
+  /** 진료비는 이미 검증됐고, **다른 이유**로 계산을 막는 자리. 진료비 합계를 보존한다. */
   const blocked = (notes: string[]): MultiClaimResult => ({
     status: "PENDING_UNVERIFIED", generation: "2026", lines: [],
     totalAmount, totalOwnPay: null, totalInsurancePay: null, appliedCaps: [], notes,

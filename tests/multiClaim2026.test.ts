@@ -42,8 +42,19 @@ function check(name: string, ok: boolean, detail = "") {
   check("건보율 입력 시 두 건 계산", ok.status === "OK" && ok.totalOwnPay === 120_000 && ok.totalInsurancePay === 180_000);
 }
 {
-  const r = calculateMany2026({ cause: "disease", coverage: "benefit", visit: "inpatient", amounts: [-1, Number.NaN, 100_000.9] });
-  check("입력 정규화", r.lines.map((x) => x.amount).join(",") === "0,0,100000");
+  // ⚠ **낡은 계약을 교체했다(G-27).** 종전에는 `-1`·`NaN`·`100000.9`가 `normalizeAmount`로
+  //   `0,0,100000`이 되어 그대로 계산됐다("입력 정규화"). 잘못된 값이 **없던 0원 행**이 되어
+  //   총액과 행 목록이 입력과 달라지는 자리였다. G-27이 진료비를 0 이상의 안전한 정수로
+  //   닫았으므로 이제는 계산하지 않는다. 합계 정합·정수 확정은 **유효한 입력**으로 옮겨
+  //   그대로 확인한다.
+  const bad = calculateMany2026({ cause: "disease", coverage: "benefit", visit: "inpatient", amounts: [-1, Number.NaN, 100_000.9] });
+  check("무효 진료비는 계산하지 않는다(G-27)",
+    bad.status === "PENDING_UNVERIFIED" && bad.totalAmount === 0 && bad.lines.length === 0
+    && bad.totalOwnPay === null && bad.totalInsurancePay === null,
+    `${bad.status}/${bad.totalAmount}/${bad.lines.length}`);
+  check("무효 진료비 안내가 몇 번째인지 지목한다", (bad.notes[0] ?? "").startsWith("1번째 진료비는"), bad.notes[0]);
+  const r = calculateMany2026({ cause: "disease", coverage: "benefit", visit: "inpatient", amounts: [0, 100_000] });
+  check("0원 행은 종전대로 유효한 청구 행", r.lines.map((x) => x.amount).join(",") === "0,100000");
   check("합계 정합", (r.totalOwnPay ?? 0) + (r.totalInsurancePay ?? 0) === r.totalAmount);
   check("정수 확정", r.lines.every((x) => Number.isInteger(x.ownPay) && Number.isInteger(x.insurancePay)));
 }

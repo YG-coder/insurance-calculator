@@ -335,28 +335,31 @@ console.log("\n[G-26] 11. 접근자 — 정확히 1회, 선행 차단 0회");
 
 console.log("\n[G-26] 12. 범위 밖 — 네 번째 자리와 다른 세대는 그대로다");
 {
-  // ⚠ multiClaim2026의 amounts는 이번 범위가 **아니다**. 반환 계약(blocked — 진료비 합계
-  //   보존)과 컨테이너 미제공의 의미(빈 묶음)가 세 경로와 다르다. 종전 동작을 고정해 두어
-  //   이 커밋이 그쪽을 건드리지 않았음을 보인다.
+  // ⚠ **낡은 계약 6건을 교체했다(G-27).** G-26은 `multiClaim2026`의 `amounts`를 **네 번째
+  //   진료비 자리**로 확정하고 범위 밖으로 남기면서, 그 자리가 **아직 종전 그대로인지**를
+  //   여기에 고정했다(미제공 = 빈 묶음 / 무효 원소 = 0원 행 / 비배열 = 런타임 예외 /
+  //   양수 소수 내림 / 안전 정수 초과 통과 / `map(normalizeAmount)` 원문). G-27이 그 자리를
+  //   닫았으므로 **이제 닫혔는지**를 고정한다. 상세 계약은
+  //   `tests/gen2026MultiAmountValue.test.ts`가 본다.
   const many = (amounts: unknown) => wrap(() => calculateMany2026({
     cause: "disease", coverage: "non_benefit", visit: "outpatient", severity: "non_critical",
     nonBenefitItem: "general", amounts, priorAnnualOutpatientDays: 0 } as never));
-  check("범위 밖: multiClaim2026은 미제공을 종전대로 빈 묶음으로 본다",
-    statusOf(many(undefined)) === "OK" && amtOf(many(undefined)) === 0);
-  check("범위 밖: multiClaim2026은 종전대로 무효 원소를 0원 행으로 만든다",
-    statusOf(many([300_000, "abc"])) === "OK" && amtOf(many([300_000, "abc"])) === 300_000, shape(many([300_000, "abc"])));
-  check("범위 밖: multiClaim2026은 종전대로 비배열에서 예외를 낸다", threw(many({})));
-  // ⚠ 무효값을 0으로 만드는 것만 보면 "무효를 막는 변경"과 구별되지 않는다(둘 다 0원 행이 된다).
-  //   **양수 소수의 내림**이 두 계약을 가르는 자리다 — 종전은 300,000, 막았다면 차단이다.
-  check("범위 밖: multiClaim2026은 종전대로 양수 소수를 내림한다",
-    amtOf(many([300_000.9])) === 300_000, shape(many([300_000.9])));
-  check("범위 밖: multiClaim2026은 종전대로 안전 정수 초과를 통과시킨다",
-    amtOf(many([MAX + 1])) === MAX + 1);
+  const unusable = (x: Caught) => !threw(x) && x.r.status === "PENDING_UNVERIFIED"
+    && x.r.totalAmount === 0 && x.r.totalOwnPay === null && x.r.totalInsurancePay === null
+    && (x.r.lines as unknown[]).length === 0;
+  check("네 번째 자리: 미제공이 이제 차단된다(G-27)", unusable(many(undefined)), shape(many(undefined)));
+  check("네 번째 자리: null도 차단된다", unusable(many(null)));
+  check("네 번째 자리: 무효 원소가 0원 행이 되지 않는다", unusable(many([300_000, "abc"])), shape(many([300_000, "abc"])));
+  check("네 번째 자리: 비배열이 예외가 아니라 안전한 차단이 된다", unusable(many({})), shape(many({})));
+  check("네 번째 자리: 양수 소수가 내림되지 않는다", unusable(many([300_000.9])));
+  check("네 번째 자리: 안전 정수 초과가 차단된다", unusable(many([MAX + 1])));
+  check("네 번째 자리: 정상 계산과 빈 배열·0원 행은 그대로",
+    insOf(many([300_000])) === 150_000 && statusOf(many([])) === "OK"
+    && statusOf(many([0, 300_000])) === "OK" && amtOf(many([0, 300_000])) === 300_000);
   const src26 = readFileSync("src/lib/insurance/engine/multiClaim2026.ts", "utf8");
-  check("범위 밖: multiClaim2026의 amounts 정규화가 한 글자도 바뀌지 않았다",
-    /const amounts = \(input\.amounts \?\? \[\]\)\.map\(normalizeAmount\);/.test(src26));
-  check("범위 밖: multiClaim2026의 정상 계산은 그대로",
-    insOf(many([300_000])) === 150_000);
+  const src26Code = src26.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
+  check("네 번째 자리: amounts ?? [] 폴백이 사라졌다(주석 인용은 정상)",
+    !/input\.amounts \?\? \[\]/.test(src26Code) && !/normalizeAmount\(/.test(src26Code));
   // 4세대·2·3세대는 손대지 않았다.
   const src21 = readFileSync("src/lib/insurance/engine/multiClaim2021.ts", "utf8");
   check("범위 밖: 4세대 진료비 계약(G-16)이 그대로",

@@ -376,14 +376,15 @@ console.log("\n[G-20] 11. 소스 계약");
     `${iLegacy}/${iStray}/${iProbe}/${iDays}/${iDeduct}/${iPaid}/${iLimit}/${iRun}`);
   // 범위 밖 파일은 그대로다.
   const si = readFileSync("src/lib/insurance/engine/specialItem2026.ts", "utf8");
-  // ⚠ 계약 갱신(G-23): 별도 보장종목의 지급보험금도 검증된 원값을 쓰게 바뀌었다. 이 커밋이
-  //   손대지 않았다는 요지는 같으므로 확인 대상을 새 모양으로 옮긴다. `nonNegInt` 자체는
-  //   형제 축(보상한 횟수·누적 공제금액)의 미입력 기본값으로 그 파일에 남아 있다.
-  check("specialItem2026은 검증된 원값을 인자로 받는다(G-23) · nonNegInt는 두 곳에 남는다",
+  // ⚠ **낡은 계약을 다시 교체했다(G-23 → G-29).** 위치(범위 밖 파일 확인)와 기존 의미
+  //   ("이 커밋이 별도 보장종목 엔진을 손대지 않았다")는 그대로다. 교체 이유: G-29가 형제 두
+  //   축(보상한 횟수·누적 공제금액)을 검증값 전달로 옮기면서 `nonNegInt`의 **마지막 두
+  //   사용처가 사라져 그 파일에서 함수를 삭제했다.** 두 곳 남는다는 계약은 더 이상 없다.
+  check("specialItem2026은 검증된 원값을 인자로 받는다(G-23) · nonNegInt는 사라졌다(G-29)",
     /let paid = priorPaid \?\? 0;/.test(si)
     && !/nonNegInt\(input\.priorAnnualInsurancePaid\)/.test(si)
     && (si.split("\n").filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join("\n")
-      .match(/nonNegInt\(/g) ?? []).length === 2);
+      .match(/nonNegInt\(/g) ?? []).length === 0);
   const rc = readFileSync("src/lib/insurance/engine/roomCharge2026.ts", "utf8");
   // ⚠ 계약 갱신(G-22): 상급병실료도 검증된 원값을 쓰게 바뀌었다. 이 커밋이 손대지 않았다는
   //   요지는 같으므로 확인 대상을 새 모양으로 옮긴다.

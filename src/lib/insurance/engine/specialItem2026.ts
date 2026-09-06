@@ -57,21 +57,6 @@ export const GEN2026_INJECTION_GENERAL_ROUTE_DRUGS: readonly Gen2026InjectionPur
 export const GEN2026_MSK_APPROVED_THROUGH_VALUES: readonly Gen2026MskApprovedThrough[] =
   [10, 20, 30, 40, 50];
 
-/**
- * 미입력(undefined)을 0으로 시작시키는 기본값 헬퍼.
- *
- * ⚠ 남은 사용처는 `runOnce()`의 **두 곳뿐**이다 — `priorAnnualCoveredCount`,
- *   `priorAnnualInpatientDeductible`. 두 축 모두 `validateItemInput()`이 먼저
- *   `Number.isSafeInteger(v) && v >= 0`으로 막으므로, 여기 도달하는 값은 이미 0 이상의
- *   안전한 정수이거나 `undefined`다. 즉 이 함수가 무효값을 세탁하는 자리는 남아 있지 않다.
- * ⚠ 지급보험금(`priorAnnualInsurancePaid`)은 더 이상 여기를 지나지 않는다.
- *   `calculateSpecialItem2026()`이 preflight 뒤에서 한 번 읽어 검증하고 인자로 넘긴다(G-23).
- * ⚠ 새 축을 이 함수에 태우지 않는다. 값 검증은 그 축이 소비되는 자리 앞에서 한다 —
- *   경로·조합에 따라 결정되는 축은 `validateItemInput()`, preflight를 통과해야 소비되는
- *   축은 `calculateSpecialItem2026()`의 preflight 뒤다.
- */
-const nonNegInt = (v: number | undefined) =>
-  v !== undefined && Number.isFinite(v) ? Math.max(0, Math.floor(v)) : 0;
 
 /**
  * 입력 조합이 어느 경로에서 보상되는지. UI와 엔진이 같은 판단을 쓰도록 한 곳에 둔다.
@@ -149,7 +134,7 @@ const PURPOSE_VALUES: readonly string[] = Object.keys(GEN2026_INJECTION_PURPOSE_
  *   쓰는 값이 갈리고 **두 해석이 서로 다른 값에서 출발한다**(실측: 검증 300,000 →
  *   계산 900,000). G-23이 지급보험금에 세운 계약과 같다.
  */
-type CheckedAmounts = {
+type CheckedItemInput = {
   amounts: number[];
   /**
    * 검증을 통과한 **과거 치료행위 수**(근골격계 승인 구간 전용). 소비 경로가 아니면 `undefined`다.
@@ -160,11 +145,30 @@ type CheckedAmounts = {
    *   G-23이 지급보험금에, G-26이 진료비에 세운 계약과 같다.
    */
   acts?: number;
+  /**
+   * 검증을 통과한 **이미 보상한 횟수**(<표1> 연간 50회 한도 전용). 소비 경로가 아니면 `undefined`다.
+   *
+   * ⚠ 본체가 원본을 **다시 읽지 않도록** 값을 그대로 돌려준다(G-29). 종전에는 검증 1회 +
+   *   두 해석의 `runOnce()` 2회로 **3회** 읽었다. 값이 달라지는 접근자에서 두 해석이 서로
+   *   다른 값에서 출발해, 실제 계산 차이가 없는데도 `fingerprint()` 비교가 갈려
+   *   **잘못된 지급 0원 HOLD 차단**이 났다(실측: 검증 0 → 두 해석 49/50 → HOLD).
+   *   검증값과 계산값이 갈리기도 했다(실측: 검증 0 → 계산 50 → 지급 420,000이 0원으로).
+   */
+  covered?: number;
+  /**
+   * 검증을 통과한 **누적 공제금액**(중증 MRI 상급종합·종합병원 입원 전용). 소비 경로가 아니면 `undefined`다.
+   *
+   * ⚠ 본체가 원본을 **다시 읽지 않도록** 값을 그대로 돌려준다(G-29). 종전에는 검증 1회 +
+   *   `runOnce()` 1회로 **2회** 읽었다(중증 MRI는 횟수 한도가 없어 해석이 하나다).
+   *   실측: 검증 `0` → 계산 `5,000,000`이면 500만 원 상한이 이미 소진된 것처럼 계산돼
+   *   지급 2,100,000이 **3,000,000으로 과다 산출**됐다. 반대 순서에서는 과소 산출됐다.
+   */
+  pool?: number;
 };
 
 function validateItemInput(
   input: Exclude<Gen2026ItemClaimInput, Gen2026RoomChargeInput>,
-): Gen2026RejectedResult | CheckedAmounts {
+): Gen2026RejectedResult | CheckedItemInput {
   const raw = input as unknown as Record<string, unknown>;
   if (raw.route !== "special_item" && raw.route !== "general") return rejected("경로(route)", raw.route);
   if (raw.coverage !== "non_benefit") return rejected("급여 구분(coverage)", raw.coverage);
@@ -178,6 +182,33 @@ function validateItemInput(
     if (purpose !== undefined && !oneOf(purpose, PURPOSE_VALUES)) return rejected("약제 용도(injectionPurpose)", purpose);
   } else if (purpose !== undefined) {
     return rejected("약제 용도(injectionPurpose)는 중증 비급여 주사료에서만 사용합니다 —", purpose);
+  }
+
+  // ── 경로 대조 — 리터럴 네 축이 유효해지는 즉시, 경로별 축을 읽기 **전에** ──────
+  //   ⚠ **위치가 계약이다(G-29).** 종전에는 이 대조가 진입점의 `validateItemInput` 뒤에
+  //     있어서, 아래 경로별 축들이 **경로가 틀린 입력에서도 먼저 판정하고 먼저 읽었다.**
+  //     실측(기준선 `aab3bb1`): `route:"general"` · 중증 근골격계 + `priorAnnualCoveredCount`
+  //     → "이미 보상한 횟수는 …에만 쓰입니다"가 경로 불일치 안내를 밀어냈고 접근자 1회.
+  //     그 안내는 사실과도 다르다 — 이 조합에서 그 축은 **쓰인다.** 틀린 것은 `route`다.
+  //   ⚠ 경로 판정에 필요한 값은 위에서 검증한 넷(route·severity·item·injectionPurpose)뿐이므로
+  //     여기가 판정할 수 있는 가장 이른 자리다. 아래는 전부 경로별 축이다.
+  //   ⚠ 진입점에서 이 자리로 **옮긴 것**이지 새로 만든 검사가 아니다. 문구·반환 계약은 그대로다.
+  //   ⚠ G-23·G-26·G-28이 세운 "그 축이 실제로 쓰이는 자리 앞에서 읽는다"의 연장이다.
+  const expectedRoute = routeOfGen2026Item(
+    raw.severity as Severity, raw.item as Gen2026SpecialItem,
+    purpose as Gen2026InjectionPurpose | undefined,
+  );
+  if (expectedRoute === "missing_purpose") {
+    return rejected(
+      "비급여 주사료의 약제 용도(injectionPurpose)가 없어 보상 보장종목을 정할 수 없습니다(특별약관1 제3조(3)제2항) —",
+      purpose,
+    );
+  }
+  if (expectedRoute !== raw.route) {
+    return rejected(
+      `이 조합은 ${expectedRoute === "general" ? "일반 상해·질병 비급여" : "별도 보장종목"} 경로에서 계산해야 합니다. 요청된 경로(route)`,
+      raw.route,
+    );
   }
 
   // ── 통원 카운터는 어느 경로에서든 먼저 본다 ─────────────────────────
@@ -198,7 +229,12 @@ function validateItemInput(
   //   ⚠ 승인 구간의 '치료횟수'(priorAnnualTreatmentActCount)와 다른 축이다. 합치지 않는다.
   //   ⚠ 값이 0이어도 거부한다. 쓰이지 않는 입력을 조용히 버리면 반영됐다고 오해한다 —
   //     acts·통원 카운터와 같은 계약이다.
-  const covered = (raw as { priorAnnualCoveredCount?: unknown }).priorAnnualCoveredCount;
+  //   ⚠ **한 번만 읽는다(G-29).** 종전에는 여기서 1회 + 두 해석의 `runOnce()`가 각각 1회로
+  //     **3회**였다. 값이 달라지는 접근자에서 (a) 검증한 값과 계산에 쓰는 값이 갈리고
+  //     (실측: 검증 `0` → 계산 `50` → 지급 420,000이 **0원**으로), (b) 두 해석이 서로 다른
+  //     값에서 출발해 실제 계산 차이가 없는데도 **잘못된 지급 0원 HOLD 차단**이 났다
+  //     (실측: 검증 `0` → 두 해석 `49`/`50`). 검증한 값 하나를 `CheckedItemInput`에 실어 넘긴다.
+  const covered: unknown = (raw as { priorAnnualCoveredCount?: unknown }).priorAnnualCoveredCount;
   const usesCovered = raw.route === "special_item" && raw.severity === "critical"
     && (raw.item === "musculoskeletal_esw" || raw.item === "injection");
   if (!usesCovered && covered !== undefined) {
@@ -219,7 +255,13 @@ function validateItemInput(
   //   ⚠ 합산 범위(상해·질병 및 3대비급여를 하나로 세는지)는 확정되지 않았고
   //     (GEN2026-CRITICAL-DEDUCTIBLE-POOL-SCOPE = HOLD) 이 검증은 그것을 건드리지 않는다.
   //     여기서 하는 것은 **이 필드가 실제로 소비되는 조합인지**만 보는 것이다.
-  const pool = (raw as { priorAnnualInpatientDeductible?: unknown }).priorAnnualInpatientDeductible;
+  //   ⚠ **한 번만 읽는다(G-29).** 종전에는 여기서 1회 + `runOnce()`가 1회로 **2회**였다
+  //     (중증 MRI는 <표1>에 횟수 한도가 없어 해석이 하나뿐이라 `runOnce()`가 한 번 돈다).
+  //     값이 달라지는 접근자에서 검증한 값과 계산에 쓰는 값이 갈렸다 — 실측: 검증 `0` →
+  //     계산 `5,000,000`이면 상한이 이미 소진된 것처럼 계산돼 지급 2,100,000이
+  //     **3,000,000으로 과다 산출**됐고, 반대 순서에서는 3,000,000이 2,100,000으로 과소
+  //     산출됐다. 검증한 값 하나를 `CheckedItemInput`에 실어 넘긴다.
+  const pool: unknown = (raw as { priorAnnualInpatientDeductible?: unknown }).priorAnnualInpatientDeductible;
   const usesPoolItem = raw.route === "special_item" && raw.severity === "critical" && raw.item === "mri";
   if (!usesPoolItem && pool !== undefined) {
     return rejected("누적 공제금액(priorAnnualInpatientDeductible)은 500만 원 공제금액 상한의 대상인 중증 비급여 MRI에만 쓰입니다(특별약관1 제5조 제5항 — 근골격계 이학요법·체외충격파와 주사료는 괄호로 제외) —", pool);
@@ -307,7 +349,12 @@ function validateItemInput(
     //   `calculateSpecialItem2026`의 preflight를 통과한 뒤에만 소비되므로, 검증도 그 뒤에서
     //   한다. 여기서 읽으면 preflight가 이미 결과를 정한 입력에서까지 접근자가 실행되어
     //   종전에 안전하게 차단되던 입력에 새 런타임 예외가 생긴다.
-    return { amounts: lineAmounts, acts: checkedActs };
+    // ⚠ 여기서 확정한 세 축(진료비·승인 구간 축·형제 두 축)을 본체에 넘긴다. 본체와 두
+    //   해석이 `input`을 다시 읽지 않는다(G-26·G-28·G-29).
+    return {
+      amounts: lineAmounts, acts: checkedActs,
+      covered: covered as number | undefined, pool: pool as number | undefined,
+    };
   }
 
   if (!oneOf(raw.cause, CAUSE_VALUES)) return rejected("원인(cause)", raw.cause);
@@ -395,17 +442,21 @@ const ZERO_PAY_HOLD_NOTES = [
 /** 한 해석(countZeroPay)으로 전 행을 계산한다. */
 function runOnce(
   input: Gen2026SpecialItemInput, spec: ItemSpec, countZeroPay: boolean,
-  priorPaid: number | undefined, amounts: number[],
+  priorPaid: number | undefined, checked: CheckedItemInput,
 ): Gen2026SpecialItemResult {
+  const amounts = checked.amounts;
   // ⚠ 검증된 원값을 인자로 받는다. 여기서 input을 다시 읽으면 두 해석이 서로 다른 값에서
   //   출발할 수 있다(값이 달라지는 getter). 미입력은 종전대로 0에서 시작한다.
+  //   ⚠ 형제 두 축도 같다(G-29). 종전에는 이 두 줄이 `input`을 직접 읽어, 두 해석이
+  //     서로 다른 값에서 출발할 수 있었다. 이제 `validateItemInput`이 한 번 읽어 검증한
+  //     값을 그대로 쓴다. 미입력은 종전대로 0에서 시작한다.
+  //   ⚠ 관용 파서 `nonNegInt()`를 이 파일에서 **삭제했다.** 마지막 두 사용처가 여기였고,
+  //     두 축 모두 위에서 `Number.isSafeInteger(v) && v >= 0`으로 검증되므로 세탁할 값이
+  //     남지 않는다. 남겨 두면 새 축이 다시 그 관용(음수→0·소수 내림·문자열→0)을 타고
+  //     검증을 우회할 수 있다 — G-26이 공용 `isNum()`을 폐기한 것과 같은 이유다.
   let paid = priorPaid ?? 0;
-  let count = nonNegInt(
-    (input as { priorAnnualCoveredCount?: number }).priorAnnualCoveredCount,
-  );
-  let poolUsed = nonNegInt(
-    (input as { priorAnnualInpatientDeductible?: number }).priorAnnualInpatientDeductible,
-  );
+  let count = checked.covered ?? 0;
+  let poolUsed = checked.pool ?? 0;
   const lines: SpecialItemLineResult[] = [];
 
   for (let index = 0; index < input.lines.length; index++) {
@@ -509,9 +560,9 @@ const fingerprint = (r: Gen2026SpecialItemResult) => JSON.stringify(
 /** ⚠ export하지 않는다. 검증을 우회하는 두 번째 입구를 만들지 않기 위해서다. */
 function calculateSpecialItem2026(
   input: Gen2026SpecialItemInput,
-  amounts: number[],
-  priorActs: number | undefined,
+  checked: CheckedItemInput,
 ): Gen2026SpecialItemResult | Gen2026RejectedResult {
+  const { amounts, acts: priorActs } = checked;
   const lines = input.lines ?? [];
   // ⚠ 검증을 통과한 값으로 합계를 만든다. `normalizeAmount`를 다시 걸지 않는다 —
   //   위 검사를 통과한 값에 대해 그 함수는 항등이며, 다시 걸면 "여기서도 값을 고친다"고 읽힌다.
@@ -604,9 +655,9 @@ function calculateSpecialItem2026(
   }
   const priorPaid = paidRaw as number | undefined;
 
-  const counted = runOnce(input, spec, true, priorPaid, amounts);
+  const counted = runOnce(input, spec, true, priorPaid, checked);
   if (spec.annualVisits === null) return counted; // MRI는 횟수 한도가 없어 해석 차이가 없다
-  const notCounted = runOnce(input, spec, false, priorPaid, amounts);
+  const notCounted = runOnce(input, spec, false, priorPaid, checked);
   if (fingerprint(counted) !== fingerprint(notCounted)) return blocked(totalAmount, ZERO_PAY_HOLD_NOTES);
   // 결과는 같지만 "몇 회째"는 해석에 따라 다를 수 있다. 다른 행은 null로 두고 단정하지 않는다.
   return {
@@ -667,21 +718,9 @@ export function calculateGen2026Item(input: Gen2026ItemClaimInput): Gen2026ItemC
   const checked = validateItemInput(rest);
   if ("route" in checked) return checked;
 
-  // 2) 경로 대조. 여기 오는 값은 모두 유효한 리터럴이다.
-  const purpose = (rest as { injectionPurpose?: Gen2026InjectionPurpose }).injectionPurpose;
-  const expected = routeOfGen2026Item(rest.severity, rest.item, purpose);
-  if (expected === "missing_purpose") {
-    return rejected(
-      "비급여 주사료의 약제 용도(injectionPurpose)가 없어 보상 보장종목을 정할 수 없습니다(특별약관1 제3조(3)제2항) —",
-      purpose,
-    );
-  }
-  if (expected !== rest.route) {
-    return rejected(
-      `이 조합은 ${expected === "general" ? "일반 상해·질병 비급여" : "별도 보장종목"} 경로에서 계산해야 합니다. 요청된 경로(route)`,
-      rest.route,
-    );
-  }
+  // 2) 경로 대조는 `validateItemInput` 안에서 끝났다(G-29). 리터럴 네 축이 유효해지는
+  //   즉시 대조해야 경로별 축(보상한 횟수·누적 공제금액·승인 구간 축)이 경로가 틀린
+  //   입력에서 판정하거나 읽지 않는다. 여기 오는 입력은 `route`가 이미 확정된 것이다.
 
   // 3) 승인 구간 전용 축의 stray 차단 (G-28).
   //   ⚠ 종전에는 이 경로가 `priorAnnualTreatmentActCount`를 **조용히 폐기**했다. 검사가
@@ -710,6 +749,6 @@ export function calculateGen2026Item(input: Gen2026ItemClaimInput): Gen2026ItemC
 
   // 4) 계산.
   return rest.route === "special_item"
-    ? calculateSpecialItem2026(rest, checked.amounts, checked.acts)
+    ? calculateSpecialItem2026(rest, checked)
     : calculateRoutedGeneral2026(rest, checked.amounts);
 }

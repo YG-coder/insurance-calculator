@@ -435,30 +435,42 @@ console.log("\n[G-23] 10. 소스 계약");
   //   `runOnce`가 검증된 원값을 인자로 받고, 두 해석이 같은 값에서 출발한다.
   //   G-26이 진료비 배열도 같은 방식으로 넘기면서 `runOnce`의 인자와 `validateItemInput`의
   //   반환 형태가 달라졌다(진료비를 돌려주므로 `null`이 아니라 `{ amounts }`).
+  // ⚠ **낡은 계약 2건을 다시 교체했다(G-29).** 위치는 같고(`runOnce` 시그니처와 두 해석
+  //   호출), 기존 의미도 같다 — "검증된 원값을 인자로 받고 두 해석이 같은 값에서 출발한다".
+  //   교체 이유: G-29가 형제 두 축(보상한 횟수·누적 공제금액)도 같은 통로에 실으면서
+  //   `amounts: number[]` 인자가 `checked: CheckedItemInput` 하나로 합쳐졌다. 종전에는 그
+  //   두 축만 `runOnce`가 `input`에서 다시 읽어(각각 3회·2회) 두 해석이 서로 다른 값에서
+  //   출발할 수 있었다.
   check("runOnce가 검증된 값을 인자로 받는다",
-    /priorPaid: number \| undefined, amounts: number\[\],\n\): Gen2026SpecialItemResult \{/.test(body)
+    /priorPaid: number \| undefined, checked: CheckedItemInput,\n\): Gen2026SpecialItemResult \{/.test(body)
     && /let paid = priorPaid \?\? 0;/.test(body));
-  check("두 해석이 같은 원값에서 출발한다(지급보험금·진료비 모두)",
-    /const counted = runOnce\(input, spec, true, priorPaid, amounts\);/.test(body)
-    && /const notCounted = runOnce\(input, spec, false, priorPaid, amounts\);/.test(body));
+  check("두 해석이 같은 원값에서 출발한다(지급보험금·진료비·형제 두 축 모두)",
+    /const counted = runOnce\(input, spec, true, priorPaid, checked\);/.test(body)
+    && /const notCounted = runOnce\(input, spec, false, priorPaid, checked\);/.test(body)
+    && /let count = checked\.covered \?\? 0;/.test(body)
+    && /let poolUsed = checked\.pool \?\? 0;/.test(body));
   check("진입점의 검증 계약은 종전 그대로다(검증 → 거부면 반환 → 아니면 계산)",
     /const checked = validateItemInput\(rest\);/.test(body)
     && /if \("route" in checked\) return checked;/.test(body)
-    // ⚠ **낡은 앵커를 교체했다(G-28).** 검증된 승인 구간 축(`checked.acts`)도 함께 넘긴다.
-    //   G-23이 세운 계약(검증 → 거부면 반환 → 아니면 계산)은 그대로다.
-    && /\? calculateSpecialItem2026\(rest, checked\.amounts, checked\.acts\)/.test(body));
+    // ⚠ **낡은 앵커를 두 번 교체했다(G-28 → G-29).** G-28에서 `checked.acts`를 더했고,
+    //   G-29에서 형제 두 축까지 실리면서 검증 결과 전체를 그대로 넘기는 형태가 됐다.
+    //   G-23이 세운 계약(검증 → 거부면 반환 → 아니면 계산)은 세 번 모두 그대로다.
+    && /\? calculateSpecialItem2026\(rest, checked\)/.test(body));
   check("이 파일에서 이 속성을 정확히 두 번만 읽는다(special_item 검증 1 + 일반 전환 전달 1)",
     (body.match(/\.priorAnnualInsurancePaid/g) ?? []).length === 2,
     String((body.match(/\.priorAnnualInsurancePaid/g) ?? []).length));
   check("이 축에 내림·클램프를 걸지 않는다",
     !/nonNegInt\(input\.priorAnnualInsurancePaid\)/.test(body)
     && !/Math\.floor\([^)]*priorPaid/.test(body));
-  // nonNegInt는 남기되 사용처를 못박는다.
-  check("nonNegInt 사용처가 정확히 두 곳이다(보상한 횟수·누적 공제금액)",
-    (body.match(/nonNegInt\(/g) ?? []).length === 2
-    && /let count = nonNegInt\(/.test(body) && /let poolUsed = nonNegInt\(/.test(body),
-    String((body.match(/nonNegInt\(/g) ?? []).length));
-  check("nonNegInt를 export하지 않는다", !/export const nonNegInt/.test(raw));
+  // ⚠ **낡은 계약을 교체했다(G-29).** 위치는 같고(`nonNegInt` 사용처 고정), 기존 의미는
+  //   "관용 파서를 남기되 형제 두 축의 미입력 기본값 전용으로 못박는다"였다. 교체 이유:
+  //   G-29가 그 두 축을 `CheckedItemInput`으로 옮기면서 **마지막 사용처가 사라져 함수를
+  //   삭제했다.** 두 축 모두 위에서 `Number.isSafeInteger(v) && v >= 0`으로 검증되므로
+  //   세탁할 값이 남지 않는다. 남겨 두면 새 축이 다시 그 관용(음수→0·소수 내림·문자열→0)을
+  //   타고 검증을 우회할 수 있다 — G-26이 공용 `isNum()`을 폐기한 것과 같은 이유다.
+  check("관용 파서 nonNegInt가 이 파일에서 사라졌다", !/nonNegInt/.test(body));
+  check("미입력 기본값은 검증된 값에 ?? 0으로 준다(관용 파서 없이)",
+    /let count = checked\.covered \?\? 0;/.test(body) && /let poolUsed = checked\.pool \?\? 0;/.test(body));
   // ── G-22 보고 정정과 그 뒤 (G-26에서 교체) ───────────────────────
   //   ⚠ **낡은 계약 3건을 교체했다.** G-22 커밋 메시지·문서는 공용 isNum 호출부를 "4곳"이라
   //     적었으나 실제로는 5곳이었고(`raw.amounts.every(isNum)`가 함수 참조라 `isNum(`
@@ -493,6 +505,7 @@ console.log("\n[G-23] 10. 소스 계약");
   }
   const stripped = (path: string) => readFileSync(path, "utf8").split("\n")
     .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join("\n");
+  // ⚠ 이 파일 자신의 `nonNegInt`는 G-29에서 사라졌다(위 계약 교체 참조).
   check("4세대·상급병실료 엔진에는 nonNegInt가 없다(G-18·G-22에서 제거 — 주석 언급만 남았다)",
     !/nonNegInt/.test(stripped("src/lib/insurance/engine/multiClaim2021.ts"))
     && !/nonNegInt/.test(roomBody));

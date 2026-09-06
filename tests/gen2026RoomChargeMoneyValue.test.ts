@@ -319,10 +319,16 @@ console.log("\n[G-22] 9. 소스 계약");
     && /return rejected\("연간 보험가입금액\(annualCoverageLimit\)", limitRaw\);/.test(body));
   // 다른 엔진은 자기 사본을 그대로 가진다.
   for (const [label, path] of [["2·3세대", "src/lib/insurance/engine/multiClaim.ts"],
-    ["5세대 다회", "src/lib/insurance/engine/multiClaim2026.ts"],
-    ["별도 보장종목", "src/lib/insurance/engine/specialItem2026.ts"]] as [string, string][]) {
+    ["5세대 다회", "src/lib/insurance/engine/multiClaim2026.ts"]] as [string, string][]) {
     check(`${label} 엔진의 nonNegInt 사본은 그대로`, /const nonNegInt =/.test(readFileSync(path, "utf8")));
   }
+  // ⚠ **낡은 계약을 교체했다(G-29).** 위치(다른 엔진의 사본 확인)와 기존 의미("이 커밋이
+  //   그 엔진을 손대지 않았다")는 그대로다. 교체 이유: 별도 보장종목 엔진의 `nonNegInt`는
+  //   G-29에서 마지막 두 사용처(보상한 횟수·누적 공제금액)가 검증값 전달로 바뀌며 삭제됐다.
+  //   ⚠ 실행 코드로 본다 — 삭제 사유를 적은 주석에는 이름이 남아 있다(4세대·상급병실료와 같다).
+  check("별도 보장종목 엔진에는 nonNegInt가 없다(G-29에서 제거)",
+    !/nonNegInt/.test(readFileSync("src/lib/insurance/engine/specialItem2026.ts", "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ")));
 }
 
 console.log(`\n[G-22 상급병실료 두 금액 축 값 검증] ✅ ${pass} / ❌ ${fail}`);

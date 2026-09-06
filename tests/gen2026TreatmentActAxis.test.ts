@@ -286,10 +286,14 @@ console.log("\n[G-28] 3-b. 경로 불일치·용도 미정 안내가 stray 안�
         note0(x) === note0(bare) && isRejected(x), note0(x).slice(0, 40));
     }
   }
-  // 반대 방향은 종전 계약 그대로다(별도 보장종목 분기의 기존 거부가 먼저다).
+  // ⚠ **계약이 바뀌었다(G-29).** 종전(G-28 시점)에는 별도 보장종목 분기의 미사용 축 거부가
+  //   먼저였다 — "과거 치료행위 수는 근골격계 이학요법…에만 쓰입니다". G-29가 경로 대조를
+  //   `validateItemInput`의 리터럴 네 축 검증 직후로 올리면서, 경로가 틀린 입력에서는
+  //   **경로 불일치 안내가 먼저** 나가고 경로별 축은 읽히지도 않는다. 이 방향이 P1에서
+  //   고친 것과 같다 — 그 조합에서 이 축은 실제로 쓰이므로 "쓰이지 않습니다"는 사실과 다르다.
   const rev = wrap(() => calculateGen2026Item(MIS_REV({ priorAnnualTreatmentActCount: 5 }) as never));
-  check("route=special_item·비중증 근골격계: 종전 그대로 '근골격계 이학요법…에만 쓰입니다' 안내",
-    isRejected(rev) && note0(rev).startsWith("과거 치료행위 수(priorAnnualTreatmentActCount)는 근골격계"),
+  check("route=special_item·비중증 근골격계: 경로 불일치 안내가 먼저다(G-29)",
+    isRejected(rev) && note0(rev).startsWith("이 조합은 일반 상해·질병 비급여 경로에서"),
     note0(rev).slice(0, 40));
   check("route=special_item·비중증 근골격계: 축 미제공이면 종전대로 경로 불일치 안내",
     note0(wrap(() => calculateGen2026Item(MIS_REV() as never))).startsWith("이 조합은 일반 상해·질병 비급여 경로에서"));
@@ -400,11 +404,15 @@ console.log("\n[G-28] 7. 전달 검사 — 어느 진입점에 무엇이 넘어�
   check("실행 코드에서 이 속성을 읽는 자리가 두 곳뿐이다(검증 1 + stray 1)", readSites === 2, String(readSites));
   check("본체(calculateSpecialItem2026)가 input에서 다시 읽지 않는다",
     !/\(input as \{ priorAnnualTreatmentActCount\?: number \}\)/.test(code));
+  // ⚠ **낡은 앵커를 교체했다(G-29).** 위치는 같고(검증값 전달 계약), 기존 의미도 같다 —
+  //   "승인 구간 축을 한 번 읽어 검증한 값을 본체에 넘긴다". 교체 이유: G-29가 형제 두 축을
+  //   같은 통로에 실으면서 `CheckedAmounts`가 `CheckedItemInput`으로 이름이 바뀌고,
+  //   본체 인자가 세 개에서 검증 결과 하나로 합쳐졌다.
   check("검증한 값을 인자로 넘긴다",
     /const checkedActs = acts as number \| undefined;/.test(code)
-    && /return \{ amounts: lineAmounts, acts: checkedActs \};/.test(code)
-    && /priorActs: number \| undefined,\n\): Gen2026SpecialItemResult \| Gen2026RejectedResult \{/.test(code)
-    && /calculateSpecialItem2026\(rest, checked\.amounts, checked\.acts\)/.test(code));
+    && /amounts: lineAmounts, acts: checkedActs,/.test(code)
+    && /const \{ amounts, acts: priorActs \} = checked;/.test(code)
+    && /calculateSpecialItem2026\(rest, checked\)/.test(code));
   // ⚠ **위치가 계약이다.** stray 검사는 `validateItemInput`의 일반 분기 끝이 아니라
   //   진입점의 **경로 대조 뒤**에 있어야 한다. 분기 끝에 두면 `route: "general"`인데 실제로는
   //   별도 보장종목인 조합(중증 근골격계·MRI 등)에서 기존 경로 불일치 안내를 밀어내고,

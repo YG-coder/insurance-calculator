@@ -442,8 +442,13 @@ console.log("\n[가드] 축·문구·출처의 금지형");
   // ⚠ 계약 갱신(G-26): 진료비도 같은 계약이 됐다 — 검증된 배열을 두 해석에 함께 넘긴다.
   //   종전에는 두 해석이 각자 `line.amount`를 다시 읽어, 값이 달라지는 접근자에서 서로 다른
   //   금액으로 계산할 수 있었다(실측: 검증 300,000 → 계산 900,000).
+  // ⚠ 계약 갱신(G-29): 형제 두 축(보상한 횟수·누적 공제금액)도 같은 계약이 됐다.
+  //   종전에는 두 해석이 각자 `input`에서 그 두 축을 다시 읽어(covered 3회·pool 2회),
+  //   값이 달라지는 접근자에서 서로 다른 한도에서 출발할 수 있었다(실측: 검증 0 →
+  //   두 해석 49/50 → 실제 계산 차이가 없는데도 잘못된 지급 0원 HOLD 차단).
+  //   인자가 `amounts`에서 검증 결과 전체(`checked`)로 합쳐졌다.
   check("0원 해석을 두 번 계산해 비교 · 두 해석이 같은 원값을 받는다",
-    /runOnce\(input, spec, true, priorPaid, amounts\)[\s\S]{0,400}runOnce\(input, spec, false, priorPaid, amounts\)/.test(eng));
+    /runOnce\(input, spec, true, priorPaid, checked\)[\s\S]{0,400}runOnce\(input, spec, false, priorPaid, checked\)/.test(eng));
   check("UI가 라우팅을 엔진 함수로 판정", ui.includes("routeOfGen2026Item("));
   check("UI가 route로 좁혀 특별 결과를 읽음", ui.includes('itemResult.route === "special_item"'));
   check("UI에 as 단언으로 특별 결과를 읽는 코드가 없음", !/as Gen2026SpecialItemResult/.test(ui));

@@ -122,7 +122,11 @@ const ZERO_PAY_VISITS_HOLD_NOTES = [
  *   ⚠ "unset"과 "zero"는 **계산이 같고 안내만 다르다.** 종전에는 둘을 구분하지 않아
  *     0원을 넣은 사용자에게도 "입력하지 않으면 적용하지 않습니다"라고 말했다.
  */
-function buildNotes(input: Gen2026MultiClaimInput, limitState: "applied" | "unset" | "zero"): string[] {
+function buildNotes(
+  input: Gen2026MultiClaimInput,
+  limitState: "applied" | "unset" | "zero",
+  outpatientLimitState: "applied" | "unset" | "zero" | "other",
+): string[] {
   const causeLabel = input.cause === "injury" ? "상해" : "질병";
   const coverageLabel = input.coverage === "benefit" ? "급여" : "비급여";
   const notes = [
@@ -144,8 +148,18 @@ function buildNotes(input: Gen2026MultiClaimInput, limitState: "applied" | "unse
         ? "약관은 ①동일한 의료기관에서 같은 날 받은 외래와 처방조제, ②하루에 같은 치료를 목적으로 2회 이상 받은 통원을 각각 1회의 통원으로 봅니다. 이 경우에만 한 행으로 합쳐 입력해 주세요. 치료 목적이 다르거나 다른 의료기관이면 행을 나눠 입력합니다."
         : "비중증 통원은 약관상 '통원 1일당(외래 및 처방·조제비 합산)' 기준입니다. 같은 날 청구는 한 행으로 합쳐 입력해 주세요.",
     );
-    if (input.outpatientCoverageLimit === undefined) {
+    // ⚠ 여기서 `input`을 다시 읽지 않는다. 호출부가 **한 번 읽은** 원값의 판정을 넘긴다.
+    if (outpatientLimitState === "unset") {
       notes.push("통원 가입금액은 계약마다 다른 값이라 입력하지 않으면 적용하지 않습니다. 증권에서 확인해 입력하면 지급 한도로 반영됩니다.");
+    }
+    // ⚠ 명시적 `0`은 미입력과 **다른 상태**다. 계산 결과는 종전 그대로 미적용이지만, 값을
+    //   넘겼는데 "입력하지 않으면"이라고 말하면 사실과 다르다. 단위는 세대가 아니라
+    //   **보장종목**이 정한다 — 중증은 특별약관1의 통원 1회당, 비중증은 특별약관2의
+    //   통원 1일당(외래 및 처방·조제비 합산)이다.
+    // ⚠ 이 문장은 **계산기가 0원을 어떻게 다뤘는지**만 말한다. 0원 가입이 유효한 계약인지,
+    //   무효인지, 실제 한도가 0원인지는 원문에서 확인하지 않았고 여기서 단정하지 않는다.
+    if (outpatientLimitState === "zero") {
+      notes.push(`통원 가입금액을 0원으로 입력하셔서 계산기에서는 통원 ${input.severity === "critical" ? "1회당" : "1일당"} 지급 한도를 적용하지 않았습니다. 실제 가입금액이 있으면 증권의 금액을 입력해 주세요.`);
     }
   }
   if (limitState === "unset") {
@@ -438,6 +452,24 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
   const isCriticalOutpatient = !!nb && severity === "critical" && input.visit === "outpatient";
   const isNonCriticalOutpatient = !!nb && severity === "non_critical" && input.visit === "outpatient";
 
+  // ── 통원 가입금액(outpatientCoverageLimit) ────────────────────────────
+  //   ⚠ **활성 축일 때만 읽는다.** 이 축을 소비하는 곳은 `calc2026`의 비급여 통원 두 분기뿐이다.
+  //     급여·입원 묶음에서는 이름에 접근조차 하지 않는다 — "쓰지 않는다"는 계약은 검증을
+  //     건너뛰는 것이 아니라 **읽지 않는 것**이다(G-18의 계약).
+  //   ⚠ **한 번만 읽는다.** 종전에는 `runBundle`이 행마다(그리고 두 해석에서 각각) 다시 읽어
+  //     행 3개면 8회였다(2N+2, 엔진 직접 호출로 실측). 호출마다 값이 달라지는 접근자를 실으면
+  //     **행마다 다른 한도**가 적용됐고(실측: rows=[150000, 700000, 150000]), 두 해석이
+  //     어긋나면 계산 차이가 없는데도 **잘못된 지급 0원 HOLD 차단**이 났다.
+  //   ⚠ 값 검증은 하류 `calc2026`이 한 곳에서 한다. 여기서 `blocked()`로 먼저 막으면 단건과
+  //     다회가 서로 다른 가드를 갖게 된다. `calc2026`의 `pending()`은 아래 `runBundle`에서
+  //     `blocked(single.notes)`로 감싸지므로 이 진입점의 계약(진료비 합계 보존)은 유지된다.
+  const usesOutpatientLimit = !!nb && input.visit === "outpatient";
+  const outpatientLimitRaw: unknown = usesOutpatientLimit ? nb.outpatientCoverageLimit : undefined;
+  const outpatientLimitState: "applied" | "unset" | "zero" | "other" =
+    !usesOutpatientLimit ? "other"
+      : outpatientLimitRaw === undefined ? "unset"
+        : outpatientLimitRaw === 0 ? "zero" : "applied";
+
   /**
    * 묶음 한 번을 처음부터 끝까지 계산한다.
    *
@@ -500,7 +532,9 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
         ? calc2026({
             amount, coverage: "non_benefit", visit: nb.visit, tier: nb.tier, severity,
             nonBenefitItem: nb.nonBenefitItem,
-            perVisitCoverageLimit: nb.visit === "outpatient" ? nb.outpatientCoverageLimit : undefined,
+            // ⚠ 위에서 한 번 읽은 원값을 재사용한다. 여기서 다시 읽으면 행마다·해석마다
+            //   다른 값이 적용될 수 있다.
+            perVisitCoverageLimit: outpatientLimitRaw as number | undefined,
             priorAnnualDeductible: severity === "critical" && nb.visit === "inpatient" && nb.tier === "hospital"
               ? deductiblePaid : undefined,
           })
@@ -546,7 +580,7 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
       totalOwnPay: results.reduce((s, x) => s + (x.ownPay ?? 0), 0),
       totalInsurancePay: results.reduce((s, x) => s + (x.insurancePay ?? 0), 0),
       appliedCaps: [...new Set(results.flatMap((x) => x.appliedCaps))],
-      notes: buildNotes(input, limitState),
+      notes: buildNotes(input, limitState, outpatientLimitState),
     };
   }
 

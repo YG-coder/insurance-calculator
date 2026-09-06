@@ -144,8 +144,22 @@ function check(name: string, ok: boolean, detail = "") {
   const neg = calculateMany2026({ ...base(), outpatientCoverageLimit: -50_000 });
   check("가입금액 0은 미입력으로 처리(0원 한도를 적용하지 않음)",
     zero.totalInsurancePay === none.totalInsurancePay && zero.totalInsurancePay === 700_000, JSON.stringify(zero));
-  check("가입금액 0일 때도 미적용 안내", zero.notes.some((n) => n.includes("입력하지 않으면 적용하지 않습니다")));
-  check("가입금액 음수도 미입력으로 처리", neg.totalInsurancePay === 700_000);
+  // ⚠ **낡은 계약을 교체했다(G-24).** 숫자 0의 **계산**은 종전 그대로 미적용이지만(위 검사),
+  //   안내는 미입력 안내와 분리됐다. 종전 검사는 "입력하지 않으면 적용하지 않습니다"만 봤는데
+  //   그 문구는 **연간 보험가입금액 안내에도** 들어 있어, 통원 축의 안내가 사라져도 통과했다.
+  //   두 축을 구분해 고정한다.
+  check("가입금액 0에는 통원 축 0원 전용 안내가 붙는다",
+    zero.notes.some((n) => n.startsWith("통원 가입금액을 0원으로 입력하셔서") && n.includes("통원 1회당 지급 한도"))
+    && !zero.notes.some((n) => n.startsWith("통원 가입금액은 계약마다 다른 값이라")), JSON.stringify(zero.notes));
+  check("미입력에는 통원 축 미입력 안내가 종전 그대로 붙는다",
+    none.notes.some((n) => n.startsWith("통원 가입금액은 계약마다 다른 값이라"))
+    && !none.notes.some((n) => n.startsWith("통원 가입금액을 0원으로")), JSON.stringify(none.notes));
+  // ⚠ **낡은 계약을 교체했다(G-24).** 음수는 더 이상 미입력으로 삼켜지지 않는다.
+  //   다회의 차단 계약(`blocked()` — 진료비 합계 보존)은 그대로다.
+  check("가입금액 음수는 차단되고 진료비 합계는 보존된다",
+    neg.status === "PENDING_UNVERIFIED" && neg.totalAmount === 1_000_000
+    && neg.totalInsurancePay === null
+    && neg.notes[0].startsWith("통원 1회당 가입금액은 0 이상의 정수여야 합니다"), JSON.stringify(neg));
   const ten = calculateMany2026({ ...base(), outpatientCoverageLimit: 100_000 });
   check("가입금액 10만 적용", ten.totalInsurancePay === 100_000);
   const over = calculateMany2026({ ...base(), outpatientCoverageLimit: 500_000 });

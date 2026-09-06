@@ -311,9 +311,12 @@ console.log("\n[G-21] 10. 소스 계약");
   check("상태를 세 갈래로 나눈다",
     /const limitState: "applied" \| "unset" \| "zero" =/.test(body)
     && /limit === undefined \? "unset" : limit === 0 \? "zero" : "applied";/.test(body));
+  // ⚠ 계약 갱신(G-24): 통원 가입금액도 같은 방식으로 상태를 넘기게 되어 인자가 하나 늘었다.
+  //   이 커밋(G-21)이 고정하려는 것은 **연간 가입금액의 상태가 input 재읽기가 아니라 인자로
+  //   전달된다**는 사실이므로, 그 요지를 유지한 채 확인 대상을 새 시그니처로 옮긴다.
   check("buildNotes가 상태를 받는다",
-    /function buildNotes\(input: Gen2026MultiClaimInput, limitState: "applied" \| "unset" \| "zero"\)/.test(body)
-    && /notes: buildNotes\(input, limitState\),/.test(body));
+    /function buildNotes\(\n\s*input: Gen2026MultiClaimInput,\n\s*limitState: "applied" \| "unset" \| "zero",/.test(body)
+    && /notes: buildNotes\(input, limitState, outpatientLimitState\),/.test(body));
   check("미입력·0원 안내가 각각 한 갈래에만 걸린다",
     /if \(limitState === "unset"\) \{/.test(body) && /if \(limitState === "zero"\) \{/.test(body));
   // 순서: … → G-20 지급보험금 → 연간 가입금액 → 계산

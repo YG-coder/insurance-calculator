@@ -355,7 +355,23 @@ console.log("\n[커밋 D·E] 계산·화면 무변경 (기준 30dee21)");
     //     "약관상 …"으로 적었던 **근거 표현만** 계산기의 기존 계약으로 고친 주석 변경이고,
     //     실행 코드는 한 글자도 다르지 않다. 그 표현이 돌아오지 않는지는
     //     tests/gen2026BenefitOutpatientInput.test.ts의 금지형 검사가 본다.
-    "src/lib/insurance/engine/generation2026.ts": "9757086fbf940aae006c57ec031e43ab69f2f546a6ae0276192ce912d37123c4",
+    // ⚠ G-24에서 **의도적으로** 갱신했다(종전 9757086f…).
+    //   통원 가입금액 축(`perVisitCoverageLimit`)의 판정 `outpatientLimit()`이
+    //   `value <= 0 || !Number.isFinite(value)`를 한 줄에 묶어 **명시적 `0`·음수·`NaN`·
+    //   `±Infinity`·문자열·`null`·불리언·객체·배열·`bigint`·`Symbol`을 모두 "미입력"으로
+    //   뭉갰다**(엔진 직접 호출로 실측). 한도가 통째로 사라져 보험금이 과다 산출됐고
+    //   (중증 통원 격자: 정답 ins 150,000 → 700,000), 반대로 `0.5`는 `Math.floor`가 한도
+    //   0원을 만들어 적용해 ins가 **0**이 됐다. `150,000.7`은 내림, `MAX_SAFE+1`은 무검증
+    //   통과였다. 명시적 `0`을 넘겨도 안내는 "입력하지 않아 적용하지 않았습니다"였다.
+    //   판정을 네 상태(applied/unset/zero/invalid)로 나눠 무효값을 기존 `pending()`으로
+    //   막고, 숫자 `0`에는 미입력과 분리된 전용 안내를 붙였다.
+    //   ⚠ **유지한 계약**: `undefined`와 숫자 `0`의 계산 결과(미적용), 약관 상한선 절삭
+    //     (20만원 — 두 상한선은 규칙표에 '계약값이 아니라 상한선'으로 등록돼 있다),
+    //     산식·최소공제·차단 계약(`pending()`)·급여 전 경로·비급여 입원 전 경로·
+    //     미입력 안내 문구. 바뀐 것은 그 안내에 **도달하는 값의 범위**와 `0`의 안내뿐이다.
+    //   ⚠ G-15가 세운 "받은 값 자체를 문자열로 만들지 않고 `typeof`만 표시한다"는 이 파일의
+    //     계약을 그대로 따랐다 — `showValue()`를 이 파일에 복제하지 않았다.
+    "src/lib/insurance/engine/generation2026.ts": "1f298f2859abef58bfa41f110091767b3ae2b8e825a5e63f4a65d638cfe40844",
     "src/lib/insurance/engine/engine.ts": "da28c9f77d7d90ba1d0e18146d626c9ea7fc6a89013293a26ec50e223ee56c8e",
     "src/lib/insurance/engine/capLabels.ts": "23d0bc4b40a1b408cf74ec0189457e1a3c9f6bc75988e4bcde4e7c2c8554410d",
     // ⚠ G-14D에서 **의도적으로** 갱신했다(종전 c10d2fea…).

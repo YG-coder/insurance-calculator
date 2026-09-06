@@ -49,18 +49,67 @@ function ok(
   return r;
 }
 
+/** 통원 가입금액 축의 판정 결과. 세 상태를 **호출부가 각각 다르게** 처리한다. */
+type OutpatientLimitCheck =
+  | { state: "applied"; limit: number }
+  | { state: "unset" }
+  | { state: "zero" }
+  | { state: "invalid"; got: unknown };
+
 /**
  * 계약자가 선택한 통원 가입금액. 약관상 상한선을 넘겨 입력하면 상한선으로 깎는다.
  *
- * 정책 — 0·음수·비정상 값은 **미입력으로 본다**.
- *   0을 실제 한도로 적용하면 보험금이 0원이 되는데, 이는 "가입금액을 0으로 정한 계약"이
- *   아니라 입력하지 않았다는 뜻일 가능성이 압도적으로 높다. 조용히 0원 한도를 적용하는
- *   것보다 미적용 사실을 알리는 쪽이 안전하다.
+ * 상한 절삭의 근거 — 두 상한선은 **계약값이 아니라 상한선**으로 등록돼 있다
+ *   (GEN2026-CRITICAL-OUTPATIENT-PER-VISIT-LIMIT-MAX / GEN2026-NONCRITICAL-OUTPATIENT-PER-DAY-
+ *   LIMIT-MAX, 둘 다 20만원). 약관이 "20만원 이내에서 계약 시 정한 금액"이라고 정하므로
+ *   그보다 큰 값은 이 계약에서 나올 수 없다. **기존 절삭 처리를 그대로 둔다.**
+ *
+ * ⚠ **G-24에서 세 상태를 분리했다.** 종전에는 `value <= 0`과 `!Number.isFinite(value)`가
+ *   한 줄에 묶여 있어, 명시적 `0`·음수·`NaN`·`±Infinity`·문자열·`null`·불리언·객체·배열·
+ *   `bigint`·`Symbol`이 **모두 "미입력"으로 뭉개졌다**(엔진 직접 호출로 실측).
+ *     - 한도가 통째로 사라져 보험금이 과다 산출됐다(중증 통원 격자: 정답 150,000 → 700,000).
+ *     - 반대로 `0.5`는 `Math.floor`가 **한도 0원**을 만들어 적용해 보험금이 **0**이 됐다.
+ *       같은 축에서 값에 따라 방향이 갈렸다.
+ *     - `150,000.7`은 내림 150,000으로 조용히 바뀌었다.
+ *     - `MAX_SAFE + 1`은 검증 없이 통과했다.
+ *     - 명시적 `0`을 넘겼는데도 안내는 "**입력하지 않아** 적용하지 않았습니다"였다 —
+ *       사실과 다른 안내다.
+ * ⚠ `undefined`(미입력)와 숫자 `0`의 **계산 결과는 종전 그대로** 미적용이다. 바뀐 것은
+ *   `0`에 붙는 안내와, 무효값이 미적용으로 삼켜지지 않는다는 점뿐이다.
+ * ⚠ 0원 가입이 약관상 유효한 계약인지, 실제 한도가 0원인지는 원문에서 확인하지 않았고
+ *   여기서 단정하지 않는다. 안내는 **계산기가 무엇을 했는지**만 말한다.
  */
-function outpatientLimit(value: number | undefined, max: number): number | undefined {
-  if (value === undefined || !Number.isFinite(value) || value <= 0) return undefined;
-  return Math.min(Math.floor(value), max);
+function outpatientLimit(value: unknown, max: number): OutpatientLimitCheck {
+  if (value === undefined) return { state: "unset" };
+  if (!(typeof value === "number" && Number.isSafeInteger(value) && value >= 0)) {
+    return { state: "invalid", got: value };
+  }
+  if (value === 0) return { state: "zero" };
+  return { state: "applied", limit: Math.min(value, max) };
 }
+
+/**
+ * 무효한 통원 가입금액의 차단 안내. 이 진입점의 기존 차단 계약(`pending()`)을 그대로 쓴다.
+ *
+ * ⚠ **받은 값 자체를 문자열로 만들지 않는다 — `typeof`만 표시한다.** 이 파일은 G-15에서
+ *   그 계약을 세웠다(`받은 값의 형식: ${typeof …}`). 외부 값을 문자열로 만들면 `Symbol`이나
+ *   `toString()`이 던지는 객체에서 **차단 안내를 만드는 도중 예외**가 난다. 다른 엔진의
+ *   `showValue()`(단계적 낮춤)를 여기에 복제하지 않는 것도 같은 이유이며, 이 파일 안에서
+ *   두 가지 표시 방식이 섞이지 않게 한다.
+ * @param axis "통원 1회당 가입금액"(중증) 또는 "통원 1일당 가입금액"(비중증)
+ */
+const invalidOutpatientLimitNotes = (axis: string, got: unknown): string[] => [
+  `${axis}은 0 이상의 정수여야 합니다. 계산기가 잘못된 값을 임의로 고치지 않습니다 — 값을 고치면 지급 한도가 증권과 달라져 보험금이 잘못 계산됩니다. 증권에 적힌 통원 가입금액을 입력해 주세요.`,
+  `받은 값의 형식: ${typeof got}`,
+];
+
+/**
+ * 명시적 `0`의 안내. 미입력 안내와 **분리한다** — 값을 넘겼는데 "입력하지 않아"라고 말하면
+ * 사실과 다르다.
+ * @param unit "1회당"(중증, 특별약관1) 또는 "1일당"(비중증, 특별약관2 — 외래·처방조제 합산)
+ */
+const zeroOutpatientLimitNote = (unit: string): string =>
+  `통원 가입금액을 0원으로 입력하셔서 계산기에서는 통원 ${unit} 지급 한도를 적용하지 않았습니다. 실제 가입금액이 있으면 증권의 금액을 입력해 주세요.`;
 
 function pending(amount: number, reasons: string[]): CalcResult {
   return { status: "PENDING_UNVERIFIED", generation: "2026", amount,
@@ -226,10 +275,15 @@ export function calc2026(input: Gen2026ClaimInput): CalcResult {
     }
     // 중증 통원: Max(30%, 3만). 1회당 가입금액은 계약자 선택값이라 있을 때만 적용한다.
     const rate = c.outpatientRate;
-    const limit = outpatientLimit(input.perVisitCoverageLimit, c.outpatientPerVisitLimitMax);
-    if (limit === undefined) {
+    const checked = outpatientLimit(input.perVisitCoverageLimit, c.outpatientPerVisitLimitMax);
+    if (checked.state === "invalid") {
+      return pending(amount, invalidOutpatientLimitNotes("통원 1회당 가입금액", checked.got));
+    }
+    if (checked.state === "unset") {
       notes.push(`통원 1회당 가입금액(약관상 ${c.outpatientPerVisitLimitMax.toLocaleString("ko-KR")}원 이내에서 계약 시 정한 금액)은 입력하지 않아 적용하지 않았습니다.`);
     }
+    if (checked.state === "zero") notes.push(zeroOutpatientLimitNote("1회당"));
+    const limit = checked.state === "applied" ? checked.limit : undefined;
     notes.push(`중증 통원은 약관상 계약해당일 기준 1년간 ${c.outpatientAnnualVisits}회가 한도이지만, 1건 계산에는 반영되지 않습니다. 횟수를 반영하려면 여러 건 합산 계산을 이용해 주세요.`);
     const ownPayRaw = Math.max(amount * rate, c.outpatientMinDeductible);
     const s = settle(amount, ownPayRaw, limit);
@@ -267,10 +321,15 @@ export function calc2026(input: Gen2026ClaimInput): CalcResult {
   // 비중증 통원: Max(50%, 5만). 약관이 "통원 1일당(외래 및 처방·조제비 합산)"으로 규정하므로
   // 한 건은 하루치를 합산한 금액이며, 최소공제도 하루에 한 번만 적용된다.
   const rate = n.outpatientRate;
-  const dayLimit = outpatientLimit(input.perVisitCoverageLimit, n.outpatientPerDayLimitMax);
-  if (dayLimit === undefined) {
+  const dayChecked = outpatientLimit(input.perVisitCoverageLimit, n.outpatientPerDayLimitMax);
+  if (dayChecked.state === "invalid") {
+    return pending(amount, invalidOutpatientLimitNotes("통원 1일당 가입금액", dayChecked.got));
+  }
+  if (dayChecked.state === "unset") {
     notes.push(`통원 1일당 가입금액(약관상 ${n.outpatientPerDayLimitMax.toLocaleString("ko-KR")}원 이내에서 계약 시 정한 금액)은 입력하지 않아 적용하지 않았습니다.`);
   }
+  if (dayChecked.state === "zero") notes.push(zeroOutpatientLimitNote("1일당"));
+  const dayLimit = dayChecked.state === "applied" ? dayChecked.limit : undefined;
   const ownPayRaw = Math.max(amount * rate, n.outpatientMinDeductible);
   const s = settle(amount, ownPayRaw, dayLimit);
   const appliedCaps: CapCode[] = s.capped ? ["GEN2026_NONCRITICAL_OUTPATIENT_PER_DAY"] : [];

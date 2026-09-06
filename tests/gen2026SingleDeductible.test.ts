@@ -360,10 +360,21 @@ console.log("\n[소스] 형식 우선 검증 · 전달 조건 · 금지 사항")
   check("공용 위젯 파일은 그대로다",
     !/\.trim\(/.test(widgetSrc) && !/\.replace\(/.test(widgetSrc) && !/slice\(/.test(widgetSrc));
   const eng = readFileSync("src/lib/insurance/engine/generation2026.ts", "utf8");
+  // ⚠ **낡은 계약을 교체했다.** G-11A 시점의 `outpatientLimit()`은 `value <= 0`과
+  //   `!Number.isFinite(value)`를 한 줄에 묶어 명시적 `0`과 무효값을 **함께 미입력으로**
+  //   처리했고, 그 한 줄을 그대로 고정하고 있었다. G-24가 네 상태로 나눴으므로 확인 대상을
+  //   새 모양으로 옮긴다. 이 커밋(G-11A)이 고정하려는 요지는 **화면이 이 판정을 대신하지
+  //   않는다**는 것이며, 그 요지는 아래 세 검사가 그대로 유지한다.
   check("엔진의 소비 조건·정책은 그대로다",
-    /function outpatientLimit\(value: number \| undefined, max: number\): number \| undefined \{\s*\n\s*if \(value === undefined \|\| !Number\.isFinite\(value\) \|\| value <= 0\) return undefined;/.test(eng)
+    /function outpatientLimit\(value: unknown, max: number\): OutpatientLimitCheck \{/.test(eng)
+    && /if \(value === undefined\) return \{ state: "unset" \};/.test(eng)
+    && /if \(value === 0\) return \{ state: "zero" \};/.test(eng)
+    && /return \{ state: "applied", limit: Math\.min\(value, max\) \};/.test(eng)
     && /const priorDeductible = Math\.max\(0, input\.priorAnnualDeductible \?\? 0\);/.test(eng)
     && /const remaining = Math\.max\(c\.annualDeductibleCap - priorDeductible, 0\);/.test(eng));
+  // 화면은 여전히 이 판정을 대신하지 않는다(0·상한 판정은 엔진이 한다).
+  check("화면이 통원 가입금액을 깎거나 0을 미입력으로 바꾸지 않는다",
+    !/Math\.min\([^)]*outpatientLimit/.test(code) && !/outpatientLimitNum === 0 \? undefined/.test(code));
   const multi = readFileSync("src/components/calculators/HealthCalcMulti2026.tsx", "utf8");
   check("다회 화면은 건드리지 않았다(G-10 계약 그대로)",
     /const priorDeductibleNum = !usesPriorDeductible \? undefined/.test(multi)

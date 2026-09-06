@@ -150,9 +150,20 @@ function checkInvariant(name: string, result: ReturnType<typeof calc2026>) {
 
   const zero = calc2026({ amount: 1000000, coverage: "non_benefit", nonBenefitItem: "general", visit: "outpatient", severity: "critical", perVisitCoverageLimit: 0 });
   check("단건: 가입금액 0은 미입력으로 처리", zero.insurancePay === 700000 && zero.appliedCaps.length === 0, JSON.stringify(zero));
-  check("단건: 0일 때도 미적용 고지", zero.notes.some((n) => n.includes("입력하지 않아 적용하지 않았습니다")));
+  // ⚠ **낡은 계약을 교체했다(G-24).** 숫자 0의 **계산**은 종전 그대로 미적용이지만(위 검사),
+  //   안내는 미입력 안내와 분리됐다. 값을 넘겼는데 "입력하지 않아"라고 말하면 사실과 다르다.
+  check("단건: 0에는 0원 전용 안내가 붙는다(미입력 안내가 아니다)",
+    zero.notes.some((n) => n.includes("통원 가입금액을 0원으로 입력하셔서") && n.includes("통원 1회당 지급 한도를 적용하지 않았습니다"))
+    && !zero.notes.some((n) => n.includes("입력하지 않아 적용하지 않았습니다")), JSON.stringify(zero.notes));
+  const unset = calc2026({ amount: 1000000, coverage: "non_benefit", nonBenefitItem: "general", visit: "outpatient", severity: "critical" });
+  check("단건: 미입력 안내는 종전 그대로",
+    unset.notes.some((n) => n.includes("입력하지 않아 적용하지 않았습니다"))
+    && !unset.notes.some((n) => n.includes("0원으로 입력하셔서")));
+  // ⚠ **낡은 계약을 교체했다(G-24).** 음수는 더 이상 미입력으로 삼켜지지 않는다.
   const neg = calc2026({ amount: 1000000, coverage: "non_benefit", nonBenefitItem: "general", visit: "outpatient", severity: "critical", perVisitCoverageLimit: -1 });
-  check("단건: 가입금액 음수도 미입력으로 처리", neg.insurancePay === 700000);
+  check("단건: 가입금액 음수는 기존 pending() 계약으로 차단",
+    neg.status === "PENDING_UNVERIFIED" && neg.amount === 1000000 && neg.ownPay === null
+    && neg.notes[0].startsWith("통원 1회당 가입금액은 0 이상의 정수여야 합니다"), JSON.stringify(neg.notes));
 }
 
 console.log(`\n[generation2026 코어] 통과 ${pass} / 실패 ${fail}`);

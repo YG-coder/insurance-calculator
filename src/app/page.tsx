@@ -1,184 +1,129 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import CalculatorCard from "@/components/CalculatorCard";
 import FAQ from "@/components/FAQ";
-import { CALCULATORS, HUBS, SITE } from "@/lib/site";
+import { CALCULATORS, SITE } from "@/lib/site";
 import { publishedGuides } from "@/lib/guides";
+import { HOME_GROUPS, REVIEW_STEPS } from "@/lib/home";
 
 export const metadata: Metadata = {
-  title: `${SITE.name} - 해지환급금·사망보장·실손 자기부담금 계산`,
-  description: SITE.description,
+  title: "보험계산기 | 실손 병원비·보험 해지·가족 보장 점검",
+  description: "병원비 중 내 부담은 얼마인지, 보험을 유지하면 얼마를 더 내는지, 가족에게 필요한 보장은 얼마인지. 상황에 맞는 보험 계산기와 준비할 자료를 한곳에서 확인하세요.",
   alternates: { canonical: SITE.url },
 };
 
-export default function HomePage() {
-  const faqs = [
-    {
-      q: "보험계산기 결과는 정확한가요?",
-      a: "본 사이트의 모든 계산은 참고용입니다. 실제 보험료와 보험금은 보험사·상품·약관·가입자의 건강 상태 등에 따라 달라질 수 있어, 정확한 금액은 각 보험사 공식 채널에서 확인하시기 바랍니다.",
-    },
-    {
-      q: "개인정보를 입력해야 하나요?",
-      a: "아니요. 보험계산기는 이름, 연락처 등 어떤 개인정보도 수집하지 않습니다. 입력값은 브라우저 안에서만 계산에 사용되며 서버로 전송되지 않습니다.",
-    },
-    {
-      q: "어떤 기준으로 계산되나요?",
-      a: "대부분의 계산기는 이용자가 직접 입력한 값을 산수로 계산합니다. 사이트가 임의의 평균값이나 추정치를 만들어 넣지 않으며, 실손보험 자기부담금은 4세대·5세대 실손보험의 자기부담률 등 공개된 기준을 그대로 반영합니다.",
-    },
-    {
-      q: "어떤 계산기를 쓸 수 있나요?",
-      a: "실손보험 자기부담금(4세대·5세대) 계산기와 함께, 해지환급금·앞으로 낼 보험료·해지 vs 유지 같은 손익 판단 계산기, 사망보장·유족 생활비·보장 공백 같은 보장 설계 계산기를 제공합니다. 보험을 유지할지 해지할지, 보장이 얼마나 부족한지 같은 의사결정에 필요한 숫자를 직접 계산할 수 있습니다.",
-    },
-  ];
+const faqs = [
+  { q: "내 실손보험이 몇 세대인지 모르겠어요.", a: "보험증권이나 보험사 앱에서 상품명과 적용 약관을 먼저 확인하세요. 전환·재가입했다면 처음 가입한 시점만으로 선택하지 말고 현재 적용되는 계약을 기준으로 선택하세요. 이 사이트는 2·3세대, 4세대, 5세대 계산기를 제공합니다." },
+  { q: "계산 결과가 실제 지급 보험금인가요?", a: "아닙니다. 입력한 조건에 따른 참고용 계산입니다. 보장 여부, 면책, 이미 사용한 한도와 상품별 약관 등에 따라 실제 지급액은 달라질 수 있습니다. 결과와 안내를 함께 확인하고 최종 금액은 보험사에 확인하세요. 기준이 확정되지 않은 일부 조건은 계산이 보류될 수 있습니다." },
+  { q: "해지환급금도 자동으로 조회하나요?", a: "보험사 계약을 조회하지 않습니다. 보험사 앱이나 고객센터에서 확인한 현재 해지환급금과 납입 내역을 직접 입력해야 합니다. 해지·유지 계산은 금액을 비교하는 도구이며, 보장 상실이나 재가입 가능성까지 판단해 주지는 않습니다." },
+  { q: "회원가입이나 상담 신청이 필요한가요?", a: "회원가입이나 상담 신청 없이 이용할 수 있습니다. 계산에 입력한 값은 브라우저에서 처리하며 계산을 위해 이름·연락처를 요구하지 않습니다." },
+];
+const focus = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-4";
 
+function calculator(href: string) {
+  const item = CALCULATORS.find(c => c.href === href);
+  if (!item) throw new Error(`등록되지 않은 홈 계산기: ${href}`);
+  return item;
+}
+
+export default function HomePage() {
+  const guides = publishedGuides();
   return (
     <>
-      <section className="bg-gradient-to-br from-brand-50 via-white to-brand-50/30 border-b border-slate-100">
-        <div className="container-base py-16 sm:py-20 text-center">
-          <span className="inline-block px-3 py-1 rounded-full bg-brand-100 text-brand-700 text-xs font-semibold mb-4">
-            2026년 기준 · 참고용
-          </span>
-          <h1 className="text-3xl sm:text-5xl font-bold text-slate-900 leading-tight">
-            보험, 계산해서 결정하세요
-          </h1>
-          <p className="mt-4 text-base sm:text-lg text-slate-600 max-w-2xl mx-auto leading-relaxed">
-            지금 해지하면 얼마인지, 유지하면 얼마를 더 내는지, 보장이 얼마나 부족한지 —
-            입력한 값으로 직접 계산합니다. 추정값 없이, 개인정보 입력 없이 바로 사용하세요.
-          </p>
-          <div className="mt-8 flex flex-wrap gap-3 justify-center">
-            <Link href="/surrender-value-calculator" className="btn-primary">
-              해지환급금 계산하기
-            </Link>
-            <Link
-              href="#calculators"
-              className="inline-flex items-center justify-center px-6 py-3 rounded-xl bg-white border border-slate-200 text-slate-700 font-semibold hover:border-brand-300"
-            >
-              전체 계산기 보기
-            </Link>
+      <section className="border-b border-slate-200 bg-white">
+        <div className="container-base grid gap-9 py-10 sm:py-14 lg:grid-cols-[1.25fr_1fr] lg:items-center">
+          <div>
+            <p className="text-sm font-semibold text-brand-700">내 보험을 이해하는 첫 계산</p>
+            <h1 className="mt-4 text-3xl font-bold leading-tight tracking-tight text-slate-900 sm:text-5xl sm:leading-tight">
+              보험을 바꾸기 전에,<br />내가 부담할 금액부터
+            </h1>
+            <p className="mt-5 max-w-xl text-base leading-7 text-slate-600">
+              병원비, 남은 보험료, 가족에게 필요한 보장.{" "}<br className="hidden sm:block" />
+              지금 궁금한 것부터 하나씩 확인하세요.
+            </p>
+            <div className="mt-7 flex flex-wrap gap-3">
+              <Link href="#start" className={`btn-primary ${focus}`}>내 상황에 맞게 시작하기 ↓</Link>
+              <Link href="#calculators" className={`inline-flex items-center rounded-xl border border-slate-300 px-5 py-3 font-semibold text-slate-700 hover:bg-slate-50 ${focus}`}>전체 계산기 {CALCULATORS.length}개</Link>
+            </div>
+            <p className="mt-5 text-xs leading-6 text-slate-500">회원가입 없이 · 입력값은 브라우저에서 계산 · 결과는 참고용</p>
           </div>
+          <aside aria-labelledby="before-start" className="rounded-2xl bg-slate-900 p-6 text-white sm:p-8">
+            <p className="text-xs font-semibold tracking-widest text-indigo-200">계산 전 준비</p>
+            <h2 id="before-start" className="mt-3 text-xl font-bold">이 자료를 곁에 두세요</h2>
+            <dl className="mt-5 divide-y divide-slate-700 text-sm">
+              {[
+                ["병원비를 계산할 때", "보험증권 · 진료비 영수증 · 세부내역서"],
+                ["해지와 유지를 비교할 때", "현재 해지환급금 · 월 보험료 · 남은 납입기간"],
+                ["가족 보장을 점검할 때", "생활비 · 부채 · 준비된 자금 · 현재 보장금액"],
+              ].map(([title, detail]) => <div key={title} className="py-4 first:pt-0 last:pb-0"><dt className="font-semibold">{title}</dt><dd className="mt-1.5 leading-6 text-slate-300">{detail}</dd></div>)}
+            </dl>
+          </aside>
         </div>
       </section>
 
-      <section id="calculators" className="container-base py-14">
-        <div className="text-center mb-10">
-          <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">계산기 모음</h2>
-          <p className="mt-2 text-slate-600">필요한 보험 항목을 선택해 바로 계산해보세요.</p>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {CALCULATORS.map((c) => (
-            <CalculatorCard key={c.href} {...c} />
+      <section id="start" className="container-base scroll-mt-24 py-10 sm:py-14">
+        <h2 className="text-2xl font-bold tracking-tight">지금 어떤 고민이 있으신가요?</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-600">계산기 이름을 몰라도 괜찮습니다. 확인하려는 상황에서 시작하세요.</p>
+        <div className="mt-6 grid gap-4 md:grid-cols-3">
+          {HOME_GROUPS.slice(0, 3).map((group, i) => (
+            <article key={group.id} className="flex flex-col rounded-2xl border border-slate-200 bg-white p-6">
+              <span className="text-xs font-bold text-brand-600">0{i + 1} / {group.label}</span>
+              <h3 className="mt-3 text-xl font-bold leading-snug">{group.question}</h3>
+              <p className="mt-3 grow text-sm leading-6 text-slate-600">{group.description}</p>
+              <Link href={group.start.href} className={`mt-5 inline-flex w-fit items-center rounded-lg bg-brand-600 px-4 py-3 text-sm font-semibold text-white hover:bg-brand-700 ${focus}`}>{group.start.label} →</Link>
+              <Link href={group.hub} className={`mt-4 w-fit text-sm text-slate-600 underline underline-offset-4 hover:text-brand-700 ${focus}`}>{group.label} 안내 읽기</Link>
+            </article>
           ))}
         </div>
       </section>
 
-      {HUBS.length > 0 && (
-        <section className="container-base py-14">
-          <div className="text-center mb-10">
-            <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">단계별로 안내받기</h2>
-            <p className="mt-2 text-slate-600">
-              어떤 계산기를 먼저 써야 할지 모르겠다면, 주제별 허브가 순서대로 안내합니다.
-            </p>
+      <section id="silson" className="scroll-mt-24 border-y border-slate-200 bg-white py-10 sm:py-12">
+        <div className="container-base">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div><p className="text-xs font-bold text-brand-700">병원비 계산의 시작</p><h2 className="mt-2 text-2xl font-bold">내 실손보험 세대를 먼저 확인하세요</h2></div>
+            <Link href="/guide/silson-generations" className={`text-sm font-semibold text-brand-700 hover:underline ${focus}`}>세대 구분이 어렵다면 →</Link>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            {HUBS.map((h) => (
-              <Link
-                key={h.slug}
-                href={`/${h.slug}`}
-                className="card hover:border-brand-300 hover:shadow-md transition flex items-start gap-4"
-              >
-                <span className="text-3xl" aria-hidden>{h.icon}</span>
-                <div>
-                  <div className="font-bold text-slate-900">{h.title}</div>
-                  <div className="text-sm text-slate-600 mt-1 leading-relaxed">{h.tagline}</div>
-                </div>
-              </Link>
-            ))}
+          <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            {HOME_GROUPS[0].calculators.map(href => {
+              const calc = calculator(href);
+              return <Link key={href} href={href} className={`group flex items-center justify-between rounded-xl border border-slate-200 p-5 transition-colors hover:border-brand-400 hover:bg-brand-50 ${focus}`}><div><h3 className="text-lg font-bold">{calc.short}</h3><p className="mt-1 text-sm text-slate-600">자기부담금 계산하기</p></div><span aria-hidden="true" className="text-xl text-brand-600">→</span></Link>;
+            })}
           </div>
-        </section>
-      )}
+          <p className="mt-4 text-sm leading-6 text-slate-600">전환·재가입했다면 <strong className="font-semibold text-slate-800">현재 적용 약관</strong>을 확인하세요. 세대를 임의로 선택하면 다른 계산 결과가 나올 수 있습니다. 1세대 전용 계산기는 제공하지 않습니다.</p>
+        </div>
+      </section>
 
-      <section className="container-base py-14">
-        <div className="card">
-          <h2 className="text-2xl font-bold text-slate-900 mb-4">이 사이트가 계산하는 방식</h2>
-          <div className="prose-seo">
-            <p>
-              보험계산기는 <strong>보험료가 얼마 나올지 추정해 주는 사이트가 아닙니다.</strong> 대신 이미
-              알고 있는 값 — 지금까지 낸 보험료, 해지환급금, 월 생활비, 현재 보장금액 등 — 을 입력하면,
-              그 값으로 <strong>보험 의사결정에 필요한 숫자</strong>를 계산합니다.
-            </p>
-            <p>
-              예를 들어 지금 해지하면 얼마를 돌려받는지(해지환급금), 유지하면 앞으로 얼마를 더 내는지
-              (앞으로 낼 보험료), 필요한 보장에서 얼마가 부족한지(보장 공백)를 계산합니다. 어느 쪽이 유리한지
-              단정하거나 특정 상품을 추천하지 않으며, <strong>평균값이나 추정 상수를 임의로 넣지 않습니다.</strong>
-              판단에 필요한 숫자를 제공하고, 결정은 이용자가 하도록 돕는 것이 이 사이트의 방식입니다.
-            </p>
+      <section className="container-base py-10 sm:py-14">
+        <div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-2xl font-bold">해지 결정은 세 숫자를 확인한 뒤에</h2><p className="mt-2 text-sm leading-6 text-slate-600">돌려받을 돈과 앞으로 낼 돈은 다릅니다. 순서대로 나눠 보세요.</p></div><Link href="/insurance-cancellation" className={`text-sm font-semibold text-brand-700 hover:underline ${focus}`}>해지 전 점검사항 →</Link></div>
+        <ol className="mt-6 grid gap-5 sm:grid-cols-3">
+          {REVIEW_STEPS.map((step, i) => <li key={step.href} className="border-t-2 border-brand-200 pt-5"><p className="text-xs font-bold text-brand-600">STEP 0{i + 1}</p><h3 className="mt-2 text-lg font-bold">{step.title}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{step.description}</p><Link href={step.href} className={`mt-3 inline-block py-2 text-sm font-semibold text-brand-700 hover:underline ${focus}`}>{step.action} →</Link></li>)}
+        </ol>
+        <p className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">금액 비교만으로 해지를 결정하지 마세요. 사라지는 보장과 새 보험의 가입 가능성·면책 조건도 별도로 확인해야 합니다. 계산기 사이 입력값은 자동으로 전달되지 않습니다.</p>
+      </section>
+
+      <section id="calculators" className="scroll-mt-24 border-y border-slate-200 bg-white py-10 sm:py-12">
+        <div className="container-base">
+          <h2 className="text-2xl font-bold">전체 계산기 <span className="text-brand-600">{CALCULATORS.length}</span></h2>
+          <p className="mt-2 text-sm text-slate-600">찾는 계산기가 정해져 있다면 여기에서 바로 여세요.</p>
+          <div className="mt-6 grid gap-x-10 gap-y-7 sm:grid-cols-2">
+            {HOME_GROUPS.map(group => <div key={group.id}><h3 className="border-b border-slate-200 pb-3 text-sm font-bold text-slate-500">{group.label}</h3><ul className="divide-y divide-slate-100">{group.calculators.map(href => {
+              const calc = calculator(href);
+              return <li key={href}><Link href={href} className={`flex items-center justify-between gap-3 rounded-lg py-4 hover:text-brand-700 ${focus}`}><span><span className="block text-sm font-semibold">{calc.short}</span><span className="mt-1 block text-xs leading-5 text-slate-500">{calc.description}</span></span><span aria-hidden="true">↗</span></Link></li>;
+            })}</ul></div>)}
           </div>
         </div>
       </section>
 
-      <section className="container-base py-14">
-        <div className="card">
-          <h2 className="text-2xl font-bold text-slate-900 mb-4">세 가지 계산으로 보험을 정리하세요</h2>
-          <div className="prose-seo">
-            <ul>
-              <li>
-                <strong>실손보험 자기부담금:</strong> 4세대·5세대 실손보험 기준으로 병원비 중 본인부담금과
-                보험 적용 금액을 계산합니다. 공개된 자기부담률을 그대로 적용합니다.
-              </li>
-              <li>
-                <strong>손익 판단 (해지환급금 · 앞으로 낼 보험료 · 해지 vs 유지):</strong> 지금 해지하면
-                받는 금액과 유지하면 앞으로 낼 금액을 계산해, 해지·유지 결정에 필요한 숫자를 나란히 보여줍니다.
-              </li>
-              <li>
-                <strong>보장 설계 (사망보장 · 유족 생활비 · 보장 공백):</strong> 유족에게 필요한 자금과
-                이미 준비된 자금을 입력하면, 필요한 보장금액과 현재 보장과의 차이를 계산합니다.
-              </li>
-            </ul>
-            <p>
-              모든 계산은 이용자가 입력한 값을 기준으로 하며, 적정 금액이나 추천 상품을 제시하지 않습니다.
-              정확한 보험료·보장 내역은 가입하신 보험사의 공식 채널에서 확인하시기 바랍니다.
-            </p>
-          </div>
+      <section className="container-base py-10 sm:py-14">
+        <div className="flex items-center justify-between gap-3"><h2 className="text-2xl font-bold">계산 다음에 읽을 보험 가이드</h2><Link href="/guide" className={`shrink-0 text-sm font-semibold text-brand-700 hover:underline ${focus}`}>전체 보기 →</Link></div>
+        <div className="mt-6 grid gap-4 sm:grid-cols-3">
+          {HOME_GROUPS.slice(0, 3).map(group => {
+            const guide = guides.find(g => g.slug === group.guide);
+            if (!guide) return null;
+            return <article key={guide.slug} className="rounded-xl border border-slate-200 bg-white p-5"><p className="text-xs font-semibold text-brand-700">{group.label}</p><h3 className="mt-2 font-bold leading-6"><Link href={`/guide/${guide.slug}`} className={`hover:underline ${focus}`}>{guide.title}</Link></h3><p className="mt-2 text-sm leading-6 text-slate-600">{guide.description}</p></article>;
+          })}
         </div>
-      </section>
-
-      <section className="container-base py-14">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">
-            보험 가이드
-          </h2>
-          <Link
-            href="/guide"
-            className="text-sm font-semibold text-brand-600 hover:text-brand-700"
-          >
-            전체 보기 →
-          </Link>
-        </div>
-        <p className="text-slate-600 mb-6">
-          계산만으로는 부족하다면, 보험을 고르고 활용하는 데 도움이 되는 가이드도
-          함께 확인해보세요.
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {publishedGuides()
-            .slice(0, 6)
-            .map((g) => (
-              <Link
-                key={g.slug}
-                href={`/guide/${g.slug}`}
-                className="card hover:border-brand-300 hover:shadow-md transition"
-              >
-                <div className="font-semibold text-slate-900">{g.title}</div>
-                <div className="text-xs text-slate-600 mt-2 leading-relaxed">
-                  {g.description}
-                </div>
-              </Link>
-            ))}
-        </div>
-      </section>
-
-      <section className="container-base py-14">
-        <h2 className="text-2xl font-bold text-slate-900 mb-6">자주 묻는 질문</h2>
-        <FAQ items={faqs} />
+        <div className="mt-10 border-t border-slate-200 pt-8"><h2 className="mb-5 text-xl font-bold">계산 전에 자주 묻는 질문</h2><FAQ items={faqs} /></div>
+        <p className="mt-6 text-xs leading-6 text-slate-500">보험계산기는 특정 보험 가입·해지를 권유하거나 보험금 지급을 확정하지 않습니다. <Link href="/disclaimer" className={`underline underline-offset-4 ${focus}`}>계산 결과의 범위와 한계</Link>를 확인해 주세요.</p>
       </section>
     </>
   );

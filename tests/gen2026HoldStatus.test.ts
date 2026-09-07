@@ -533,8 +533,14 @@ console.log("\n[커밋 D·E] 계산·화면 무변경 (기준 30dee21)");
       /const needsItem = coverage === "non_benefit" && nonBenefitItem === null;/.test(g5)
       && /const needsSeverity =\s*\n\s*coverage === "non_benefit" && nonBenefitItem === "general" && severity === null;/.test(g5)
       && /const needsTier =\s*\n\s*coverage === "non_benefit" && nonBenefitItem === "general" && severity !== null\s*\n\s*&& visit === "inpatient" && nbInpatientTier === null;/.test(g5));
-    check("무변경(G-4): 결과 표시의 0원 정책이 그대로",
-      /result && result\.status === "OK" && num > 0/.test(g5));
+    // ⚠ **낡은 계약을 교체했다.** 종전에는 5세대 단건의 0원 정책(`num > 0`)이 G-4 이후
+    //   **무변경**이라는 것을 고정했다. G-35가 그 정책을 의도적으로 바꿨다 — 정상 계산의
+    //   0원 결과를 감추면 계산 실패와 구분되지 않기 때문이다. HOLD 관점에서 지켜야 할 것은
+    //   "무효 원문에서 엔진을 호출하지 않는다"와 "선택 게이트 3종"이고 그 둘은 위에서 본다.
+    //   여기서는 **바뀐 방향**을 고정한다(금액 조건이 되돌아오지 않는지 포함).
+    check("변경 의도(G-35): 결과 표시가 금액이 아니라 결과 상태 기준이다",
+      /result && result\.status === "OK" && \(/.test(g5)
+      && !/num > 0/.test(g5.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "")));
     // ⚠ **낡은 계약을 교체했다.** G-11A가 두 금액 입력을 `gen2026SingleAmount`로 옮겼다.
     //   HOLD 관점에서 중요한 것은 **빈 값의 뜻이 필드마다 다르게 유지된다**는 사실이다.
     check("변경 의도(G-11A): 두 금액도 단건 파서를 쓰고 빈 값 계약이 필드마다 다르다",

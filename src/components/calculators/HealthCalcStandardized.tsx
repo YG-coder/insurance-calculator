@@ -540,8 +540,19 @@ export default function HealthCalcStandardized() {
             </NoticeBox>
           )}
 
-          {result !== null && result.status === "OK" && result.totalAmount > 0 && (
+          {/* ⚠ **정책 교체.** 종전에는 `result.totalAmount > 0`을 함께 봐서 **정상 계산인데
+              총액이 0원**이면 카드를 그리지 않았다 — 계산 실패나 미실행과 구분되지 않았다.
+              미입력·무효는 `result === null`, 엔진 차단은 `PENDING_UNVERIFIED`로 이미 갈리므로
+              금액 조건이 필요 없다. 0원 행이 외래 횟수를 1회 소진하는 2·3세대 계약은 그대로다. */}
+          {result !== null && result.status === "OK" && (
             <>
+              {/* ⚠ **라이브 리전은 요약 한 문장만 담는다.** 결과 카드·표를 이 안에 넣으면
+                  제출 뒤 입력을 고칠 때마다 표 전체가 다시 낭독된다(이 화면들은 `submitted`가
+                  true로 유지된 채 매 입력마다 재계산된다). `aria-atomic`으로 문장 전체를
+                  한 번에 읽게 하고, 카드는 리전 **밖**에 둔다. */}
+              <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+                계산 결과 · {result.lines.length}건 합계. 총 진료비 {won(result.totalAmount)}, 총 본인부담금 {won(result.totalOwnPay ?? 0)}, 총 보험 적용 금액 {won(result.totalInsurancePay ?? 0)}.
+              </p>
               <ResultCard
                 title={`계산 결과 · ${result.lines.length}건 합계 (${generation === "2009" ? "2세대" : "3세대"} 실손 기본형 기준 · 참고용)`}
                 items={[

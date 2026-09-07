@@ -461,7 +461,15 @@ export default function HealthCalcMulti2021() {
         {result.notes.map((note) => <div className="mt-3 first:mt-0" key={note}><NoticeBox variant="warning">{note}</NoticeBox></div>)}
       </div>}
 
-      {submitted && result !== null && result.status === "OK" && result.totalAmount > 0 && <div className="mt-7">
+      {/* ⚠ **정책 교체.** 종전 `result.totalAmount > 0`을 뺐다 — 정상 계산의 0원 총액을
+             계산 실패처럼 감추지 않는다. 제출 조건과 차단 분기는 그대로다. */}
+      {submitted && result !== null && result.status === "OK" && <div className="mt-7">
+        {/* ⚠ **라이브 리전은 요약 한 문장만 담는다.** 결과 카드·표를 이 안에 넣으면
+             제출 뒤 입력을 고칠 때마다 표 전체가 다시 낭독된다. `aria-atomic`으로 문장 전체를
+             한 번에 읽게 하고, 카드와 표는 리전 **밖**에 둔다. */}
+        <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+          다회 청구 합계. 총 진료비 {won(result.totalAmount)}, 총 본인부담금 {won(result.totalOwnPay ?? 0)}, 총 보험 적용 금액 {won(result.totalInsurancePay ?? 0)}.
+        </p>
         <ResultCard title="다회 청구 합계 (4세대 · 참고용)" items={[
           { label: "총 진료비", value: won(result.totalAmount) },
           { label: "총 본인부담금", value: won(result.totalOwnPay ?? 0), highlight: true },

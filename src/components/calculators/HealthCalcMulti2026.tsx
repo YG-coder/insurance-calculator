@@ -1040,13 +1040,22 @@ export default function HealthCalcMulti2026() {
     {submitted && rowsIncomplete && <div className="mt-5"><NoticeBox variant="warning">각 행의 <b>치료 형태</b>{needsRowTier ? <>와 입원 행의 <b>의료기관 종별</b></> : null}를 선택해 주세요.{needsRowTier ? " 중증 비급여 MRI 입원은 의료기관 종별에 따라 공제금액 상한 500만 원 적용 여부가 달라지므로 기본값으로 계산하지 않습니다." : ""}</NoticeBox></div>}
     {submitted && result && result.status === "PENDING_UNVERIFIED" && <div className="mt-5"><NoticeBox variant="warning">{result.notes.join(" ")}</NoticeBox></div>}
 
-    {submitted && result && result.status === "OK" && result.totalAmount > 0 && <div className="mt-7">
+    {/* ⚠ **정책 교체.** 종전 `result.totalAmount > 0`을 뺐다. 이 게이트는 일반·별도
+           보장종목·상급병실료 세 경로가 함께 쓴다 — 상급병실료 차액 0원처럼 정상적으로
+           지급 0원이 나오는 계산도 이제 카드로 보여 준다. */}
+    {submitted && result && result.status === "OK" && <div className="mt-7">
+      {/* ⚠ **라이브 리전은 요약 한 문장만 담는다.** 결과 카드·표를 이 안에 넣으면
+             제출 뒤 입력을 고칠 때마다 표 전체가 다시 낭독된다. `aria-atomic`으로 문장 전체를
+             한 번에 읽게 하고, 카드와 표는 리전 **밖**에 둔다. */}
+      <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        다회 청구 합계. 총 진료비 {won(result.totalAmount)}, 총 본인부담금 {won(result.totalOwnPay ?? 0)}, 총 보험 적용 금액 {won(result.totalInsurancePay ?? 0)}.
+      </p>
       <ResultCard title="다회 청구 합계 (5세대 · 참고용)" items={[{ label: "총 진료비", value: won(result.totalAmount) }, { label: "총 본인부담금", value: won(result.totalOwnPay ?? 0), highlight: true }, { label: "총 보험 적용 금액", value: won(result.totalInsurancePay ?? 0) }]} />
       <div className="mt-4 overflow-x-auto">
         {room
           ? <table className="w-full text-sm"><thead><tr className="text-left text-slate-500"><th>입원</th><th>차액</th><th>일수</th><th>1일 평균 차액</th><th>50%</th><th>지급</th><th>본인부담</th></tr></thead><tbody>{room.lines.map((line) => <tr className="border-t" key={line.index}><td className="py-2">{line.index + 1}</td><td>{won(line.amount)}</td><td>{line.inpatientDays}일</td><td>{won(line.dailyAverageRoomCharge)}</td><td>{won(line.payBeforeCaps)}</td><td>{won(line.insurancePay ?? 0)}</td><td>{won(line.ownPay ?? 0)}</td></tr>)}</tbody></table>
           : special
-          ? <table className="w-full text-sm"><thead><tr className="text-left text-slate-500"><th>행</th><th>진료비</th><th>공제금액</th><th>본인부담</th><th>보험 적용</th><th>보상</th></tr></thead><tbody>{special.lines.map((line) => <tr className="border-t" key={line.index}><td className="py-2">{line.index + 1}</td><td>{won(line.amount)}</td><td>{won(line.deductible.deductibleApplied)}</td><td>{won(line.ownPay ?? 0)}</td><td>{won(line.insurancePay ?? 0)}</td><td>{line.covered ? (line.actIndex === null ? "보상" : `${line.actIndex}회째`) : "제외"}</td></tr>)}</tbody></table>
+          ? <table className="w-full text-sm"><thead><tr className="text-left text-slate-500"><th>행</th><th>진료비</th><th>공제금액</th><th>본인부담</th><th>보험 적용</th><th>보상</th></tr></thead><tbody>{special.lines.map((line) => <tr className="border-t" key={line.index}><td className="py-2">{line.index + 1}</td><td>{won(line.amount)}</td><td>{won(line.deductible.deductibleApplied)}</td><td>{won(line.ownPay ?? 0)}</td><td>{won(line.insurancePay ?? 0)}</td><td>{!line.covered ? "제외" : (line.insurancePay ?? 0) === 0 ? (line.actIndex === null ? "지급 0원" : `${line.actIndex}회째 · 지급 0원`) : (line.actIndex === null ? "보상" : `${line.actIndex}회째`)}</td></tr>)}</tbody></table>
           : <table className="w-full text-sm"><thead><tr className="text-left text-slate-500"><th>건</th><th>진료비</th><th>본인부담</th><th>보험 적용</th></tr></thead><tbody>{result.lines.map((line) => <tr className="border-t" key={line.index}><td className="py-2">{line.index + 1}</td><td>{won(line.amount)}</td><td>{won(line.ownPay ?? 0)}</td><td>{won(line.insurancePay ?? 0)}</td></tr>)}</tbody></table>}
       </div>
       {result.appliedCaps.length > 0 && <div className="mt-4"><NoticeBox variant="info">적용된 한도: {result.appliedCaps.map((c) => CAP_LABELS[c]).join(", ")}</NoticeBox></div>}

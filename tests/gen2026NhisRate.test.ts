@@ -404,7 +404,13 @@ console.log("\n[소스] 비율 전용 파서 · 게이트 · 금지 사항");
     && /const priorDeductibleNum = !usesPriorDeductible \? undefined/.test(code)
     && /priorAnnualDeductible: limits\.deductible,/.test(code)
     && /perVisitCoverageLimit: limits\.perVisit,/.test(code)
-    && /result && result\.status === "OK" && num > 0/.test(code));
+    // ⚠ **낡은 계약을 교체했다.** 종전에는 결과 게이트를 `num > 0`까지 포함해 고정했다.
+    //   G-35가 단건 게이트를 **입력값이 아니라 결과 상태** 기준으로 바꿨다(정상 0원을 감추지
+    //   않기 위해서다). 이 검사의 관심사는 본인부담률 계약이지 금액 조건이 아니므로,
+    //   결과 상태 기준만 남기고 금액 조건이 되돌아오지 않는 것을 함께 본다.
+    && /result && result\.status === "OK" && \(/.test(code)
+    // ⚠ 주석을 걷어내고 본다 — 교체 이유 주석이 종전 조건식을 인용한다.
+    && !/num > 0/.test(code.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "")));
   const eng = readFileSync("src/lib/insurance/engine/generation2026.ts", "utf8");
   check("엔진과 20% 하한은 그대로다",
     /if \(nhis === undefined\) holds\.push\("급여 통원: 건강보험 본인부담률 미제공 → 계산 불가\(#2 입력 필요\)"\);/.test(eng)

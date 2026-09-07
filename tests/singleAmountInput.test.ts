@@ -6,10 +6,12 @@
 //   `1,0`→**10**, `abc`·빈 값·`Infinity`→**0**, 안전 정수 초과→잘린 유효값.
 //   그리고 두 화면 모두 **렌더마다 엔진을 무조건 호출**해 그 값으로 후보 결과를 만들었다.
 //
-// ⚠ 두 세대의 0원 정책은 **서로 다르고, 이번에 통일하지 않는다.**
-//     4세대 — `num === 0`이면 "진료비를 1원 이상 입력해 주세요."로 거부(종전 정책).
-//     5세대 — 안내 없이 결과만 숨긴다(`num > 0`, 종전 정책).
-//   파서는 두 세대 모두 명시적 `0`을 **유효한 숫자**로 판정한다. 그 뒤 처리를 화면이 정한다.
+// ⚠ **교체됨 (G-35).** 종전에는 두 세대의 0원 정책이 서로 달랐고 이 파일이 그 비대칭을
+//   고정했다 — 4세대는 `num === 0`에서 "진료비를 1원 이상 입력해 주세요."로 거부했고,
+//   5세대는 `num > 0`으로 안내 없이 결과만 숨겼다. 둘 다 **정상 계산 결과를 입력 오류처럼
+//   설명하거나 아무 반응도 주지 않아** 계산 실패와 구분되지 않았다.
+//   이제 두 세대 모두 **결과 상태 기준**(`status === "OK"`)으로 카드를 그리고, 0원 거부
+//   문구는 어느 화면에도 없다. 파서가 명시적 `0`을 유효한 숫자로 보는 계약은 그대로다.
 // ⚠ 다회 계산기의 파서·게이트·위젯은 이번 범위가 아니다. 세대별 단건 전용 파서를 따로 둔다.
 // ⚠ 5세대의 통원 가입금액·누적 공제금액은 진료비가 아니다. `AmountInput`과 종전 파싱 그대로.
 // ⚠ 엔진·타입·규칙값·공제·한도, 별도 보장종목 차단과 다회 유도, 선택 게이트 3종은 무변경.
@@ -183,23 +185,37 @@ console.log("\n[0원] 빈 값과 명시적 0을 구분하고 세대별 기존 �
   const h4 = setup(HealthCalc as unknown as Comp, names4);
   typeInto(h4, "med-amount", "0");
   check("4세대: 명시적 0은 파서가 유효로 본다", parse4("0") === 0);
-  check("4세대: 명시적 0 → 종전 '1원 이상' 안내 유지",
-    !screenOf(h4).calculated && infoText(h4).includes("진료비를 1원 이상 입력해 주세요."));
-  check("4세대: 명시적 0에 형식 경고를 만들지 않는다", warnText(h4) === "");
+  // ⚠ **낡은 계약 3건을 이 자리에서 교체했다** — "종전 '1원 이상' 안내 유지",
+  //   "빈 값은 0원 안내가 아니라 형식 안내"의 `1원 이상` 부분, "0원 안내 문구가 그대로다".
+  //   셋 다 정상 0원을 오류처럼 설명하던 문구를 고정하고 있었다.
+  const z4 = screenOf(h4);
+  // ⚠ 0원에서도 엔진의 정상 안내(미반영 한도 목록)는 그대로 붙는다 — 그것까지 없어야
+  //   한다고 고정하면 정상 계산의 안내를 지우는 계약이 된다. 여기서는 **거부 문구가 없는지**만 본다.
+  check("4세대: 명시적 0 → 결과 카드를 표시한다(G-35)",
+    z4.calculated && warnText(h4) === "" && !infoText(h4).includes("1원 이상"),
+    `${z4.calculated} / ${warnText(h4)}`);
   typeInto(h4, "med-amount", "");
-  check("4세대: 빈 값은 0원 안내가 아니라 형식 안내",
-    !infoText(h4).includes("1원 이상") && warnText(h4).includes("올바르게 입력해 주세요"));
-  check("4세대: 0원 안내 문구가 그대로다", /진료비를 1원 이상 입력해 주세요\./.test(ui4));
+  check("4세대: 빈 값은 형식 안내", warnText(h4).includes("올바르게 입력해 주세요"));
+  // ⚠ 렌더 기준으로 본다. 삭제한 자리의 **교체 이유 주석이 종전 문구를 인용**하므로
+  //   원문 정규식으로는 "사라졌다"를 확인할 수 없다.
+  typeInto(h4, "med-amount", "0");
+  check("4세대: 0원 거부 문구가 화면에서 사라졌다",
+    !infoText(h4).includes("1원 이상") && !warnText(h4).includes("1원 이상"));
 
   const h5 = setup(HealthCalc5th as unknown as Comp, names5,
     { nonBenefitItem: "general", severity: "critical", visit: "inpatient", nbInpatientTier: "clinic" });
   typeInto(h5, "med5-amount", "0");
   check("5세대: 명시적 0은 파서가 유효로 본다", parse5("0") === 0);
-  check("5세대: 명시적 0 → 결과만 숨기고 새 거부 안내를 만들지 않는다",
-    !screenOf(h5).calculated && warnText(h5) === "" && !infoText(h5).includes("1원 이상"));
-  check("5세대: 결과 표시의 0원 게이트가 그대로다",
-    /result && result\.status === "OK" && num > 0/.test(ui5));
-  check("5세대에 4세대식 0원 거부 문구를 넣지 않았다", !/1원 이상/.test(ui5));
+  // ⚠ **낡은 계약 2건을 교체했다** — "결과만 숨기고 새 거부 안내를 만들지 않는다"와
+  //   게이트 문자열 `num > 0`. 결과를 숨기던 쪽이 문제였으므로 반대 방향으로 고정한다.
+  const z5 = screenOf(h5);
+  check("5세대: 명시적 0 → 결과 카드를 표시한다(G-35)",
+    z5.calculated && warnText(h5) === "" && !infoText(h5).includes("1원 이상"),
+    `${z5.calculated} / ${warnText(h5)}`);
+  check("5세대: 단건 게이트가 결과 상태 기준이다",
+    /result && result\.status === "OK" && \(/.test(ui5)
+    && !/num > 0/.test(ui5.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "")));
+  check("5세대에 0원 거부 문구가 없다", !/1원 이상/.test(ui5));
   typeInto(h5, "med5-amount", "");
   check("5세대: 빈 값은 형식 안내", warnText(h5).includes("올바르게 입력해 주세요"));
 }

@@ -289,9 +289,15 @@ console.log("\n[UI] 도수에만 승인 select가 열리고 숨은 값은 전달
   check("UI가 최초 구간·단위를 상수에서 읽는다",
     /GEN2021\.rider\.mskApproval\.initialApproved/.test(ui)
     && /GEN2021\.rider\.mskApproval\.step/.test(ui));
+  // ⚠ **낡은 계약을 교체했다.** 이 검사가 지켜야 할 성질은 "차단 결과를 카드로 그리지
+  //   않는다"이고, 종전에는 그것을 `status === "OK" && totalAmount > 0`이라는 **당시의 게이트
+  //   문자열 전체**로 고정했다. G-35가 총액 조건만 뺐으므로 성질은 그대로이고 문자열만 달라진다.
+  //   총액 조건이 다시 들어오지 않는 것도 함께 본다.
   check("차단 결과를 ResultCard로 그리지 않는다",
     /result\.status === "PENDING_UNVERIFIED"/.test(ui)
-    && /result\.status === "OK" && result\.totalAmount > 0/.test(ui));
+    && /result\.status === "OK" && <div className="mt-7">/.test(ui)
+    // ⚠ 주석을 걷어내고 본다 — 교체 이유 주석이 종전 조건식을 인용한다.
+    && !/totalAmount > 0/.test(ui.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "")));
   check("도수·주사가 각각 satisfies로 초과 필드를 막는다",
     /\} satisfies Gen2021MultiRiderManualInput\)/.test(ui)
     && /\} satisfies Gen2021MultiRiderInjectionInput\)/.test(ui));

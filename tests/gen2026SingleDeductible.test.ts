@@ -263,7 +263,11 @@ console.log("\n[무변경] 진료비·선택 게이트·별도 보장종목 차�
   const h = inp();
   check("급여 입원 계산 유지", scr(setup({ coverage: "benefit", visit: "inpatient", amount: "300000" })).own === "60,000원");
   check("비급여 중증 입원 상급종합·종합병원 기본 계산 유지", scr(h).own === "3,000,000원", String(scr(h).own));
-  check("진료비 0원 정책 유지(안내 없이 결과만 숨김)", !scr(inp({ amount: "0" })).calc);
+  // ⚠ **낡은 계약을 교체했다 (G-35).** 종전에는 "진료비 0원 정책 유지(안내 없이 결과만 숨김)"로
+  //   고정했다. 그 정책이 정상 계산의 0원 결과를 계산 실패와 구분되지 않게 만들었으므로
+  //   뒤집었다. 이 절의 관심사는 **두 금액 축이 0원 진료비에서도 종전대로 동작하는가**이므로
+  //   같은 자리에서 방향만 바꿔 고정한다.
+  check("진료비 0원도 결과 카드를 표시한다(G-35)", scr(inp({ amount: "0" })).calc);
   check("진료비 무효는 여전히 차단", !scr(inp({ amount: "abc" })).calc && scr(inp({ amount: "abc" })).warn.includes("병원비"));
   check("치료유형 미선택 차단 유지", !scr(setup({ coverage: "non_benefit", amount: "300000" })).calc);
   check("질환 구분 미선택 차단 유지", !scr(setup({ coverage: "non_benefit", nonBenefitItem: "general", amount: "300000" })).calc);

@@ -559,8 +559,17 @@ export default function HealthCalc5th() {
             <NoticeBox variant="warning">{result.notes.join(" ")}</NoticeBox>
           )}
 
-          {result && result.status === "OK" && num > 0 && (
+          {/* ⚠ **정책 교체.** 종전 `num > 0`은 입력값 기준이라 정상 0원 결과를 안내 없이
+              감췄다(4세대와 달리 대체 안내도 없어 화면 변화가 0이었다). 결과 상태만 본다. */}
+          {result && result.status === "OK" && (
             <>
+              {/* ⚠ **라이브 리전은 요약 한 문장만 담는다.** 결과 카드·표를 이 안에 넣으면
+                  제출 뒤 입력을 고칠 때마다 표 전체가 다시 낭독된다(이 화면들은 `submitted`가
+                  true로 유지된 채 매 입력마다 재계산된다). `aria-atomic`으로 문장 전체를
+                  한 번에 읽게 하고, 카드는 리전 **밖**에 둔다. */}
+              <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+                계산 결과. 총 진료비 {won(result.amount)}, 본인부담금 {won(result.ownPay ?? 0)}, 보험 적용 금액 {won(result.insurancePay ?? 0)}.
+              </p>
               <ResultCard
                 title="계산 결과 (5세대 실손 기준 · 참고용)"
                 items={[

@@ -182,8 +182,18 @@ console.log("\n[무회귀] 명시적 0원과 기존 카운터 동작은 그대�
     boundary.calculated && boundary.values === "300,000원 / 300,000원 / 0원");
   const noZero = screenOf(withRows(["300000"], { priorVisits: "179" }));
   check("0원 행이 없으면 180회째가 보상된다", noZero.values === "300,000원 / 60,000원 / 240,000원");
-  check("전체 합이 0원이면 결과를 숨기는 기존 게이트가 유지된다",
-    !screenOf(withRows(["0"])).calculated && /result\.totalAmount > 0/.test(ui));
+  // ⚠ **낡은 계약을 교체했다.** 종전 검사는 "전체 합이 0원이면 결과를 숨기는 기존 게이트가
+  //   유지된다"를 `!calculated`와 소스의 `/result\.totalAmount > 0/`로 고정했다. 그 게이트는
+  //   **정상 계산인데 총액이 0원**인 결과를 계산 실패·미실행과 구분되지 않게 감췄다 —
+  //   화면 변화가 0이라 사용자가 "계산이 안 됐다"로 읽는다. 정책을 뒤집었으므로 같은 자리에서
+  //   **반대 방향**으로 고정한다. 0원 행이 외래 횟수를 1회 소진하는 위 계약은 그대로다.
+  const zeroOnly = screenOf(withRows(["0"]));
+  check("전체 합이 0원이어도 결과 카드를 표시한다(G-35)",
+    zeroOnly.calculated && zeroOnly.values === "0원 / 0원 / 0원", String(zeroOnly.values));
+  // ⚠ 주석을 걷어내고 본다. 교체 이유를 적은 주석이 종전 조건식을 **인용**하므로,
+  //   원문 전체에 정규식을 걸면 "사라졌다"를 확인할 수 없다.
+  const codeOnly = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  check("총액 조건이 게이트에서 사라졌다", !/totalAmount > 0/.test(codeOnly(ui)));
 }
 
 console.log("\n[빠른 채우기] 잘못된 금액을 행에 복사하지 않는다");

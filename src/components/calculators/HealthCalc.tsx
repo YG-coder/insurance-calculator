@@ -191,8 +191,21 @@ export default function HealthCalc() {
         </button>
       </div>
 
-      {submitted && result !== null && num > 0 && (
+      {/* ⚠ **정책 교체.** 종전 조건은 `num > 0`이었다 — 입력값을 보느라 (1) 정상 0원 결과를
+             감췄고, (2) `result.status`를 **아예 보지 않아** 엔진이 차단한 결과도 `?? 0` 때문에
+             전부 0원인 카드로 그렸다. 결과 상태를 기준으로 바꿔 두 문제를 함께 닫는다.
+             ⚠ 차단 안내 UI는 이번에 만들지 않는다 — 이 화면은 `tier`를 항상 유효 리터럴로만
+             싣고 stray 축을 넘기지 않아 공개 화면에서 PENDING 도달 경로를 찾지 못했다
+             (없다고 단정하지는 않는다). 도달하면 카드를 그리지 않는 계약만 고정한다. */}
+      {submitted && result !== null && result.status === "OK" && (
         <div className="mt-8">
+          {/* ⚠ **라이브 리전은 요약 한 문장만 담는다.** 결과 카드·표를 이 안에 넣으면
+                  제출 뒤 입력을 고칠 때마다 표 전체가 다시 낭독된다(이 화면들은 `submitted`가
+                  true로 유지된 채 매 입력마다 재계산된다). `aria-atomic`으로 문장 전체를
+                  한 번에 읽게 하고, 카드는 리전 **밖**에 둔다. */}
+          <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+            계산 결과. 총 진료비 {won(num)}, 본인부담금 {won(ownPay)}, 보험 적용 금액 {won(insurancePay)}.
+          </p>
           <ResultCard
             title="계산 결과 (4세대 실손 기준 · 참고용)"
             items={[
@@ -240,11 +253,10 @@ export default function HealthCalc() {
           </NoticeBox>
         </div>
       )}
-      {submitted && !amountInvalid && num === 0 && (
-        <div className="mt-6">
-          <NoticeBox variant="info">진료비를 1원 이상 입력해 주세요.</NoticeBox>
-        </div>
-      )}
+      {/* ⚠ **삭제한 자리다.** 종전에는 `num === 0`에서 "진료비를 1원 이상 입력해 주세요."를
+             띄웠다. 0원은 파서가 인정하는 **유효한 입력**이고 엔진도 정상 계산하는데, 그 안내가
+             정상 결과를 입력 오류처럼 설명했다. 이제 위 게이트가 0원 결과 카드를 그린다.
+             ⚠ 5세대에는 이 문구가 처음부터 없었다 — 세대 간 비대칭도 함께 없앴다. */}
     </div>
   );
 }

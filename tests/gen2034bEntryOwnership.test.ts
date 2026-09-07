@@ -41,9 +41,17 @@
 //   ⚠ 대조의 기준 입력은 **승인된 화면 입력 구성**을 따른다 — tier를 더는 싣지 않는 일곱
 //     경로군에 tier를 남겨 두면 승인된 tier 봉인이 coverage의 과잉으로 잘못 잡힌다.
 //
-// ⚠ **판단 보류 2자리**(5세대 다회 비급여 통원의 `tier`)는 막지 않았다. 단건 `calc2026`의
-//   같은 축이 G-34A에서 보류로 남아 G-34C에서 확정되므로, 다회만 먼저 좁히면 5세대 계약이
-//   갈린다. 보류는 허용이 아니다 — 지금 막지 않을 뿐이다.
+// ⚠ **교체됨 (G-34D).** G-34B 시점에는 5세대 다회 비급여 통원의 `tier` 2자리가 **판단 보류**였고,
+//   이 파일 §5도 "막지 않되 근거를 코드에 남긴다"를 고정했다. 단건 `calc2026`의 같은 축이
+//   G-34A에서 보류로 남아 있어 다회만 먼저 좁히면 5세대 계약이 갈리기 때문이었다.
+//   그 보류는 **G-34C에서 확정 stray(cat5)로 판정돼 봉인**됐다 — 5세대 비급여에서 종별이
+//   결과를 가르는 곳은 **입원**뿐이고, 통원은 미제공·clinic·hospital의 결과가 완전히 같다.
+//   ⚠ 그런데 §5의 제목·라벨·코드 검사가 보류 시절 서술 그대로 남아, **배포된 계약과 반대
+//     내용을 설명**하고 있었다(검사는 `tier`를 아예 넘기지 않고 `multiClaim2026.ts`만 정규식으로
+//     보았기 때문에 깨지지 않았다). G-34C 최종 배포 확인에서 발견해 §5를 **행위 검사로 교체**한다.
+//   ⚠ 봉인 위치는 `multiClaim2026.ts`가 아니라 **하류의 `generation2026.ts`**다. 다회는 행마다
+//     `calc2026`을 호출하고, 그 안의 비급여 통원 가드가 값을 거부한다. 다회 진입점의 반환 계약
+//     (`blocked` — 검증된 진료비 합계 보존, 행 없음)은 `gen2026MultiInputContract.test.ts`가 본다.
 // ⚠ 화면이 값을 싣는다는 사실은 **허용 근거가 아니다.** 4세대 다회 6자리와 5세대 다회 급여
 //   입원 1자리는 화면의 공통 객체를 분리해 **함께** 닫았다.
 import { readFileSync } from "node:fs";
@@ -190,20 +198,42 @@ console.log("\n[G-34B] 4. 실제 소비 축은 종전대로 계산한다");
     && shape(pool) !== shape(wrap(() => calculateGen2026Item(BASE["별도|중증|MRI"][1] as never))));
 }
 
-console.log("\n[G-34B] 5. 판단 보류 2자리 — 막지 않되 근거를 코드에 남긴다");
+console.log("\n[G-34B→G-34D] 5. 5세대 다회 비급여 통원의 `tier` — G-34C에서 확정 stray로 봉인됐다");
 {
+  // ⚠ **낡은 계약을 이 자리에서 교체했다.** 종전 두 검사는 "tier 보류(막지 않음)"과
+  //   "비급여 통원 tier를 막는 코드가 없다"를 고정했다 — 둘 다 G-34B 시점의 보류 상태를
+  //   적은 것이고, G-34C가 그 2자리를 cat5로 확정·봉인한 뒤에는 배포 계약과 반대가 된다.
+  //   종전 검사가 깨지지 않은 이유까지 함께 막는다: (1) 탐침이 `tier`를 **실제로 전달**하고,
+  //   (2) 차단이 어느 파일에서 나오는지를 **안내 문구의 출처**로 확인한다.
+  const nbOut = (sev: "critical" | "non_critical", extra: Record<string, unknown>) => ({
+    cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: sev,
+    visit: "outpatient", amounts: [3_000_000],
+    ...(sev === "critical" ? { priorAnnualOutpatientVisits: 0 } : { priorAnnualOutpatientDays: 0 }),
+    ...extra,
+  });
+  // ⚠ 세 값을 함께 본다. `"tertiary"`는 2·3세대 `Facility`의 값이라 5세대 `Tier`가 아니지만,
+  //   이 자리에서 갈리는 것은 **값의 유효성이 아니라 축의 소유권**이다 — 셋 다 같은 이유로 막힌다.
+  const TIERS = ["clinic", "hospital", "tertiary"] as const;
   for (const sev of ["critical", "non_critical"] as const) {
-    const r = wrap(() => calculateMany2026({
-      cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: sev,
-      visit: "outpatient", amounts: [3_000_000],
-      ...(sev === "critical" ? { priorAnnualOutpatientVisits: 0 } : { priorAnnualOutpatientDays: 0 }),
-    } as never));
-    check(`5세대 비급여 통원 ${sev}: tier 보류(막지 않음)`, statusOf(r) === "OK", statusOf(r) + " " + note0(r).slice(0, 40));
+    const base = wrap(() => calculateMany2026(nbOut(sev, {}) as never));
+    const rejected = TIERS.map((t) => wrap(() => calculateMany2026(nbOut(sev, { tier: t }) as never)));
+    check(`5세대 비급여 통원 ${sev}: 미제공은 계산하고 tier 3값은 전부 차단한다(G-34C 봉인)`,
+      statusOf(base) === "OK"
+      && rejected.every((r) => statusOf(r) === "PENDING_UNVERIFIED"
+        && note0(r).startsWith("의료기관 종별(tier)은 5세대 비급여에서")),
+      statusOf(base) + " / " + rejected.map(statusOf).join(",") + " / " + note0(rejected[0]).slice(0, 40));
   }
   const mul = readFileSync("src/lib/insurance/engine/multiClaim2026.ts", "utf8");
-  check("5세대 다회의 종별 거부가 급여 입원 조건과 같은 모양이다",
-    /if \(input\.visit === "inpatient"\) \{\n\s*const strayTier = readCount\(bf, "tier"\);/.test(mul));
-  check("비급여 통원 tier를 막는 코드가 없다", !/non_benefit[\s\S]{0,200}strayTier/.test(mul));
+  const gen = readFileSync("src/lib/insurance/engine/generation2026.ts", "utf8");
+  const WHY = "의료기관 종별(tier)은 5세대 비급여에서 **입원**만 가릅니다";
+  // ⚠ **차단 위치의 계약이다.** 다회는 행마다 `calc2026`을 부르고, 그 하류 가드가 막는다.
+  //   같은 문구가 `multiClaim2026.ts`에도 생기면 두 곳이 갈라져 한쪽만 고쳐질 수 있다.
+  check("차단은 하류 generation2026.ts에서 나온다(다회 파일에는 이 안내가 없다)",
+    gen.includes(WHY) && !mul.includes(WHY));
+  // ⚠ 다회 파일이 자체로 막는 종별은 **급여 입원**뿐이다. 이 모양은 G-34B 그대로 유지한다.
+  check("5세대 다회의 자체 종별 거부는 급여 입원 조건 모양 그대로다",
+    /if \(input\.visit === "inpatient"\) \{\n\s*const strayTier = readCount\(bf, "tier"\);/.test(mul)
+    && !/non_benefit[\s\S]{0,200}strayTier/.test(mul));
 }
 
 console.log("\n[G-34B] 6. 반환 계약 — 진입점마다 종전 모양 그대로다");

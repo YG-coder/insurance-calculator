@@ -215,7 +215,13 @@ console.log("\n[가드] 소스에 종별 조건이 실제로 연결돼 있다");
       /useState<Tier>\("clinic"\)/.test(ui[i]) && /benefitTier/.test(ui[i]));
   }
   check("단건: 급여 계산이 benefitTier를 쓴다", /coverage: "benefit", visit, tier: benefitTier/.test(ui[0]));
-  check("다회: 급여 계산이 benefitTier를 쓴다", /coverage: "benefit", visit, tier: benefitTier/.test(ui[1]));
+  // ⚠ 종전 의미: 다회 화면이 급여 계산에 `benefitTier`를 그대로 싣는다. **G-34B가 그 전달을
+  //   경로별로 바꿨다** — 종별을 소비하는 것은 급여 **통원**뿐이고 급여 입원은 읽지 않으므로,
+  //   화면도 통원에서만 싣는다. 지키려던 성질("급여 계산이 화면의 종별 선택을 쓴다")은
+  //   그대로이고, 달라진 것은 **비활성 경로에 싣지 않는다**는 조건뿐이다.
+  check("다회: 급여 통원 계산이 benefitTier를 쓴다",
+    /tier: visit === "outpatient" \? benefitTier : undefined/.test(ui[1]));
+  check("다회: 급여 입원에는 종별을 싣지 않는다", !/coverage: "benefit", visit, tier: benefitTier/.test(ui[1]));
   check("비급여 미선택을 급여 기본값으로 덮지 않음",
     !/nbInpatientTier \?\? "clinic"/.test(ui[0] + ui[1]) && !/nbInpatientTier \|\| "clinic"/.test(ui[0] + ui[1]));
 }

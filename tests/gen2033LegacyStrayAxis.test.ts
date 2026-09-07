@@ -241,13 +241,23 @@ console.log("\n[G-33] 8. 5세대와 세대별 직접 진입점은 손대지 않�
     const d21 = wrap(() => calc2021({ ...G21["non_benefit·outpatient"], [key]: NORMAL[key] } as never));
     check(`calc2021은 ${key}를 종전대로 무시한다`, statusOf(d21) === "OK");
   }
-  const manyBase = { plan: "standard", facility: "clinic", priorAnnualOutpatientVisits: 0,
-    lines: [{ amount: A, visit: "outpatient" }, { amount: A, visit: "inpatient" }] };
+  // ⚠ 종전 픽스처는 최상위에 `facility`를 실었다. G-34B가 그 자리를 닫았다 — 2·3세대 다회는
+  //   행마다 `visit`·`facility`가 다를 수 있어 두 축을 **행 안에서만** 읽고, 최상위 값은
+  //   읽지 않았다(조용한 폐기). 이 검사가 지키려는 것은 "G-33이 2·3세대 다회를 건드리지
+  //   않았다"이므로, 최상위 축을 뺀 정상 입력으로 같은 성질을 확인한다.
+  const manyBase = { plan: "standard", priorAnnualOutpatientVisits: 0,
+    lines: [{ amount: A, visit: "outpatient", facility: "clinic" }, { amount: A, visit: "inpatient" }] };
   const many = wrap(() => calculateMany("2009", manyBase as never));
   check("2·3세대 다회는 그대로 계산한다", statusOf(many) === "OK", statusOf(many) + " " + note0(many).slice(0, 30));
+  // ⚠ 종전 의미: "G-33은 2·3세대 다회를 손대지 않았으므로 `severity`를 실어도 결과가
+  //   같다"(= 조용히 버려진다). **G-34B가 그 자리를 닫았다** — 2·3세대 다회는 `severity`를
+  //   어느 행 구성에서도 읽지 않으므로 이제 명시적으로 거부한다. 지키려던 성질("G-33이
+  //   이 진입점의 계산을 바꾸지 않았다")은 아래 두 줄로 나눠 그대로 확인한다.
   const manyStray = wrap(() => calculateMany("2009", { ...manyBase, severity: "critical" } as never));
-  check("2·3세대 다회는 이 커밋의 대상이 아니다(종전 그대로)",
-    shape(manyStray) === shape(many), statusOf(manyStray));
+  check("2·3세대 다회의 severity는 G-34B가 거부한다(G-33은 계산을 바꾸지 않았다)",
+    statusOf(manyStray) === "PENDING_UNVERIFIED" && note0(manyStray).includes("severity"),
+    statusOf(manyStray) + " " + note0(manyStray).slice(0, 40));
+  check("2·3세대 다회의 정상 계산은 G-33 전후로 같다", statusOf(many) === "OK");
 }
 
 console.log("\n[G-33] 9. 구조 — 위치·목록·순서");

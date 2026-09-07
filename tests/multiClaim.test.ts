@@ -131,8 +131,19 @@ const counters = (ls: ClaimLine[]) => ({
   check("미입력 시 안내 문구", noLimit.notes.some((n) => n.includes("회(건)당 가입금액은 계약마다 다른 값")));
 
   // 입원에는 적용하지 않는다 — 회(건)당 한도는 외래·처방조제비 항목의 가입금액이다
-  const inpatient = calculateMany("2017", { plan: "standard", lines: [inp(5_000_000)], perVisitCoverageLimit: 300_000 });
+  //   ⚠ 종전에는 **입원만 있는 묶음에 축을 실어 놓고 "무시된다"를 확인**했다. G-34B가 그
+  //     자리를 입력 계약으로 바꿨다 — 통원 행이 없으면 그 축은 조용히 버려지는 대신
+  //     거부된다(화면도 `!hasOutpatient`에서 이미 보내지 않는다). 그래서 검사를 둘로 나눈다.
+  //     ① 축을 싣지 않은 입원 계산이 종전 값 그대로인가 — 산식 무회귀
+  //     ② 축을 실으면 거부되고 **검증된 진료비 합계는 보존**되는가 — 새 입력 계약
+  const inpatient = calculateMany("2017", { plan: "standard", lines: [inp(5_000_000)] });
   check("입원에는 회(건)당 가입금액을 적용하지 않음", inpatient.totalInsurancePay === 4_000_000 && inpatient.totalOwnPay === 1_000_000);
+  const inpatientStray = calculateMany("2017", { plan: "standard", lines: [inp(5_000_000)], perVisitCoverageLimit: 300_000 });
+  check("입원만 있는 묶음에 회(건)당 가입금액을 실으면 거부(합계는 보존)",
+    inpatientStray.status === "PENDING_UNVERIFIED" && inpatientStray.totalAmount === 5_000_000
+    && inpatientStray.totalOwnPay === null && inpatientStray.lines.length === 0
+    && inpatientStray.notes[0].includes("회(건)당 가입금액(perVisitCoverageLimit)"),
+    inpatientStray.status + " " + (inpatientStray.notes[0] ?? "").slice(0, 40));
 }
 
 // ── 6. 입원 자기부담 상한의 건 사이 누적 ─────────────────────────────
@@ -189,14 +200,19 @@ const counters = (ls: ClaimLine[]) => ({
 
 // ── 9. 입력 정규화 ───────────────────────────────────────────────────
 {
+  // ⚠ 종전에는 **통원만 있는 묶음**에 `priorAnnualPaid: -100`을 함께 실어 두 가지를 한 번에
+  //   봤다(진료비 정규화 + 음수 누적 금액의 클램프). G-34B가 그 조합을 닫았다 — 입원 행이
+  //   없으면 그 축은 읽히지 않으므로 이제 거부된다. 두 성질을 **각자 성립하는 입력**으로
+  //   나눠 그대로 확인한다. 종전 기대값은 바꾸지 않았다.
   const r = calculateMany("2017", {
     plan: "standard",
     lines: [out(-500_000), out(Number.NaN), out(10_000.9)],
-    priorAnnualOutpatientVisits: 0,
-    priorAnnualPaid: -100 });
+    priorAnnualOutpatientVisits: 0 });
   check("음수·NaN 진료비는 0으로, 소수는 floor", r.lines[0].amount === 0 && r.lines[1].amount === 0 && r.lines[2].amount === 10_000);
+  const negPaid = calculateMany("2017", {
+    plan: "standard", lines: [inp(1_000_000)], priorAnnualPaid: -100 });
   check("음수 금액 누적 입력은 종전대로 0으로 클램프(금액 축은 이번 범위 밖)",
-    r.status === "OK" && r.lines.every((l) => l.covered));
+    negPaid.status === "OK" && negPaid.lines.every((l) => l.covered));
   // ⚠ 종전에는 횟수 축의 음수도 0으로 클램프했다. 안전성 커밋에서 차단으로 바뀌었다.
   const negCount = calculateMany("2017", {
     plan: "standard", lines: [out(300_000)], priorAnnualOutpatientVisits: -5 });

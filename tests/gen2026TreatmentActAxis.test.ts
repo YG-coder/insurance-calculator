@@ -434,8 +434,13 @@ console.log("\n[G-28] 7. 전달 검사 — 어느 진입점에 무엇이 넘어�
   //   고정한다 — 지키려던 것(앞선 키들을 밀어내지 않는다)은 그대로다.
   check("상급병실료 미사용 키 목록에서 승인 구간 축이 기존 13개 뒤에 있다",
     /"priorAnnualOutpatientDays",\s*\n\s*"priorAnnualTreatmentActCount",/.test(rcCode), "직전 키 뒤 아님");
-  check("G-31의 nhisCoinsuranceRate가 그 뒤이자 목록 맨 끝이다",
-    /"priorAnnualTreatmentActCount",\s*\n\s*"nhisCoinsuranceRate",\s*\n\] as const;/.test(rcCode), "목록 끝 아님");
+  // ⚠ G-34B가 목록 끝에 12종을 더 붙였다. 지키려던 성질은 "목록의 물리적 끝"이 아니라
+  //   **G-31 키가 G-28 키 바로 뒤이고 앞선 키들을 밀어내지 않는다**는 것이므로, 그 순서만
+  //   직접 잡는다. 새로 붙은 12종이 기존 16개 뒤에 오는 것은 아래 검사가 따로 본다.
+  check("G-31의 nhisCoinsuranceRate가 G-28 키 바로 뒤다",
+    /"priorAnnualTreatmentActCount",\s*\n\s*"nhisCoinsuranceRate",/.test(rcCode), "직전 키 뒤 아님");
+  check("G-34B가 붙인 12종이 기존 16개 **뒤**에 온다",
+    rcCode.indexOf('"nhisCoinsuranceRate"') < rcCode.indexOf('"priorAnnualRiderVisits"'), "앞에 있음");
   check("상급병실료 미사용 키 루프가 한 번만 읽는다",
     /const got: unknown = raw\[key\];\n\s*if \(got !== undefined\) return rejected\(`상급병실료 차액 계산에 쓰이지 않는 입력\(\$\{key\}\)`, got\);/.test(rcCode));
   const mcSrc = readFileSync("src/lib/insurance/engine/multiClaim2026.ts", "utf8");

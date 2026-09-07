@@ -86,6 +86,41 @@ const badCount = (v: unknown): boolean =>
 const readCount = (o: object, key: string): unknown =>
   (o as Record<string, unknown>)[key];
 
+/**
+ * 이 묶음 진입점의 **어느 행 구성에서도** 쓰이지 않는 축 29종 (G-34B).
+ *
+ * 종전에는 이 진입점에 stray 목록 자체가 없었다 — 두 카운터만 행 구성으로 판정했고,
+ * 나머지 축은 실려 와도 **조용히 버려졌다**. 전수 스윕(기준선 `0914d7d`, 8경로군 × 35축,
+ * 금액 배율 3벌 × 값 격자, 접근자 계수)에서 정상 리터럴이 전부 조용히 통과했다.
+ *   · 다른 진입점의 축    `amount`(단건), `amounts`·`stays`·`roomChargeTotal`·
+ *                         `inpatientDays`(4·5세대 다회·상급병실료의 컨테이너와 원소 필드)
+ *   · 다른 세대의 축      `tier`·`cause`·`coverage`·`nhisCoinsuranceRate`·
+ *                         `annualCoverageLimit`·`priorAnnualInsurancePaid`·
+ *                         `priorAnnualRiderPaid`·`priorAnnualRiderVisits`·
+ *                         `approvedThroughVisit`·`rider`(4세대),
+ *                         `severity`·`nonBenefitItem`·`priorAnnualDeductible`·
+ *                         `outpatientCoverageLimit`·`priorAnnualOutpatientDays`·
+ *                         `route`·`item`·`injectionPurpose`·
+ *                         `priorAnnualInpatientDeductible`·`priorAnnualCoveredCount`·
+ *                         `priorAnnualTreatmentActCount`(5세대)
+ *   · 행 안에서만 의미    `visit`·`facility`는 `lines[]`의 원소 필드다. 최상위에 실으면
+ *                         읽히지 않는다 — 이 묶음은 행마다 둘이 다를 수 있기 때문이다.
+ *   · 입력 축이 아닌 것   `generation`은 함수의 **첫 인자**이지 입력 객체의 필드가 아니다.
+ *                         객체에 실으면 계산 세대를 바꾸지 않고 조용히 버려진다.
+ * ⚠ `plan`은 넣지 않는다 — 이 진입점의 필수 축이고 위에서 이미 미지정을 막는다.
+ * ⚠ 두 카운터(`priorAnnualOutpatientVisits`·`priorAnnualPrescriptions`)도 넣지 않는다.
+ *   행 구성으로 판정하는 기존 계약이 이미 있고, 그 안내가 더 구체적이다.
+ */
+const MULTI_STD_UNUSED_KEYS = [
+  "amount", "amounts", "stays", "roomChargeTotal", "inpatientDays", "generation",
+  "coverage", "visit", "cause", "severity", "tier", "facility",
+  "route", "item", "rider", "nonBenefitItem", "injectionPurpose", "nhisCoinsuranceRate",
+  "outpatientCoverageLimit", "annualCoverageLimit",
+  "priorAnnualDeductible", "priorAnnualInpatientDeductible", "priorAnnualInsurancePaid",
+  "priorAnnualRiderPaid", "priorAnnualOutpatientDays", "priorAnnualRiderVisits",
+  "approvedThroughVisit", "priorAnnualCoveredCount", "priorAnnualTreatmentActCount",
+] as const;
+
 /** 연간 횟수 한도를 넘겨 보상 대상이 아닌 행. 자기부담이 진료비 전액이 된다. */
 function notCovered(
   generation: StandardizedGeneration,
@@ -194,6 +229,54 @@ export function calculateMany(
       return blocked([
         "이미 사용한 처방전 건수는 0 이상의 정수여야 합니다. 음수·소수·NaN·Infinity·안전 정수 범위를 넘는 값·문자열은 계산하지 않습니다.",
         `받은 값: ${showValue(prescriptionsRaw)}`,
+      ]);
+    }
+  }
+
+  // ── 쓰이지 않는 축 stray 거부 (G-34B) ───────────────────────────────
+  //   ⚠ **선행 preflight 전부의 뒤**다(표준형/선택형 미지정 · 두 카운터의 stray·미입력·
+  //     잘못된 값). 그 검사들이 결과를 정하는 경로에서는 아래 이름들을 **읽지 않는다.**
+  //   ⚠ 각 키를 **한 번만** 읽고, 목록 순서대로 먼저 찾은 키만 안내한다.
+  //   ⚠ 값이 `0`이어도 막는다. `undefined`만 미제공이다 — 호출부의
+  //     `{ ...base, key: undefined }` 패턴은 막지 않는다(이 저장소의 화면이 그 패턴을 쓴다).
+  //   ⚠ 반환은 기존 `blocked()`다 — **검증된 진료비 합계를 그대로 보존**하고 행은 비운다.
+  //     이 진입점의 다른 차단과 같은 계약이고, 새 반환 모양을 만들지 않는다.
+  {
+    for (const key of MULTI_STD_UNUSED_KEYS) {
+      const got = readCount(input, key);
+      if (got === undefined) continue;
+      return blocked([
+        `${key}은(는) 2·3세대 여러 건 계산에 쓰이지 않는 입력입니다.`,
+        "다른 세대·다른 진입점의 축이거나, 행(lines) 안에서만 의미가 있는 축입니다.",
+        "쓰이지 않는 입력을 조용히 버리면 반영했다고 오해할 수 있어 계산하지 않았습니다.",
+        `받은 값: ${showValue(got)}`,
+      ]);
+    }
+    // ── 행 구성이 정하는 두 금액 축 (G-34B) ──────────────────────────
+    //   두 카운터와 **같은 방식**이다 — 필요한지는 최상위 필드가 아니라 `lines`의 내용이
+    //   정한다. 한 축만 다른 방식으로 두지 않는다.
+    //     `priorAnnualPaid`        입원 자기부담 연 200만원 상한의 시작값. 입원 행이 없으면
+    //                              읽지 않는다(실측: 입원 행이 있으면 보험금이
+    //                              13,000,000 → 14,500,000으로 달라지고, 없으면 무변화).
+    //     `perVisitCoverageLimit`  회(건)당 가입금액. 통원 행이 없으면 읽지 않는다
+    //                              (실측: 통원 행이 있으면 800,000 → 200,000).
+    //   ⚠ 화면은 이미 같은 조건으로 보낸다(`!hasInpatient`·`!hasOutpatient`에서 undefined).
+    //     그래서 이 거부가 정상 화면을 막지 않는다.
+    const hasInpatient = lines.some((l) => l.visit === "inpatient");
+    const strayPaid = hasInpatient ? undefined : readCount(input, "priorAnnualPaid");
+    if (strayPaid !== undefined) {
+      return blocked([
+        "연간 기납부 자기부담금(priorAnnualPaid)은 입원 자기부담 연간 상한(200만원) 계산에만 쓰입니다.",
+        "이 묶음에는 입원 행이 없습니다. 쓰이지 않는 입력을 조용히 버리면 상한을 반영했다고 오해할 수 있어 계산하지 않았습니다.",
+        `받은 값: ${showValue(strayPaid)}`,
+      ]);
+    }
+    const strayPerVisit = hasOutpatient ? undefined : readCount(input, "perVisitCoverageLimit");
+    if (strayPerVisit !== undefined) {
+      return blocked([
+        "회(건)당 가입금액(perVisitCoverageLimit)은 통원(외래·처방조제) 행의 지급 한도에만 쓰입니다.",
+        "이 묶음에는 통원 행이 없습니다. 쓰이지 않는 입력을 조용히 버리면 한도를 반영했다고 오해할 수 있어 계산하지 않았습니다.",
+        `받은 값: ${showValue(strayPerVisit)}`,
       ]);
     }
   }

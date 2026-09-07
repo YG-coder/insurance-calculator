@@ -65,6 +65,36 @@ const showValue = (v: unknown): string => {
  */
 const badCount = (v: unknown): boolean =>
   !(typeof v === "number" && Number.isSafeInteger(v) && v >= 0);
+/**
+ * 이 묶음 진입점의 **어느 경로에서도** 쓰이지 않는 축 23종 (G-34B).
+ *
+ * 전수 스윕(기준선 `0914d7d`, 7경로군 × 35축, 금액 배율 3벌 × 값 격자, 접근자 계수)에서
+ * 정상 리터럴이 **조용히 통과**했다 — 접근자 호출 0회이고 결과가 미제공과 한 글자도 다르지
+ * 않았다. 세 갈래다.
+ *   · 다른 세대의 축      `plan`·`facility`·`perVisitCoverageLimit`·`priorAnnualPaid`·
+ *                         `priorAnnualPrescriptions` (2·3세대), `severity`·`nonBenefitItem`·
+ *                         `nhisCoinsuranceRate`·`priorAnnualDeductible`·
+ *                         `outpatientCoverageLimit` (5세대)
+ *   · 다른 진입점의 축    `amount`(단건), `lines`·`stays`·`roomChargeTotal`·`inpatientDays`
+ *                         (2·3세대 다회·상급병실료의 컨테이너와 그 원소 필드),
+ *                         `route`·`item`·`injectionPurpose`·`priorAnnualInpatientDeductible`·
+ *                         `priorAnnualCoveredCount`·`priorAnnualTreatmentActCount`
+ *                         (5세대 별도 보장종목), `priorAnnualOutpatientDays`(5세대 비중증)
+ *   · 입력 축이 아닌 것   `generation`은 결과 필드다. 실어도 계산 세대를 바꾸지 않는다.
+ * ⚠ `tier`는 여기 넣지 않는다 — **급여 통원**이 실제로 소비한다(실측: 3만원에서 종별에 따라
+ *   자기부담 10,000 / 20,000 / 0). 경로 조건으로 따로 막는다.
+ * ⚠ 위 세 stray 검사(통원 횟수·특약 횟수·승인 회차)와 금액 축 검사의 **뒤**에 둔다.
+ *   배포된 안내 우선순위를 새 목록이 밀어내지 않는다.
+ */
+const MULTI2021_UNUSED_KEYS = [
+  "amount", "lines", "stays", "roomChargeTotal", "inpatientDays", "generation",
+  "severity", "facility", "plan", "route", "item", "nonBenefitItem", "injectionPurpose",
+  "nhisCoinsuranceRate", "perVisitCoverageLimit", "outpatientCoverageLimit",
+  "priorAnnualPaid", "priorAnnualDeductible", "priorAnnualInpatientDeductible",
+  "priorAnnualOutpatientDays", "priorAnnualPrescriptions",
+  "priorAnnualCoveredCount", "priorAnnualTreatmentActCount",
+] as const;
+
 const readCount = (o: object, key: string): unknown =>
   (o as Record<string, unknown>)[key];
 
@@ -298,6 +328,44 @@ export function calculateMany2021(input: Gen2021MultiClaimInput): MultiClaimResu
         "쓰이지 않는 입력을 조용히 버리면 반영했다고 오해할 수 있어 계산하지 않았습니다.",
         `받은 값: ${showValue(got)}`,
       ]);
+    }
+  }
+
+  // ── 어느 경로에서도 쓰이지 않는 축 stray 거부 (G-34B) ───────────────
+  //   ⚠ **위 형제 stray 검사들 뒤**다. 배포된 안내 우선순위를 새 목록이 밀어내지 않고,
+  //     앞 검사가 결과를 정하는 경로에서는 이 이름들을 읽지도 않는다.
+  //   ⚠ 각 키를 **한 번만** 읽고, 목록 순서대로 먼저 찾은 키만 안내한다.
+  //   ⚠ 값이 `0`이어도 막는다. `readCount`는 값을 보므로 호출부의
+  //     `{ ...common, key: undefined }` 패턴은 막지 않는다(4세대 화면이 그 패턴을 쓴다).
+  {
+    for (const key of MULTI2021_UNUSED_KEYS) {
+      const got = readCount(input, key);
+      if (got === undefined) continue;
+      return blocked([
+        `${key}은(는) 4세대 여러 건 계산에 쓰이지 않는 입력입니다.`,
+        "다른 세대(2·3세대·5세대)의 축이거나 다른 진입점(단건·별도 보장종목·상급병실료)의 축입니다.",
+        "쓰이지 않는 입력을 조용히 버리면 반영했다고 오해할 수 있어 계산하지 않았습니다.",
+        `받은 값: ${showValue(got)}`,
+      ]);
+    }
+    // ── 의료기관 종별 (G-34B) ────────────────────────────────────────
+    //   `tier`를 소비하는 것은 **급여 통원**뿐이다 — 그 경로에서만 종별이 최소공제를 가른다
+    //   (실측: 3만원에서 clinic 10,000 / hospital 20,000 / tertiary 0). 비급여와 입원은
+    //   요율이 `coverage`×`visit` 표로 정해져 종별을 읽지 않는다. 종전에는 행마다 읽어
+    //   단건 엔진에 넘기고 **거기서 무시**됐다 — 조용한 폐기가 아니라 읽고 무시다.
+    //   ⚠ 조건은 소비 분기와 **정확히 같은 모양**이다. 특약 여부로 가르지 않는다 —
+    //     특약도 급여 통원이면 같은 최소공제 표를 쓴다.
+    //   ⚠ 화면도 함께 고쳤다 — `HealthCalcMulti2021`의 공통 객체에서 `tier`를 빼고 급여
+    //     통원 분기에만 싣는다. 런타임만 막고 화면을 두면 정상 화면이 즉시 계산 불가가 된다.
+    if (!(input.coverage === "benefit" && input.visit === "outpatient")) {
+      const strayTier = readCount(input, "tier");
+      if (strayTier !== undefined) {
+        return blocked([
+          "의료기관 종별(tier)은 급여 통원의 최소공제를 가르는 축입니다. 비급여와 입원은 요율이 보장 구분과 치료 형태로 정해져 종별을 읽지 않습니다.",
+          "쓰이지 않는 입력을 조용히 버리면 반영했다고 오해할 수 있어 계산하지 않았습니다.",
+          `받은 값: ${showValue(strayTier)}`,
+        ]);
+      }
     }
   }
 

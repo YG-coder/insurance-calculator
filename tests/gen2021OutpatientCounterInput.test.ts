@@ -41,7 +41,10 @@ type Extra = Partial<Record<string, unknown>>;
 const call = (o: Extra) => calculateMany2021({ cause: "disease", amounts: [A], ...o } as unknown as Gen2021MultiClaimInput);
 /** 일반 비급여 통원(연 100회). OMIT은 키 자체를 넣지 않는다. */
 const gen = (amounts: number[], v: unknown, extra: Extra = {}) => calculateMany2021({
-  cause: "disease", coverage: "non_benefit", visit: "outpatient", tier: "clinic", amounts,
+  // ⚠ G-34B: 4세대 다회는 급여 통원만 종별을 소비한다. 비급여 통원 픽스처에서 `tier`를
+  //   뺐다 — 종전에는 실어도 읽히지 않았고(조용한 폐기) 이제는 거부된다. 이 파일이 보는
+  //   성질(통원 횟수 축의 입력 검증)은 그대로다.
+  cause: "disease", coverage: "non_benefit", visit: "outpatient", amounts,
   ...(v === "OMIT" ? {} : { priorAnnualOutpatientVisits: v }), ...extra,
 } as unknown as Gen2021MultiClaimInput);
 /** 3대비급여 특약(연 50회). */
@@ -244,9 +247,13 @@ console.log("\n[타입] 판별 유니온");
   const common = /interface Gen2021MultiCommonInput \{([\s\S]*?)\n\}/.exec(types)?.[1] ?? "";
   check("공통 베이스에는 두 축이 없다",
     !common.includes("priorAnnualOutpatientVisits") && !common.includes("priorAnnualRiderVisits"));
+  // ⚠ G-34B에서 공개 타입이 `Gen2021MultiSealed & ( … 유니온 … )`이 되면서 유니온이 괄호로
+  //   감싸졌고 마지막 멤버가 `Gen2021MultiRiderMriInput);`로 끝난다. 지키려는 성질(다섯 변형이
+  //   모두 유니온에 있다)은 그대로이므로 괄호를 허용하는 형태로 바꾼다.
   check("유니온이 다섯 변형을 모두 포함",
-    /export type Gen2021MultiClaimInput =[\s\S]{0,400}Gen2021MultiRiderMriInput;/.test(types)
-    && (types.match(/\| Gen2021Multi(General|Rider)\w+;?/g) ?? []).length >= 5);
+    /export type Gen2021MultiClaimInput = Gen2021MultiSealed & \([\s\S]{0,400}Gen2021MultiRiderMriInput\);/.test(types)
+    && (types.match(/\| Gen2021Multi(General|Rider)\w+\)?;?/g) ?? []).length >= 5);
+  check("봉인이 유니온 전체에 씌워져 있다", /type Gen2021MultiSealed = SealNever</.test(types));
   check("타입 주석이 미입력≠0을 명시",
     types.includes("미입력(undefined)과 확인 결과 0은 다른 상태다"));
 }

@@ -93,6 +93,29 @@ const SPECIAL_ITEM_ONLY_KEYS = [
 ] as const;
 
 /**
+ * 이 묶음 진입점의 **어느 경로에서도** 쓰이지 않는 축 11종 (G-34B).
+ *
+ * 전수 스윕(기준선 `0914d7d`, 6경로군 × 35축, 금액 배율 3벌 × 값 격자, 접근자 계수)에서
+ * 정상 리터럴이 **조용히 통과**했다 — 접근자 호출 0회이고 결과가 미제공과 한 글자도 다르지
+ * 않았다.
+ *   `amount`                      단건 진입점의 축이다. 이 진입점은 `amounts[]`로 받는다.
+ *   `roomChargeTotal`·`inpatientDays`  `stays[]`의 **원소** 필드다(상급병실료 진입점).
+ *   `generation`                  결과 필드이지 입력 축이 아니다.
+ *   `facility`·`plan`             2·3세대 표준약관의 축이다.
+ *   `rider`·`priorAnnualRiderPaid`·`priorAnnualRiderVisits`  4세대 3대비급여 특약의 축이다.
+ *   `perVisitCoverageLimit`       2·3세대 통원의 회(건)당 가입금액이다.
+ *   `priorAnnualPrescriptions`    2·3세대 다회의 처방조제 건수 카운터다.
+ * ⚠ `SPECIAL_ITEM_ONLY_KEYS`와 합치지 않는다 — 그쪽은 "별도 보장종목으로 계산하세요"라는
+ *   다른 안내를 낸다. 목록을 합치면 안내가 갈린다.
+ * ⚠ `priorAnnualPaid`는 여기 넣지 않는다. 아래 A군이 이미 자기 안내로 막고 있다.
+ */
+const MULTI2026_UNUSED_KEYS = [
+  "amount", "roomChargeTotal", "inpatientDays", "generation",
+  "facility", "plan", "rider", "perVisitCoverageLimit",
+  "priorAnnualRiderPaid", "priorAnnualPrescriptions", "priorAnnualRiderVisits",
+] as const;
+
+/**
  * 안내에 "받은 값"을 실을 때 쓰는 **안전 표시**.
  *
  * ⚠ `JSON.stringify`는 값에 따라 **예외를 던진다** — `bigint`는 "Do not know how to
@@ -382,6 +405,25 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
         `받은 값: ${showValue(checkedNhis)}`,
       ]);
     }
+    // ── 급여 입원의 의료기관 종별 (G-34B) ────────────────────────────
+    //   급여 **통원**은 종별로 최소공제가 갈려 이 값을 소비한다(실측: `tertiary`에서 종별
+    //   preflight가 반응한다). 급여 **입원**은 약관이 정률 20%로 고정해 종별을 읽지 않는다 —
+    //   종전에는 행마다 읽어 `calc2026`에 넘기고 거기서 무시됐다(실측: 세 종별 값 모두
+    //   결과가 같았다). 조용한 폐기가 아니라 **읽고 무시**다.
+    //   ⚠ 조건은 바로 위 본인부담률 검사와 **같은 모양**이다. 형제 두 축을 다른 자리에 두지
+    //     않는다. 통원은 건드리지 않는다.
+    //   ⚠ 화면도 함께 고쳤다 — `HealthCalcMulti2026`이 급여 입원 분기에 `tier`를 싣지
+    //     않는다. 런타임만 막고 화면을 두면 정상 화면이 즉시 계산 불가가 된다.
+    if (input.visit === "inpatient") {
+      const strayTier = readCount(bf, "tier");
+      if (strayTier !== undefined) {
+        return blocked([
+          "의료기관 종별(tier)은 급여 통원의 최소공제를 가르는 축입니다. 급여 입원의 자기부담률은 약관이 20%로 정하고 있어 종별을 읽지 않습니다.",
+          "쓰이지 않는 입력을 조용히 버리면 반영했다고 오해할 수 있어 계산하지 않았습니다.",
+          `받은 값: ${showValue(strayTier)}`,
+        ]);
+      }
+    }
   }
 
   // ── A군: 2·3세대 전용 레거시 필드 ─────────────────────────────────
@@ -422,6 +464,25 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
       return blocked([
         `${stray}은(는) 별도 보장종목(3대비급여·비중증 MRI·상급병실료 차액) 전용 입력이라 이 묶음 계산에 쓰이지 않습니다.`,
         "그 보장종목은 calculateGen2026Item으로 계산해 주세요. 공제금액·보장한도·적용 축이 모두 다릅니다(특별약관1 제5조 제1항 단서·제3항).",
+        "쓰이지 않는 입력을 조용히 버리면 반영했다고 오해할 수 있어 계산하지 않았습니다.",
+        `받은 값: ${showValue(got)}`,
+      ]);
+    }
+  }
+
+  // ── 어느 경로에서도 쓰이지 않는 축 stray 거부 (G-34B) ──────────────
+  //   ⚠ **별도 보장종목 전용 축 목록 바로 뒤**다. 그 목록이 결과를 정하는 경로에서는 이
+  //     이름들을 읽지 않고, 배포된 안내 우선순위도 밀리지 않는다.
+  //   ⚠ 각 키를 **한 번만** 읽고, 목록 순서대로 먼저 찾은 키만 안내한다.
+  //   ⚠ 값이 `0`이어도 막는다. `readCount`는 `in`이 아니라 값을 보므로 호출부의
+  //     `{ ...base, key: undefined }` 패턴은 막지 않는다.
+  {
+    for (const stray of MULTI2026_UNUSED_KEYS) {
+      const got = readCount(input, stray);
+      if (got === undefined) continue;
+      return blocked([
+        `${stray}은(는) 5세대 여러 건 계산에 쓰이지 않는 입력입니다.`,
+        "다른 세대·다른 진입점의 입력 축이거나, 행 안에서만 의미가 있는 축입니다.",
         "쓰이지 않는 입력을 조용히 버리면 반영했다고 오해할 수 있어 계산하지 않았습니다.",
         `받은 값: ${showValue(got)}`,
       ]);

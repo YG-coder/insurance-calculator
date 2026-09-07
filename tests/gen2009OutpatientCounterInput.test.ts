@@ -186,8 +186,14 @@ console.log("\n[무변경] 지급 0원 처리와 계산 순서");
 // ── 타입 ─────────────────────────────────────────────────────────────
 console.log("\n[타입] optional인 이유가 문서화돼 있다");
 {
-  const body = /interface MultiClaimInput \{([\s\S]*?)\n\}/.exec(types)?.[1] ?? "";
-  check("MultiClaimInput 본문을 찾음", body.length > 0);
+  // ⚠ G-34B에서 필드 선언부의 이름이 `MultiClaimInputFields`로 바뀌었다 — 공개 타입
+  //   `MultiClaimInput`이 그 선언부와 **미사용 축 봉인**(`SealNever<…>`)의 교차가 됐기
+  //   때문이다. 이 검사가 보는 것은 "두 카운터가 optional이고 그 이유가 문서화돼 있다"이므로
+  //   선언부만 그대로 잡는다.
+  const body = /interface MultiClaimInputFields \{([\s\S]*?)\n\}/.exec(types)?.[1] ?? "";
+  check("MultiClaimInput 선언부를 찾음", body.length > 0);
+  check("공개 타입이 선언부와 미사용 축 봉인의 교차다",
+    /export type MultiClaimInput = MultiClaimInputFields\n\s*& SealNever</.test(types));
   check("두 축이 optional이다", /priorAnnualOutpatientVisits\?: number;/.test(body)
     && /priorAnnualPrescriptions\?: number;/.test(body));
   check("optional인 이유가 '타입으로 표현 불가'로 적혀 있다",
@@ -260,8 +266,9 @@ console.log("\n[구조] 검증 위치와 절삭 금지");
 // ── 4·5세대 무회귀 ───────────────────────────────────────────────────
 console.log("\n[범위] 4·5세대 무변경");
 {
+  // ⚠ G-34B: 4세대 다회는 급여 통원만 종별을 소비한다. 비급여 통원 픽스처에서 `tier`를 뺐다.
   const g4 = calculateMany2021({ cause: "disease", coverage: "non_benefit", visit: "outpatient",
-    tier: "clinic", rider: "none", amounts: [100_000], priorAnnualOutpatientVisits: 0 } as never);
+    rider: "none", amounts: [100_000], priorAnnualOutpatientVisits: 0 } as never);
   check("4세대는 종전대로 계산", g4.status === "OK" && g4.totalInsurancePay === 70_000);
   check("4세대는 여전히 미입력을 차단", calculateMany2021({ cause: "disease",
     coverage: "non_benefit", visit: "outpatient", tier: "clinic", rider: "none",

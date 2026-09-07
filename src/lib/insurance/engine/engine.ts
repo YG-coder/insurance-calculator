@@ -53,7 +53,11 @@ const OTHER_ENTRY_AXES = [
  * ⚠ 이 다섯은 조용히 버려질 때 피해가 가장 크다 — 호출부는 여러 건을 넘겼다고 믿는데
  *   결과는 `amount` 한 건만 계산한 값이라 **총액이 조용히 축소**된다.
  */
-const CONTAINER_AXES = ["lines", "amounts", "stays", "roomChargeTotal", "inpatientDays"] as const;
+const CONTAINER_AXES = ["lines", "amounts", "stays", "roomChargeTotal", "inpatientDays",
+  // ⚠ G-34B에서 추가했다. `generation`은 **결과 필드**이지 입력 축이 아니다 — 세대는 이
+  //   함수의 첫 인자로 받는다. 입력 객체에 실으면 계산 세대를 바꾸지 않고 조용히 버려졌다.
+  //   G-34B가 묶음·항목 진입점에서 같은 축을 닫으면서 형제 정렬을 위해 여기도 함께 닫는다.
+  "generation"] as const;
 
 /**
  * 5세대 전용 축 (G-33이 세운 목록 — 순서와 안내 문구를 그대로 유지한다).
@@ -230,6 +234,7 @@ const WHY: Record<RouterAxis, string> = {
   rider: "특약 종류(rider)는 4세대 다회 청구 진입점의 축이라 단건 계산에는 대응 축이 없습니다.",
   route: "진입점 선택(route)은 별도 보장종목·상급병실료 진입점의 축이라 단건 계산에는 대응 축이 없습니다.",
 
+  generation: "세대(generation)는 이 함수의 **첫 인자**로 받습니다. 입력 객체에 실어도 계산 세대를 바꾸지 않습니다.",
   lines: CONTAINER_WHY,
   amounts: CONTAINER_WHY,
   stays: CONTAINER_WHY,

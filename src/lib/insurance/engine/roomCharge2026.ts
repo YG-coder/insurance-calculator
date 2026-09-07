@@ -51,6 +51,19 @@ const UNUSED_KEYS = [
   //   ⚠ **목록의 맨 끝**에 넣는다. 이 루프는 먼저 찾은 키에서 반환하므로, 뒤에 붙이면
   //     기존 14개 키의 안내 우선순위가 그대로 유지된다(G-28이 같은 이유로 맨 끝에 붙였다).
   "nhisCoinsuranceRate",
+  // ⚠ G-34B에서 추가한 12종. 전수 스윕(기준선 `0914d7d`, 2경로군 × 35축, 접근자 계수 +
+  //   §5 값 격자)에서 이 축들은 정상 리터럴이 **조용히 통과**했다 — 접근자 호출 0회이고
+  //   결과가 미제공과 한 글자도 다르지 않았다. 다른 진입점(단건·다회·별도 보장종목)의
+  //   축이거나(`amount`·`plan`·`facility`·`rider`·`perVisitCoverageLimit`·
+  //   `priorAnnualPaid`·`priorAnnualRiderPaid`·`priorAnnualPrescriptions`·
+  //   `priorAnnualRiderVisits`), 행 안에서만 의미가 있는 축이 최상위에 실린 경우다
+  //   (`roomChargeTotal`·`inpatientDays`는 `stays[]`의 원소 필드다).
+  //   `generation`은 결과 필드이지 입력 축이 아니다 — 실려도 계산이 세대를 바꾸지 않는다.
+  //   ⚠ **목록의 맨 끝**에 붙인다. 기존 16개 키의 안내 우선순위가 그대로 유지된다
+  //     (G-28·G-31이 같은 이유로 맨 끝에 붙였다).
+  "amount", "roomChargeTotal", "inpatientDays", "generation",
+  "facility", "plan", "rider", "perVisitCoverageLimit",
+  "priorAnnualPaid", "priorAnnualRiderPaid", "priorAnnualPrescriptions", "priorAnnualRiderVisits",
 ] as const;
 
 /**

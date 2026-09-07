@@ -180,13 +180,32 @@ export interface CalcResult {
 // 따라서 다회 계산은 행을 **순서대로** 처리한다. 총액은 순서와 무관하지만(불변식으로 고정),
 // 어느 행이 상한에 걸리는지는 순서가 정한다. 입력 행 순서를 발생 순서로 본다.
 // ─────────────────────────────────────────────────────────────────────
+
+/* ────────────────────────────────────────────────────────────────────────
+ * G-34B — 진입점별 **미사용 축의 타입 봉인**.
+ *
+ * 각 묶음·항목 진입점이 어느 경로에서도 읽지 않는 축을 `?: never`로 닫는다. 종전에는 대부분
+ * **선언조차 없어** 객체 리터럴만 초과 속성 검사에 걸렸고, 변수를 거쳐 온 객체·외부 데이터는
+ * 그대로 통과해 런타임이 조용히 버렸다.
+ * ⚠ **경로별 축은 여기서 닫지 않는다.** `MultiClaimInput`의 `priorAnnualPaid`(입원 행이
+ *   있을 때만)·`perVisitCoverageLimit`(통원 행이 있을 때만)은 행 구성이 정하므로 최상위
+ *   필드로 유니온을 쪼갤 수 없고, 4·5세대 다회의 `tier`는 `coverage`×`visit`으로 쪼개야 하는데
+ *   호출부가 두 축을 변수로 넘겨 `as` 없이 컴파일되지 않는다. 그 축들은 런타임으로만 닫았다
+ *   (G-30·G-31·G-33·G-34A가 남긴 경계와 같은 종류다).
+ * ⚠ 화면·정상 호출부에 `as` 단언을 더하지 않는다. 단언으로 통과시키면 타입 봉인이 무의미하다.
+ * ──────────────────────────────────────────────────────────────────────── */
+type SealNever<K extends string> = { [P in K]?: never };
+
+/** 다른 진입점의 컨테이너와 그 원소 필드, 그리고 입력 축이 아닌 결과 필드. */
+type ForeignContainerAxes = "amounts" | "lines" | "stays" | "roomChargeTotal" | "inpatientDays" | "generation";
+
 export interface ClaimLine {
   amount: number;
   visit: Visit;
   facility?: Facility; // 통원에서만 의미 있음
 }
 
-export interface MultiClaimInput {
+interface MultiClaimInputFields {
   plan?: Plan;
   lines: ClaimLine[];
   priorAnnualPaid?: number;              // 계약해당일 기준 1년간 이미 부담한 입원 자기부담금
@@ -213,6 +232,21 @@ export interface MultiClaimInput {
   priorAnnualPrescriptions?: number;
   perVisitCoverageLimit?: number;        // 계약자가 정한 회(건)당 가입금액. 미제공 시 미적용
 }
+
+/**
+ * 2·3세대 다회의 **공개 입력 타입**. 위 필드에 더해 이 진입점이 읽지 않는 축을 닫는다(G-34B).
+ *   ⚠ `visit`·`facility`는 `lines[]`의 원소 필드다. 이 묶음은 행마다 둘이 다를 수 있어
+ *     최상위 값을 읽지 않는다 — 최상위에 실으면 조용히 버려졌다.
+ *   ⚠ `plan`·두 카운터·`priorAnnualPaid`·`perVisitCoverageLimit`은 닫지 않는다(소비하거나
+ *     행 구성이 정하는 축이다).
+ */
+export type MultiClaimInput = MultiClaimInputFields
+  & SealNever<Exclude<ForeignContainerAxes, "lines"> | "amount" | "coverage" | "visit" | "cause" | "severity"
+    | "tier" | "facility" | "route" | "item" | "rider" | "nonBenefitItem" | "injectionPurpose"
+    | "nhisCoinsuranceRate" | "outpatientCoverageLimit" | "annualCoverageLimit"
+    | "priorAnnualDeductible" | "priorAnnualInpatientDeductible" | "priorAnnualInsurancePaid"
+    | "priorAnnualRiderPaid" | "priorAnnualOutpatientDays" | "priorAnnualRiderVisits"
+    | "approvedThroughVisit" | "priorAnnualCoveredCount" | "priorAnnualTreatmentActCount">;
 
 export interface ClaimLineResult extends CalcResult {
   index: number;    // 입력 행 순서(0-based). 결과 표와 입력 행을 잇는다
@@ -346,12 +380,24 @@ export interface Gen2021MultiRiderMriInput extends Gen2021MultiCommonInput, Gen2
   approvedThroughVisit?: never;
 }
 
-export type Gen2021MultiClaimInput =
+/**
+ * 4세대 다회가 **어느 경로에서도** 읽지 않는 축 (G-34B).
+ *   ⚠ `tier`는 닫지 않는다 — 급여 통원이 실제로 소비한다. `coverage`×`visit`으로 유니온을
+ *     쪼개야 하는데 화면이 두 축을 변수로 넘기므로 `as` 없이 컴파일되지 않는다(런타임만).
+ */
+type Gen2021MultiSealed = SealNever<Exclude<ForeignContainerAxes, "amounts">
+  | "amount" | "severity" | "facility" | "plan" | "route" | "item" | "nonBenefitItem"
+  | "injectionPurpose" | "nhisCoinsuranceRate" | "perVisitCoverageLimit"
+  | "outpatientCoverageLimit" | "priorAnnualPaid" | "priorAnnualDeductible"
+  | "priorAnnualInpatientDeductible" | "priorAnnualOutpatientDays" | "priorAnnualPrescriptions"
+  | "priorAnnualCoveredCount" | "priorAnnualTreatmentActCount">;
+
+export type Gen2021MultiClaimInput = Gen2021MultiSealed & (
   | Gen2021MultiGeneralNonBenefitOutpatientInput
   | Gen2021MultiGeneralBenefitInput
   | Gen2021MultiGeneralNonBenefitInpatientInput
   | Gen2021MultiRiderCountedInput
-  | Gen2021MultiRiderMriInput;
+  | Gen2021MultiRiderMriInput);
 
 // 5세대 다회 청구. 단건과 같은 정책 — 비급여에서 치료유형은 필수다.
 interface Gen2026MultiCommonInput {
@@ -421,9 +467,18 @@ export interface Gen2026MultiNonBenefitInput extends Gen2026MultiCommonInput {
   annualCoverageLimit?: number;
 }
 
-export type Gen2026MultiClaimInput =
+/**
+ * 5세대 다회가 **어느 경로에서도** 읽지 않는 축 (G-34B).
+ *   ⚠ `tier`는 닫지 않는다 — 비급여 입원과 급여 통원이 소비한다(급여 입원·비급여 통원은
+ *     런타임에서 본다). `priorAnnualPaid`는 이미 A군이 런타임에서 막는다.
+ */
+type Gen2026MultiSealed = SealNever<Exclude<ForeignContainerAxes, "amounts">
+  | "amount" | "facility" | "plan" | "rider" | "perVisitCoverageLimit"
+  | "priorAnnualRiderPaid" | "priorAnnualPrescriptions" | "priorAnnualRiderVisits">;
+
+export type Gen2026MultiClaimInput = Gen2026MultiSealed & (
   | Gen2026MultiBenefitInput
-  | Gen2026MultiNonBenefitInput;
+  | Gen2026MultiNonBenefitInput);
 
 // ─────────────────────────────────────────────────────────────────────
 // 5세대 별도 보장종목 — 특별약관1 (3)3대비급여 / 특별약관2 (3)비급여 자기공명영상진단
@@ -579,6 +634,14 @@ export interface Gen2026NonCriticalMriInput extends Gen2026SpecialBase {
   priorAnnualCoveredCount?: never;
 }
 
+/**
+ * 별도 보장종목·일반 전환이 **어느 경로에서도** 읽지 않는 축 (G-34B).
+ *   ⚠ `approvedThroughVisit`은 닫지 않는다 — 근골격계가 소비한다(다른 항목은 런타임에서 본다).
+ */
+type Gen2026ItemSealed = SealNever<Exclude<ForeignContainerAxes, "lines" | "amounts">
+  | "amount" | "facility" | "plan" | "rider" | "perVisitCoverageLimit"
+  | "priorAnnualPaid" | "priorAnnualRiderPaid" | "priorAnnualPrescriptions" | "priorAnnualRiderVisits">;
+
 export type Gen2026SpecialItemInput =
   | Gen2026CriticalMskInput
   | Gen2026CriticalInjectionInput
@@ -694,11 +757,33 @@ export interface Gen2026RoomChargeInput {
   //   양쪽 모두 비어 있어 **조용히 폐기**됐다(실측: 접근자 호출 0회). 둘 다 함께 닫는다.
   nonBenefitItem?: never;
   nhisCoinsuranceRate?: never;
+  // ⚠ G-34B. 아래 12종도 이 계산에 쓰이지 않는다. 종전에는 선언조차 없어 변수 경유가
+  //   컴파일을 통과했고 런타임이 조용히 버렸다(`roomChargeTotal`·`inpatientDays`는
+  //   `stays[]`의 원소 필드이고, `generation`은 결과 필드다).
+  amount?: never;
+  amounts?: never;
+  lines?: never;
+  roomChargeTotal?: never;
+  inpatientDays?: never;
+  generation?: never;
+  facility?: never;
+  plan?: never;
+  rider?: never;
+  perVisitCoverageLimit?: never;
+  priorAnnualPaid?: never;
+  priorAnnualRiderPaid?: never;
+  priorAnnualPrescriptions?: never;
+  priorAnnualRiderVisits?: never;
 }
 
+/**
+ * ⚠ 봉인은 별도 보장종목·일반 전환 두 갈래에만 씌운다. 상급병실료(`route: "room_charge"`)는
+ *   `stays`를 **필수로 쓰는** 경로라 같은 봉인을 씌우면 그 멤버가 통째로 `never`가 된다.
+ *   상급병실료는 자기 타입이 이미 12종을 닫고 있다.
+ */
 export type Gen2026ItemClaimInput =
-  | Gen2026SpecialItemInput
-  | Gen2026RoutedGeneralInput
+  | (Gen2026ItemSealed & Gen2026SpecialItemInput)
+  | (Gen2026ItemSealed & Gen2026RoutedGeneralInput)
   | Gen2026RoomChargeInput;
 
 // ── 결과 ──────────────────────────────────────────────────────────────

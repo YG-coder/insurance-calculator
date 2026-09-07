@@ -265,8 +265,12 @@ console.log("\n[소스] 안내 조건만 바꾸고 계산·전달은 그대로")
     && /const usesPrescriptions = lines\.some\(isPharmacyLine\);/.test(engBody)
     && /if \(!usesVisits && visitsRaw !== undefined\) \{/.test(engBody)
     && /if \(!usesPrescriptions && prescriptionsRaw !== undefined\) \{/.test(engBody));
-  check("엔진: hasOutpatient를 계산·한도에 쓰지 않는다(안내 전용)",
-    (engBody.match(/hasOutpatient/g) ?? []).length === 3);
+  // ⚠ G-34B에서 `hasOutpatient`가 한 자리 더 쓰인다 — 통원 행이 없을 때
+  //   `perVisitCoverageLimit`을 **입력 계약으로 거부**하는 판정이다(두 카운터가 행 구성으로
+  //   판정하는 것과 같은 방식). 종전 성질("계산·한도에는 쓰지 않는다")은 그대로이고,
+  //   늘어난 자리는 계산이 아니라 거부 판정이다. 개수만 실측값으로 맞춘다.
+  check("엔진: hasOutpatient를 계산·한도에 쓰지 않는다(안내와 입력 계약 전용)",
+    (engBody.match(/hasOutpatient/g) ?? []).length === 4);
   check("엔진: 결과 타입과 집계는 그대로다",
     /const totalOwnPay = results\.reduce\(\(sum, r\) => sum \+ \(r\.ownPay \?\? 0\), 0\);/.test(engBody)
     && /const appliedCaps = \[\.\.\.new Set\(results\.flatMap\(\(r\) => r\.appliedCaps\)\)\];/.test(engBody)

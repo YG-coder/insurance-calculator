@@ -207,9 +207,12 @@ console.log("\n[G-14D] 5. 상급병실료 — 두 진입점 모두");
 console.log("\n[G-14D] 6. 계산 무회귀 — 정상 입력의 결과가 그대로다");
 {
   // 값은 G-14B·G-14C 검사와 같은 기준선에서 온 것이다. 표시 변경이 계산에 닿지 않음을 고정한다.
+  // ⚠ G-34B: 별도 보장종목은 `cause`를 읽지 않는다 — <표1>의 한도가 상해·질병을 **합산**해
+  //   적용하기 때문이다. 타입은 이미 `?: never`였고 런타임만 통과시키던 자리라 이번에 닫혔다.
+  //   픽스처에서 뺐다. 이 검사가 보는 것(공제 pool 계산과 안전 표시)은 그대로다.
   const mri = (extra: Record<string, unknown> = {}) => callItem({
     route: "special_item", coverage: "non_benefit", severity: "critical", item: "mri",
-    cause: "disease", priorAnnualInsurancePaid: 0,
+    priorAnnualInsurancePaid: 0,
     lines: [{ amount: 1_000_000, visit: "inpatient", tier: "hospital" },
       { amount: 1_000_000, visit: "inpatient", tier: "clinic" }], ...extra,
   });
@@ -242,7 +245,8 @@ console.log("\n[G-14D] 6. 계산 무회귀 — 정상 입력의 결과가 그대
     threw(g14b) ? g14b.threw : g14b.r.notes.join(" ").slice(0, 60));
   const zeroPay = callItem({
     route: "special_item", coverage: "non_benefit", severity: "critical",
-    item: "musculoskeletal_esw", cause: "disease", priorAnnualInsurancePaid: 0,
+    // ⚠ G-34B: 별도 보장종목은 `cause`를 읽지 않는다(<표1>이 상해·질병을 합산한다). 뺐다.
+    item: "musculoskeletal_esw", priorAnnualInsurancePaid: 0,
     priorAnnualCoveredCount: 49, priorAnnualTreatmentActCount: 0, approvedThroughVisit: 10,
     lines: [{ amount: 20_000, visit: "outpatient" }, { amount: 100_000, visit: "outpatient" }],
   });
@@ -299,8 +303,11 @@ console.log("\n[G-14D] 7. 소스 계약");
   //   G-31이 급여의 미사용 비금액 축·급여 입원의 본인부담률·비급여의 본인부담률을 더해
   //   13 → 16곳, G-32가 중증도 열거값 검증을 더해 16 → 17곳이 됐다.
   //   요지(이 파일의 안내는 전부 지역 showValue를 거친다)는 그대로다.
-  check("multiClaim2026의 '받은 값' 17곳이 모두 안전 표시를 쓴다",
-    (multiBody.match(/받은 값: \$\{showValue\(/g) ?? []).length === 17
+  // ⚠ G-34B가 `MULTI2026_UNUSED_KEYS`와 급여 입원 종별 거부를 더하면서 안내가 17 → 19곳이
+  //   됐다. 지키는 성질은 개수가 아니라 "받은 값을 안내에 실을 때는 지역 `showValue`를
+  //   쓴다"이므로 개수만 실측값으로 맞춘다.
+  check("multiClaim2026의 '받은 값' 19곳이 모두 안전 표시를 쓴다",
+    (multiBody.match(/받은 값: \$\{showValue\(/g) ?? []).length === 19
     && !/받은 값: \$\{JSON\.stringify/.test(multiBody),
     String((multiBody.match(/받은 값: \$\{showValue\(/g) ?? []).length));
   // fingerprint는 결과 비교용이라 대상이 아니다 — 그대로 JSON.stringify를 쓴다.

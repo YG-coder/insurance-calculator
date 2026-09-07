@@ -78,9 +78,12 @@ const OTHER_ENTRY = ["cause", "outpatientCoverageLimit", "annualCoverageLimit",
   "priorAnnualInpatientDeductible", "injectionPurpose", "item", "rider", "route"] as const;
 const CONTAINER = ["lines", "amounts", "stays", "roomChargeTotal", "inpatientDays"] as const;
 /** 후보 목록(engine.ts의 ROUTER_AXES)과 같은 31종. 어긋나면 §12의 완전성 검사가 잡는다. */
+// ⚠ G-34B에서 `generation`이 더해졌다(결과 필드이지 입력 축이 아니다 — 세대는 첫 인자다).
+//   묶음·항목 진입점이 같은 축을 닫으면서 라우터도 형제 정렬로 함께 닫았다. 모집단이
+//   16경로군 × 34축 = 544 → 16 × 35 = 560이 되고, 늘어난 16자리는 전부 확정 stray다.
 const ROUTER_AXES_FOR_TEST = ["nhisCoinsuranceRate", "severity", "nonBenefitItem", "priorAnnualDeductible",
   "perVisitCoverageLimit", "tier", "plan", "facility", "priorAnnualPaid",
-  ...OTHER_ENTRY, ...CONTAINER] as const;
+  ...OTHER_ENTRY, ...CONTAINER, "generation"] as const;
 const NORMAL: Record<string, unknown> = {
   cause: "injury", outpatientCoverageLimit: 200_000, annualCoverageLimit: 5_000_000,
   priorAnnualInsurancePaid: 1_000, priorAnnualRiderPaid: 1_000, priorAnnualOutpatientVisits: 1,
@@ -261,8 +264,8 @@ console.log("\n[G-34A] 7. 분류표 — 모집단 16경로군 × 34축 = 544자�
     "2026|benefit|outpatient", "2026|benefit|inpatient", "2026|non_benefit|outpatient", "2026|non_benefit|inpatient",
   ] as const;
   const ALL_AXES = [...ALWAYS_ACCEPTED_AXES, ...ROUTER_AXES_FOR_TEST] as readonly string[];
-  check(`축 34종 · 경로군 16 (모집단 ${GROUPS.length * ALL_AXES.length}자리)`,
-    ALL_AXES.length === 34 && GROUPS.length === 16, `축 ${ALL_AXES.length} 경로군 ${GROUPS.length}`);
+  check(`축 35종 · 경로군 16 (모집단 ${GROUPS.length * ALL_AXES.length}자리)`,
+    ALL_AXES.length === 35 && GROUPS.length === 16, `축 ${ALL_AXES.length} 경로군 ${GROUPS.length}`);
 
   /** cat1 — 세대별 **직접 진입점**으로 측정한 실제 소비(라우터 가드가 읽는 것은 세지 않는다). */
   const CONSUMED: Record<string, readonly string[]> = {
@@ -303,7 +306,7 @@ console.log("\n[G-34A] 7. 분류표 — 모집단 16경로군 × 34축 = 544자�
   check(`cat2 의미상 허용 ${count[2]}`, count[2] === 8, String(count[2]));
   check(`cat3 공통 통로 ${count[3]} — 근거가 있는 자리는 아직 없다`, count[3] === 0, String(count[3]));
   check(`cat4 선행 차단 미도달 ${count[4]}`, count[4] === 0, String(count[4]));
-  check(`cat5 확정 stray ${count[5]}`, count[5] === 444, String(count[5]));
+  check(`cat5 확정 stray ${count[5]}`, count[5] === 460, String(count[5]));
   check(`cat6 판단 보류 ${count[6]}`, count[6] === 5, String(count[6]));
 
   // 표와 구현이 어긋나면 여기서 잡힌다 — cat5만 거부되고 나머지는 통과해야 한다.
@@ -322,7 +325,7 @@ console.log("\n[G-34A] 7. 분류표 — 모집단 16경로군 × 34축 = 544자�
     "2026|non_benefit|inpatient": { amount: A, coverage: "non_benefit", visit: "inpatient", severity: "critical", nonBenefitItem: "general", tier: "hospital" },
   };
   for (const g of Object.keys(GBASE).filter((k) => k.startsWith("2009"))) GBASE[g.replace("2009", "2017")] = { ...GBASE[g] };
-  const PROBE_VAL: Record<string, unknown> = { ...NORMAL, amount: 700_000, nhisCoinsuranceRate: 0.2,
+  const PROBE_VAL: Record<string, unknown> = { ...NORMAL, generation: "2009", amount: 700_000, nhisCoinsuranceRate: 0.2,
     severity: "non_critical", nonBenefitItem: "general", priorAnnualDeductible: 1_000, perVisitCoverageLimit: 200_000 };
   for (const grp of GROUPS) {
     const gen = grp.split("|")[0] as Generation;

@@ -418,8 +418,13 @@ console.log("\n[G-31] 10. 구조 — 목록을 합치지 않고, 각 키를 한 
     && /\n  for \(const key of ITEM_UNUSED_NON_MONEY_KEYS\) \{/.test(itm));
   check("specialItem2026: 경로 대조 뒤다",
     itm.indexOf("for (const key of ITEM_UNUSED_NON_MONEY_KEYS)") > itm.indexOf("if (expectedRoute !== raw.route) {"));
-  check("roomCharge2026: nhisCoinsuranceRate가 UNUSED_KEYS 맨 끝이다",
-    /"nhisCoinsuranceRate",\s*\n\] as const;/.test(room));
+  // ⚠ G-34B가 목록 끝에 12종을 더 붙였다(맨 끝은 이제 `priorAnnualRiderVisits`). 이 검사가
+  //   지키려던 것은 "맨 끝"이라는 위치 자체가 아니라 **G-31이 추가한 키가 기존 키들의 안내
+  //   우선순위를 밀어내지 않는다**는 성질이다. 그 성질을 직접 잡는 형태로 바꾼다.
+  //   ⚠ `room`은 주석을 지우지 않은 원문이라 두 키 사이에 주석 블록이 있다. 위치 관계만 본다.
+  check("roomCharge2026: nhisCoinsuranceRate가 기존 14개 뒤에 있다(우선순위 유지)",
+    room.indexOf('"priorAnnualTreatmentActCount",') < room.indexOf('"nhisCoinsuranceRate",')
+    && room.indexOf('"nhisCoinsuranceRate",') < room.indexOf('"priorAnnualRiderVisits",'));
   for (const [file, body] of [["generation2026", gen], ["multiClaim2026", mul], ["specialItem2026", itm]] as const) {
     check(`${file}: in 연산자가 아니라 !== undefined로 본다`,
       !/"(severity|nonBenefitItem|nhisCoinsuranceRate)" in /.test(body));

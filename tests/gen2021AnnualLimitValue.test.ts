@@ -385,8 +385,12 @@ console.log("\n[G-18] 7. 소스 계약 — nonNegInt 완전 제거와 검증 위
   //   요지(이 커밋이 그 자리를 건드리지 않았다)는 같다. 새 계약은
   //   tests/multiClaimNoteSafeDisplay.test.ts가 본다.
   // ⚠ 계약 갱신(G-30): 미사용 금액 축 stray 안내가 한 곳 늘어 6 → 7이다.
-  check("다른 안내 7곳은 안전 표시(showValue)를 쓴다",
-    (body.match(/받은 값: \$\{showValue\(/g) ?? []).length === 7
+  // ⚠ G-34B에서 4세대 다회에 stray 목록(`MULTI2021_UNUSED_KEYS`)과 종별 거부가 들어가면서
+  //   안내가 7곳 → 9곳이 됐다. 이 검사가 지키는 성질은 **개수**가 아니라 "받은 값을 안내에
+  //   실을 때는 반드시 `showValue`를 쓴다(= `JSON.stringify`를 직접 쓰지 않는다)"이므로,
+  //   개수만 실측값으로 맞추고 성질은 그대로 둔다.
+  check("다른 안내 9곳은 안전 표시(showValue)를 쓴다",
+    (body.match(/받은 값: \$\{showValue\(/g) ?? []).length === 9
     && !/받은 값: \$\{JSON\.stringify/.test(body),
     String((body.match(/받은 값: \$\{showValue\(/g) ?? []).length));
   check("G-16 금액 계약이 그대로",
@@ -400,8 +404,8 @@ console.log("\n[G-18] 7. 소스 계약 — nonNegInt 완전 제거와 검증 위
   // 다른 세대는 각자 사본을 가지며 손대지 않았다.
   const std = readFileSync("src/lib/insurance/engine/multiClaim.ts", "utf8");
   check("2·3세대 엔진은 자기 nonNegInt를 그대로 가진다", /const nonNegInt =/.test(std));
-  check("2·3세대 엔진의 안내 4곳도 안전 표시로 바뀌었다(G-19)",
-    (std.match(/받은 값: \$\{showValue\(/g) ?? []).length === 4
+  check("2·3세대 엔진의 안내 7곳도 안전 표시를 쓴다",
+    (std.match(/받은 값: \$\{showValue\(/g) ?? []).length === 7
     && !/받은 값: \$\{JSON\.stringify/.test(std));
   const g5 = readFileSync("src/lib/insurance/engine/multiClaim2026.ts", "utf8");
   // ⚠ **낡은 계약을 교체했다(G-30).** 위치·기존 의미("이 커밋이 5세대 엔진을 손대지

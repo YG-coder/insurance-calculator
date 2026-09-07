@@ -257,14 +257,23 @@ export default function HealthCalcMulti2021() {
   //   필드가 따라 들어간다 — 종전에는 `priorAnnualRiderPaid: isRider ? … : undefined`가
   //   일반 세 분기에도 실려, 타입이 막지 못하고 엔진이 조용히 폐기했다. 각 분기에서 쓰는
   //   쪽만 실어 보낸다(5세대 화면이 통원 카운터에 쓰는 방식과 같다).
+  // ⚠ `tier`는 공통 객체에서 뺐다(G-34B). 종별이 최소공제를 가르는 것은 **급여 통원**뿐이고,
+  //   비급여·입원·특약 경로에서는 엔진이 읽지 않는다. 종전에는 공통 객체를 여섯 분기에
+  //   스프레드해 모든 경로에 실어 보냈고, 쓰지 않는 경로에서는 **읽고 무시**됐다 —
+  //   화면이 고른 종별이 반영된 것처럼 보였다. 공통 객체가 값을 싣는다는 사실은
+  //   허용 근거가 아니므로, 런타임 거부와 함께 화면의 전달도 바로잡는다.
+  //   ⚠ 상태(`tier`)와 선택 UI는 그대로 둔다. 경로를 오가도 선택이 보존되고, 급여 통원으로
+  //     돌아오면 같은 값이 다시 전달된다. **비활성 경로에만 싣지 않는다.**
   const common = money === null ? null : {
-    cause, visit, tier, amounts: amounts.map((a) => gen2021Amount(a) as number),
+    cause, visit, amounts: amounts.map((a) => gen2021Amount(a) as number),
   };
+  /** 급여 통원에서만 종별을 싣는다 — 엔진의 소비 분기와 같은 모양이다. */
+  const tierForPath = coverage === "benefit" && visit === "outpatient" ? tier : undefined;
   // ⚠ 게이트가 걸린 동안에는 엔진을 호출하지 않는다. 무효 행을 넘기면 엔진의
   //   normalizeAmount가 조용히 0원으로 바꿔 계산해 버린다.
   const result = money === null || common === null ? null : rider === "manual_therapy"
     ? calculateMany2021({
-        ...common, rider: "manual_therapy", coverage,
+        ...common, tier: tierForPath, rider: "manual_therapy", coverage,
         priorAnnualRiderPaid: money.priorPaid,
         priorAnnualRiderVisits: gen2021Count(riderVisitsText) ?? undefined,
         // ⚠ 미선택이면 필드를 싣지 않는다. 화면이 10을 만들어 보내면 "보험사가 승인한
@@ -273,29 +282,29 @@ export default function HealthCalcMulti2021() {
       } satisfies Gen2021MultiRiderManualInput)
     : rider === "injection"
     ? calculateMany2021({
-        ...common, rider: "injection", coverage,
+        ...common, tier: tierForPath, rider: "injection", coverage,
         priorAnnualRiderPaid: money.priorPaid,
         priorAnnualRiderVisits: gen2021Count(riderVisitsText) ?? undefined,
         // ⚠ 승인 축은 주사료에 없다. 화면에서 숨겨진 값을 넘기지 않는다.
       } satisfies Gen2021MultiRiderInjectionInput)
     : rider === "mri"
       ? calculateMany2021({
-        ...common, rider: "mri", coverage, priorAnnualRiderPaid: money.priorPaid,
+        ...common, tier: tierForPath, rider: "mri", coverage, priorAnnualRiderPaid: money.priorPaid,
       } satisfies Gen2021MultiRiderMriInput)
       : coverage === "benefit"
         ? calculateMany2021({
-            ...common, rider: "none", coverage: "benefit",
+            ...common, tier: tierForPath, rider: "none", coverage: "benefit",
             annualCoverageLimit: money.annualLimit,
             priorAnnualInsurancePaid: money.priorPaid,
           } satisfies Gen2021MultiGeneralBenefitInput)
         : visit === "inpatient"
           ? calculateMany2021({
-              ...common, rider: "none", coverage: "non_benefit", visit: "inpatient",
+              ...common, tier: tierForPath, rider: "none", coverage: "non_benefit", visit: "inpatient",
               annualCoverageLimit: money.annualLimit,
               priorAnnualInsurancePaid: money.priorPaid,
             } satisfies Gen2021MultiGeneralNonBenefitInpatientInput)
           : calculateMany2021({
-              ...common, rider: "none", coverage: "non_benefit", visit: "outpatient",
+              ...common, tier: tierForPath, rider: "none", coverage: "non_benefit", visit: "outpatient",
               annualCoverageLimit: money.annualLimit,
               priorAnnualInsurancePaid: money.priorPaid,
               priorAnnualOutpatientVisits: gen2021Count(priorOutVisits) ?? undefined,

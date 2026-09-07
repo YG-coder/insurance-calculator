@@ -146,6 +146,61 @@ const SPECIAL_ITEM_UNUSED_MONEY_KEYS = [
  */
 const ITEM_UNUSED_NON_MONEY_KEYS = ["nhisCoinsuranceRate", "nonBenefitItem"] as const;
 
+/* ────────────────────────────────────────────────────────────────────────
+ * G-34B — 이 진입점의 **경로별 미사용 축**.
+ *
+ * 전수 스윕(기준선 `0914d7d`, 9경로군 × 35축, 금액 배율 3벌 × §5 값 격자, 접근자 계수)에서
+ * 아래 축들은 **정상 리터럴이 조용히 통과**했다 — 접근자 호출 0회이고 결과가 미제공과 한
+ * 글자도 다르지 않았다. 값 검증만 반응하고 계산에는 반영되지 않는 자리도 함께 담는다
+ * (그쪽이 더 위험하다 — 무효값이 거부되니 "검증을 통과했으면 반영됐다"고 오해하게 된다).
+ * ⚠ 접근자 0회만으로 정하지 않았다. 어느 금액 배율에서도 어떤 값으로도 **계산이 달라지지
+ *   않을 때**만 미사용으로 봤다.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+/**
+ * 세 경로(별도 보장종목·일반 전환·상급병실료) **공통**으로 쓰이지 않는 축 12종.
+ *   `amount`                    단건 진입점의 축이다. 이 진입점은 `lines[]`/`amounts[]`로 받는다.
+ *   `roomChargeTotal`·`inpatientDays`  `stays[]`의 **원소** 필드다. 최상위에 실으면 읽히지 않는다.
+ *   `generation`                결과 필드이지 입력 축이 아니다. 실어도 계산 세대를 바꾸지 않는다.
+ *   `facility`·`plan`           2·3세대 표준약관의 축이다. 5세대에는 대응 축이 없다.
+ *   `rider`·`priorAnnualRiderPaid`·`priorAnnualRiderVisits`  4세대 3대비급여 **특약**의 축이다.
+ *   `perVisitCoverageLimit`     2·3세대 통원의 회(건)당 가입금액이다.
+ *   `priorAnnualPaid`           2·3세대 입원 자기부담 누적이다(5세대는 공제금액 축을 쓴다).
+ *   `priorAnnualPrescriptions`  2·3세대 다회의 처방조제 건수 카운터다.
+ */
+const ITEM_UNUSED_COMMON_KEYS = [
+  "amount", "roomChargeTotal", "inpatientDays", "generation",
+  "facility", "plan", "rider", "perVisitCoverageLimit",
+  "priorAnnualPaid", "priorAnnualRiderPaid", "priorAnnualPrescriptions", "priorAnnualRiderVisits",
+] as const;
+
+/**
+ * `route: "special_item"`에서만 추가로 쓰이지 않는 축.
+ *   `amounts`·`stays`  다른 진입점의 컨테이너다. 별도 보장종목은 `lines[]`를 읽는다.
+ *   `visit`·`tier`     **행 안에서만** 의미가 있다(`lines[].visit`·`lines[].tier`).
+ *                      최상위에 실으면 읽히지 않는다.
+ *   `cause`            타입은 이미 `?: never`인데 런타임이 정상 리터럴을 통과시켰다
+ *                      (타입과 런타임이 어긋난 자리). <표1>의 한도는 상해·질병을 합산한다.
+ */
+const SPECIAL_ITEM_UNUSED_PATH_KEYS = ["amounts", "stays", "visit", "tier", "cause"] as const;
+
+/**
+ * `route: "general"`(일반 (1)(2) 전환)에서만 추가로 쓰이지 않는 축.
+ *   `lines`·`stays`   이 경로는 `amounts[]`를 읽는다.
+ */
+const ROUTED_GENERAL_UNUSED_PATH_KEYS = ["lines", "stays", "approvedThroughVisit"] as const;
+
+/**
+ * 승인 회차 `approvedThroughVisit`은 **근골격계 이학요법·체외충격파에만** 있다
+ * (<표1> 주). 주사료·MRI와 일반 전환 경로에는 대응 축이 없다.
+ *   ⚠ 종전에는 **부분 봉인**이었다 — 무효값 `0`은 "값이 올바르지 않아"로 거부하면서
+ *     정상 리터럴 `50`은 조용히 통과시켰다(실측). 검증을 통과했으니 반영됐다고 오해하기
+ *     가장 쉬운 형태다. 값 검증과 별개로 **경로에 없는 축**임을 먼저 막는다.
+ *   ⚠ 일반 (1)(2)로 되돌아온 경로(`route: "general"`)에는 항목이 근골격계여도 승인 구간이
+ *     없다 — <표1> 자체가 적용되지 않기 때문이다. 그래서 그쪽은 위 목록이 막는다.
+ */
+const APPROVAL_ONLY_ITEM = "musculoskeletal_esw";
+
 const SPECIAL_ITEM_VALUES: readonly string[] = Object.keys(GEN2026_SPECIAL_ITEM_LABEL);
 const PURPOSE_VALUES: readonly string[] = Object.keys(GEN2026_INJECTION_PURPOSE_LABEL);
 
@@ -190,6 +245,35 @@ type CheckedItemInput = {
    */
   pool?: number;
 };
+
+/**
+ * 경로별 미사용 축 stray 거부 (G-34B).
+ *   ⚠ **컨테이너 검증 뒤**에서 부른다. 선행 차단(경로 대조·행 목록·진료비)이 결과를 정하면
+ *     이 이름들을 읽지 않는다 — 던지는 getter가 그 경로에서 종전에 없던 예외를 만들지 않는다.
+ *   ⚠ 각 키를 **한 번만** 읽고, 목록 순서대로 먼저 찾은 키만 안내한다.
+ *   ⚠ 값이 `0`이어도 막는다. `in`이 아니라 `!== undefined`로 보아 호출부의
+ *     `{ ...base, key: undefined }` 패턴은 막지 않는다.
+ */
+function rejectPathUnusedAxes(raw: Record<string, unknown>): Gen2026RejectedResult | null {
+  const list: readonly string[] = raw.route === "special_item"
+    ? [...ITEM_UNUSED_COMMON_KEYS, ...SPECIAL_ITEM_UNUSED_PATH_KEYS]
+    : raw.route === "general"
+      ? [...ITEM_UNUSED_COMMON_KEYS, ...ROUTED_GENERAL_UNUSED_PATH_KEYS]
+      : ITEM_UNUSED_COMMON_KEYS;
+  for (const key of list) {
+    const got: unknown = raw[key];
+    if (got === undefined) continue;
+    return rejected(`이 계산 경로에서 쓰이지 않는 입력(${key})`, got);
+  }
+  // 승인 회차는 **별도 보장종목의 근골격계** 전용이다. 그 밖에서는 값이 유효해도 막는다.
+  if (!(raw.route === "special_item" && raw.item === APPROVAL_ONLY_ITEM)) {
+    const got: unknown = raw.approvedThroughVisit;
+    if (got !== undefined) {
+      return rejected("보상 승인 회차(approvedThroughVisit)는 별도 보장종목의 근골격계 이학요법·체외충격파 전용입니다(<표1> 주). 이 경로에는 대응 축이 없습니다 —", got);
+    }
+  }
+  return null;
+}
 
 function validateItemInput(
   input: Exclude<Gen2026ItemClaimInput, Gen2026RoomChargeInput>,
@@ -366,6 +450,11 @@ function validateItemInput(
     );
   }
 
+  // ⚠ G-34B의 경로별 미사용 축 거부는 **컨테이너 검증 뒤**로 옮겼다 — `rejectPathUnusedAxes()`를
+  //   두 분기의 마지막에서 부른다. 여기(컨테이너 앞)에 두면 `lines`·`amounts`가 무효인
+  //   **선행 차단 경로**에서 새 이름을 읽어, 던지는 getter가 종전에 없던 예외를 만든다
+  //   (실측: 그 자리 14곳). 선행 차단이 결과를 정하면 읽지 않는다는 계약이 우선이다.
+
   if (raw.route === "special_item") {
     // (3) 별도 보장종목에는 통원 한도가 적용되지 않는다. <표1>의 보장한도는 별개이며
     //   통원 가입금액·연간 가입금액도 여기 적용되지 않는다(제5조①단서·③).
@@ -426,6 +515,12 @@ function validateItemInput(
     //   종전에 안전하게 차단되던 입력에 새 런타임 예외가 생긴다.
     // ⚠ 여기서 확정한 세 축(진료비·승인 구간 축·형제 두 축)을 본체에 넘긴다. 본체와 두
     //   해석이 `input`을 다시 읽지 않는다(G-26·G-28·G-29).
+    // ⚠ 경로별 미사용 축은 **여기서** 본다 — 컨테이너·진료비 검증을 통과한 뒤다(G-34B).
+    //   선행 차단이 결과를 정하는 입력에서는 이 이름들을 읽지 않는다.
+    const stray = rejectPathUnusedAxes(raw);
+    if (stray) return stray;
+    // ⚠ 여기서 확정한 세 축(진료비·승인 구간 축·형제 두 축)을 본체에 넘긴다. 본체와 두
+    //   해석이 `input`을 다시 읽지 않는다(G-26·G-28·G-29).
     return {
       amounts: lineAmounts, acts: checkedActs,
       covered: covered as number | undefined, pool: pool as number | undefined,
@@ -482,6 +577,9 @@ function validateItemInput(
   //     갖지 않도록, 이 경로에는 검증을 우회하는 두 번째 공개 진입점을 만들지 않는다.
   //   ⚠ 지급보험금(priorAnnualInsurancePaid)도 같은 이유로 여기서 읽지 않는다.
   //     `calculateRoutedGeneral2026`이 `calculateMany2026`으로 그대로 넘긴다.
+  // ⚠ 경로별 미사용 축은 **여기서** 본다 — 진료비 검증을 통과한 뒤다(G-34B).
+  const strayGeneral = rejectPathUnusedAxes(raw);
+  if (strayGeneral) return strayGeneral;
   return { amounts: generalAmounts };
 }
 

@@ -82,12 +82,15 @@ const inp = (a: number, tier = "hospital") => ({ amount: a, visit: "inpatient", 
 
 // ── 4세대 6경로 ──────────────────────────────────────────────────────
 const G21: Record<string, (e?: Any) => Any> = {
-  "일반 비급여 통원": (e = {}) => ({ cause: "disease", coverage: "non_benefit", visit: "outpatient", tier: "clinic", amounts: [AMT], priorAnnualOutpatientVisits: 0, ...e }),
+  // ⚠ G-34B: 4세대 다회는 **급여 통원**만 종별을 소비한다. 비급여·입원·특약 픽스처에서
+  //   `tier`를 뺐다 — 종전에는 실어도 읽히지 않았고(조용한 폐기) 이제는 거부된다.
+  //   이 파일이 보는 성질(미사용 금액 축의 거부)은 그대로다.
+  "일반 비급여 통원": (e = {}) => ({ cause: "disease", coverage: "non_benefit", visit: "outpatient", amounts: [AMT], priorAnnualOutpatientVisits: 0, ...e }),
   "일반 급여": (e = {}) => ({ cause: "disease", coverage: "benefit", visit: "outpatient", tier: "clinic", amounts: [AMT], ...e }),
-  "일반 비급여 입원": (e = {}) => ({ cause: "disease", coverage: "non_benefit", visit: "inpatient", tier: "hospital", amounts: [AMT], ...e }),
-  "특약 도수치료": (e = {}) => ({ cause: "disease", coverage: "non_benefit", visit: "outpatient", tier: "clinic", rider: "manual_therapy", amounts: [AMT], priorAnnualRiderVisits: 0, ...e }),
-  "특약 주사료": (e = {}) => ({ cause: "disease", coverage: "non_benefit", visit: "outpatient", tier: "clinic", rider: "injection", amounts: [AMT], priorAnnualRiderVisits: 0, ...e }),
-  "특약 MRI": (e = {}) => ({ cause: "disease", coverage: "non_benefit", visit: "outpatient", tier: "clinic", rider: "mri", amounts: [AMT], ...e }),
+  "일반 비급여 입원": (e = {}) => ({ cause: "disease", coverage: "non_benefit", visit: "inpatient", amounts: [AMT], ...e }),
+  "특약 도수치료": (e = {}) => ({ cause: "disease", coverage: "non_benefit", visit: "outpatient", rider: "manual_therapy", amounts: [AMT], priorAnnualRiderVisits: 0, ...e }),
+  "특약 주사료": (e = {}) => ({ cause: "disease", coverage: "non_benefit", visit: "outpatient", rider: "injection", amounts: [AMT], priorAnnualRiderVisits: 0, ...e }),
+  "특약 MRI": (e = {}) => ({ cause: "disease", coverage: "non_benefit", visit: "outpatient", rider: "mri", amounts: [AMT], ...e }),
 };
 const GEN21 = ["일반 비급여 통원", "일반 급여", "일반 비급여 입원"];
 const RID21 = ["특약 도수치료", "특약 주사료", "특약 MRI"];
@@ -99,7 +102,10 @@ const G26M: Record<string, (e?: Any) => Any> = {
   // ⚠ 픽스처 갱신(G-31). 종전에는 `nhisCoinsuranceRate: 0.4`를 실었는데, 급여 **입원**은
   //   이 축을 소비하지 않는다(당시에는 읽고 무시됐다). G-31이 그 조합을 거부하므로 픽스처에서
   //   뺀다 — 이 절이 고정하려는 것은 급여 묶음의 **금액 축** 계약이라 의미는 그대로다.
-  "급여 입원": (e = {}) => ({ cause: "disease", coverage: "benefit", visit: "inpatient", tier: "hospital", amounts: [AMT], ...e }),
+  // ⚠ G-34B: 5세대 다회 **급여 입원**은 종별을 읽지 않는다(자기부담률을 약관이 20%로 정한다).
+  //   픽스처에서 `tier`를 뺐다 — 종전에는 실어도 읽고 무시됐고 이제는 거부된다.
+  //   급여 **통원**은 종별을 소비하므로 그쪽 픽스처는 그대로 둔다.
+  "급여 입원": (e = {}) => ({ cause: "disease", coverage: "benefit", visit: "inpatient", amounts: [AMT], ...e }),
 };
 // ── 5세대 별도 보장종목 4경로 + 일반 전환 3경로 + 상급병실료 ─────────
 const G26I: Record<string, (e?: Any) => Any> = {

@@ -56,8 +56,11 @@ const nbIn = (e: Record<string, unknown> = {}) => ({ cause: "injury", coverage: 
 const nbOut = (e: Record<string, unknown> = {}) => ({ cause: "injury", coverage: "non_benefit",
   visit: "outpatient", severity: "critical", nonBenefitItem: "general", amounts: [OUT_AMT],
   priorAnnualOutpatientVisits: 0, ...e });
+// ⚠ G-34B: 5세대 다회 **급여 입원**은 종별을 읽지 않는다(약관이 자기부담률을 20%로 정한다).
+//   픽스처에서 `tier`를 뺐다 — 종전에는 실어도 읽고 무시됐고 이제는 거부되며, 그 거부가
+//   이 파일이 보려는 안내(priorAnnualPaid·별도 보장종목 전용 축)를 가려 버린다.
 const ben = (e: Record<string, unknown> = {}) => ({ cause: "injury", coverage: "benefit",
-  visit: "inpatient", tier: "hospital", amounts: [BEN_AMT], ...e });
+  visit: "inpatient", amounts: [BEN_AMT], ...e });
 
 const SPECIAL_ONLY = ["priorAnnualInpatientDeductible", "priorAnnualCoveredCount",
   "priorAnnualTreatmentActCount", "approvedThroughVisit", "injectionPurpose",
@@ -238,15 +241,22 @@ console.log("\n[G-14C] 8. 소스 계약");
   //   + E군 비급여의 본인부담률 1(G-31) + 중증도 열거값 검증 1(G-32) = 17.
   //   ⚠ 계약 갱신(G-20·G-21 → G-30 → G-31 → G-32). 요지("받은 값을 싣는 안내는 예외 없이 전부
   //     안전 표시를 쓴다")는 그대로이고, 바뀐 것은 그 안내의 **개수**뿐이다.
+  // ⚠ G-34B가 `MULTI2026_UNUSED_KEYS`와 급여 입원 종별 거부를 더하면서 안내가 17 → 19곳이
+  //   됐다. 지키는 성질은 개수가 아니라 "받은 값을 안내에 실을 때는 지역 `showValue`를
+  //   쓴다"이므로 개수만 실측값으로 맞춘다.
   check("'받은 값' 안내가 모두 안전 표시를 쓴다",
-    (body.match(/받은 값: \$\{showValue\(/g) ?? []).length === 17,
+    (body.match(/받은 값: \$\{showValue\(/g) ?? []).length === 19,
     String((body.match(/받은 값: \$\{showValue\(/g) ?? []).length));
   check("B군 키 목록이 9종", (body.match(/const SPECIAL_ITEM_ONLY_KEYS = \[[\s\S]*?\] as const;/) ?? [""])[0]
     .split('"').filter((x) => x.startsWith("prior") || ["approvedThroughVisit", "injectionPurpose", "item", "lines", "route", "stays"].includes(x)).length === 9);
   check("B군 목록에 priorAnnualDeductible을 넣지 않는다",
     !/const SPECIAL_ITEM_ONLY_KEYS = \[[\s\S]*?"priorAnnualDeductible"[\s\S]*?\] as const;/.test(body));
+  // ⚠ 종전에는 `UNUSED_KEYS`라는 **이름이 등장하지 않는다**로 잡았다. G-34B가 이 파일에
+  //   자기 목록 `MULTI2026_UNUSED_KEYS`를 두면서 그 이름이 등장한다. 지키려던 성질은
+  //   "`roomCharge2026`의 목록을 **가져다 쓰지 않는다**(두 진입점이 목록을 공유하지 않는다)"
+  //   이므로, import와 그 상수 이름을 직접 잡는 형태로 바꾼다.
   check("roomCharge의 UNUSED_KEYS와 목록을 공유하지 않는다",
-    !/UNUSED_KEYS/.test(body));
+    !/from "\.\/roomCharge2026"/.test(body) && !/\bconst UNUSED_KEYS\b/.test(body));
   check("C군 소비 조건이 calc2026과 같은 식",
     /severity === undefined \|\| severity === "critical"/.test(body)
     && /nb\?\.visit === "inpatient"/.test(body)

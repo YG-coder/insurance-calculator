@@ -193,8 +193,12 @@ console.log("\n[G-19] 5. 소스 계약");
   const files: [string, string, number][] = [
     // ⚠ 계약 갱신(G-30): 미사용 금액 축 stray 안내가 한 곳 늘어 6 → 7이다.
     //   요지("받은 값을 싣는 안내는 예외 없이 전부 안전 표시를 쓴다")는 그대로다.
-    ["4세대", "src/lib/insurance/engine/multiClaim2021.ts", 7],
-    ["2·3세대", "src/lib/insurance/engine/multiClaim.ts", 4],
+    // ⚠ G-34B에서 두 엔진에 stray 목록과 경로별 거부가 들어가면서 안내 개수가 늘었다
+    //   (4세대 7 → 9, 2·3세대 4 → 7). 이 검사가 지키는 성질은 개수가 아니라 "받은 값을
+    //   안내에 실을 때는 반드시 지역 `showValue`를 쓴다"이므로, 개수만 실측값으로 맞추고
+    //   나머지 검사(몸통 동일·JSON.stringify 직접 사용 금지·showValue 안에만 존재)는 그대로다.
+    ["4세대", "src/lib/insurance/engine/multiClaim2021.ts", 9],
+    ["2·3세대", "src/lib/insurance/engine/multiClaim.ts", 7],
   ];
   for (const [gen, path, n] of files) {
     const raw = readFileSync(path, "utf8");

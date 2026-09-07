@@ -60,11 +60,11 @@ for (const item of BLOCKED) {
   const label = GEN2026_NON_BENEFIT_ITEM_LABEL[item];
   for (const severity of ["critical", "non_critical"] as const) {
     for (const visit of ["inpatient", "outpatient"] as const) {
-      const r = calc2026({ amount: 1_000_000, coverage: "non_benefit", visit, severity, nonBenefitItem: item, tier: "hospital", priorAnnualDeductible: 4_800_000 });
+      const r = calc2026({ amount: 1_000_000, coverage: "non_benefit", visit, severity, nonBenefitItem: item, priorAnnualDeductible: 4_800_000 });
       check(`단건 ${label}/${severity}/${visit}: 숫자 반환 없이 차단`, noNumbers(r), JSON.stringify(r));
       check(`단건 ${label}/${severity}/${visit}: 항목명을 밝힘`, r.notes.some((n) => n.includes(label)), JSON.stringify(r.notes));
 
-      const m = calculateMany2026({ cause: "injury", coverage: "non_benefit", visit, severity, nonBenefitItem: item, tier: "hospital", amounts: [1_000_000, 1_000_000] });
+      const m = calculateMany2026({ cause: "injury", coverage: "non_benefit", visit, severity, nonBenefitItem: item, amounts: [1_000_000, 1_000_000] });
       check(`다회 ${label}/${severity}/${visit}: 숫자 반환 없이 차단`, noNumbers(m), JSON.stringify(m));
     }
   }

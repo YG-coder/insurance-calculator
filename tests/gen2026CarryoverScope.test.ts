@@ -185,7 +185,7 @@ console.log("\n[구현 상태] 세 사실을 분리한다");
 console.log("\n[불변] 이중 해석 차단 정책");
 {
   const crit = (amounts: number[], v: number) => calculateMany2026({
-    cause: "disease", coverage: "non_benefit", visit: "outpatient", tier: "clinic",
+    cause: "disease", coverage: "non_benefit", visit: "outpatient",
     severity: "critical", nonBenefitItem: "general", amounts,
     priorAnnualOutpatientVisits: v } as unknown as Gen2026MultiClaimInput);
   check("중증: 지급 0원 행이 결과를 가르면 여전히 전체 차단",
@@ -193,7 +193,7 @@ console.log("\n[불변] 이중 해석 차단 정책");
   check("중증: 갈리지 않으면 종전대로 계산",
     crit([20_000, 500_000], 0).status === "OK");
   const nc = (amounts: number[], d: number) => calculateMany2026({
-    cause: "disease", coverage: "non_benefit", visit: "outpatient", tier: "clinic",
+    cause: "disease", coverage: "non_benefit", visit: "outpatient",
     severity: "non_critical", nonBenefitItem: "general", amounts,
     priorAnnualOutpatientDays: d } as unknown as Gen2026MultiClaimInput);
   check("비중증: 지급 0원 행이 결과를 가르면 여전히 전체 차단",

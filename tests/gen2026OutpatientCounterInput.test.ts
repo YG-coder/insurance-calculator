@@ -36,7 +36,7 @@ type Extra = Partial<Record<string, unknown>>;
 /** 직접 경로 — 중증 일반 비급여 통원. OMIT은 키 자체를 넣지 않는다(미입력). */
 const direct = (amounts: number[], visits: unknown, extra: Extra = {}) =>
   calculateMany2026({
-    cause: "disease", coverage: "non_benefit", visit: "outpatient", tier: "clinic",
+    cause: "disease", coverage: "non_benefit", visit: "outpatient",
     severity: "critical", nonBenefitItem: "general", amounts,
     ...(visits === "OMIT" ? {} : { priorAnnualOutpatientVisits: visits }), ...extra,
   } as unknown as Gen2026MultiClaimInput);
@@ -44,7 +44,9 @@ const direct = (amounts: number[], visits: unknown, extra: Extra = {}) =>
 const inj = (amounts: number[], visits: unknown, extra: Extra = {}) =>
   calculateGen2026Item({
     route: "general", coverage: "non_benefit", severity: "critical", item: "injection",
-    injectionPurpose: "anticancer", cause: "disease", visit: "outpatient", tier: "clinic", amounts,
+    // ⚠ G-34C: 일반 복귀 **통원** 경로에서 `tier`를 뺐다 — 5세대 비급여의 종별은 입원만
+    //   가르므로 통원에 실으면 이제 거부된다(종전에는 읽고 무시됐다).
+    injectionPurpose: "anticancer", cause: "disease", visit: "outpatient", amounts,
     ...(visits === "OMIT" ? {} : { priorAnnualOutpatientVisits: visits }), ...extra,
   } as unknown as Gen2026ItemClaimInput) as MultiClaimResult;
 const PATHS = [["직접", direct], ["예외 주사 전환", inj]] as const;

@@ -103,16 +103,23 @@ for (const g of ["2009", "2017"] as const) for (const pl of ["standard", "select
   OK_PATHS.push([g, `${g}·${cov}·통원·${pl}`, { amount: A, coverage: cov, visit: "outpatient", plan: pl, facility: "clinic" }]);
   OK_PATHS.push([g, `${g}·${cov}·입원·${pl}`, { amount: A, coverage: cov, visit: "inpatient", plan: pl }]);
 }
-for (const cov of ["benefit", "non_benefit"]) for (const t of ["clinic", "hospital"]) {
-  OK_PATHS.push(["2021", `2021·${cov}·통원·${t}`, { amount: A, coverage: cov, visit: "outpatient", tier: t }]);
-  OK_PATHS.push(["2021", `2021·${cov}·입원·${t}`, { amount: A, coverage: cov, visit: "inpatient", tier: t }]);
+// ⚠ G-34C: 4세대에서 `tier`를 싣는 자리는 **급여 통원**뿐이다. 종전에는 네 경로 전부에
+//   실었고(판단 보류), 이제는 나머지 셋에서 `calc2021`이 거부한다. 기준선이 OK인 입력만
+//   이 표에 남아야 아래 스윕이 "실려 있을 때 거부되는가"를 볼 수 있다.
+for (const cov of ["benefit", "non_benefit"]) {
+  for (const t of ["clinic", "hospital"]) {
+    if (cov === "benefit") OK_PATHS.push(["2021", `2021·${cov}·통원·${t}`, { amount: A, coverage: cov, visit: "outpatient", tier: t }]);
+  }
+  if (cov === "non_benefit") OK_PATHS.push(["2021", `2021·${cov}·통원`, { amount: A, coverage: cov, visit: "outpatient" }]);
+  OK_PATHS.push(["2021", `2021·${cov}·입원`, { amount: A, coverage: cov, visit: "inpatient" }]);
 }
 for (const sev of ["critical", "non_critical"]) {
   OK_PATHS.push(["2026", `2026·비급여·${sev}·통원`, { amount: A, coverage: "non_benefit", visit: "outpatient", severity: sev, nonBenefitItem: "general" }]);
   OK_PATHS.push(["2026", `2026·비급여·${sev}·입원`, { amount: A, coverage: "non_benefit", visit: "inpatient", severity: sev, nonBenefitItem: "general", tier: "hospital" }]);
 }
 OK_PATHS.push(["2026", "2026·급여·통원", { amount: A, coverage: "benefit", visit: "outpatient", tier: "clinic", nhisCoinsuranceRate: 0.2 }]);
-OK_PATHS.push(["2026", "2026·급여·입원", { amount: A, coverage: "benefit", visit: "inpatient", tier: "clinic" }]);
+// ⚠ G-34C: 5세대 급여 **입원**은 종별을 읽지 않는다 — 기준 입력에서 뺐다.
+OK_PATHS.push(["2026", "2026·급여·입원", { amount: A, coverage: "benefit", visit: "inpatient" }]);
 
 const f = (g: Generation, i: Any) => wrap(() => calculate(g, i as unknown as ClaimInput));
 
@@ -184,7 +191,9 @@ console.log("\n[G-34A] 4. 값 격자 — undefined만 미제공과 같고, 나�
 {
   const cases: [Generation, Any, string][] = [
     ["2009", { amount: A, coverage: "benefit", visit: "outpatient", plan: "standard", facility: "clinic" }, "cause"],
-    ["2021", { amount: A, coverage: "non_benefit", visit: "inpatient", tier: "clinic" }, "plan"],
+    // ⚠ G-34C: 비급여 입원은 `tier`를 쓰지 않으므로 기준 입력에서 뺐다 — 종전에는 실어도
+    //   읽고 무시됐고(판단 보류) 이제는 `calc2021`이 거부한다.
+    ["2021", { amount: A, coverage: "non_benefit", visit: "inpatient" }, "plan"],
     ["2026", { amount: A, coverage: "non_benefit", visit: "outpatient", severity: "critical", nonBenefitItem: "general" }, "lines"],
   ];
   for (const [gen, base, key] of cases) {
@@ -250,7 +259,10 @@ console.log("\n[G-34A] 6. 읽는 계약 — 각 축을 한 번만, 선행 prefli
   }
 }
 
-console.log("\n[G-34A] 7. 분류표 — 모집단 16경로군 × 34축 = 544자리, 분류 합계가 모집단과 같다");
+// ⚠ 제목의 축 수를 갱신했다(34 → 35 · 544 → 560). G-34B가 `generation`을 축 목록에 더했다 —
+//   결과 필드이지만 입력 객체에 실릴 수 있고, 라우터가 16경로군 전부에서 거부한다(cat5). 아래
+//   `check`들이 이미 35축·560자리를 세고 있었는데 제목만 옛 수를 달고 있었다.
+console.log("\n[G-34A] 7. 분류표 — 모집단 16경로군 × 35축 = 560자리, 분류 합계가 모집단과 같다");
 {
   // ⚠ 미리 제외하는 축은 없다. `amount`·`coverage`·`visit`처럼 어느 세대에서도 막지 않는 축도
   //   표에 남긴다 — 총수와 분류 합계가 맞아야 검증할 수 있다.
@@ -288,11 +300,14 @@ console.log("\n[G-34A] 7. 분류표 — 모집단 16경로군 × 34축 = 544자�
   const SEMANTIC = new Set(GROUPS.filter((g) => g.startsWith("2009") || g.startsWith("2017")).map((g) => `${g}|coverage`));
   /** cat3 — 문서·API 계약이 공용 통로임을 명시한 자리. 현재 없다. */
   const COMMON_CHANNEL = new Set<string>();
-  /** cat6 — 조용히 버려지지만 확정에 **추가 결정**이 필요한 자리. */
-  const HELD = new Set([
-    "2021|benefit|inpatient|tier", "2021|non_benefit|outpatient|tier", "2021|non_benefit|inpatient|tier",
-    "2026|benefit|inpatient|tier", "2026|non_benefit|outpatient|tier",
-  ]);
+  /**
+   * cat6 — 조용히 버려지지만 확정에 **추가 결정**이 필요한 자리.
+   * ⚠ G-34C에서 **0이 됐다.** 종전 5자리(2021 tier 3 · 2026 tier 2)는 직접 진입점 재분류에서
+   *   확정 stray로 닫혔고, 화면(`HealthCalc.tsx`·`HealthCalc5th.tsx`)의 전달도 함께 정리했다.
+   *   판정 자리는 `calc2021`·`calc2026`이다 — 라우터는 `visit`으로만 경로를 나눠 `coverage`까지
+   *   보는 조건을 쓸 수 없고, 같은 판정을 두 곳에서 하면 안내가 갈린다.
+   */
+  const HELD = new Set<string>();
   const catOf = (grp: string, ax: string): Cat =>
     (CONSUMED[grp] ?? []).includes(ax) ? 1
       : SEMANTIC.has(`${grp}|${ax}`) ? 2
@@ -306,8 +321,8 @@ console.log("\n[G-34A] 7. 분류표 — 모집단 16경로군 × 34축 = 544자�
   check(`cat2 의미상 허용 ${count[2]}`, count[2] === 8, String(count[2]));
   check(`cat3 공통 통로 ${count[3]} — 근거가 있는 자리는 아직 없다`, count[3] === 0, String(count[3]));
   check(`cat4 선행 차단 미도달 ${count[4]}`, count[4] === 0, String(count[4]));
-  check(`cat5 확정 stray ${count[5]}`, count[5] === 460, String(count[5]));
-  check(`cat6 판단 보류 ${count[6]}`, count[6] === 5, String(count[6]));
+  check(`cat5 확정 stray ${count[5]}`, count[5] === 465, String(count[5]));
+  check(`cat6 판단 보류 ${count[6]} — G-34C에서 0이 됐다`, count[6] === 0, String(count[6]));
 
   // 표와 구현이 어긋나면 여기서 잡힌다 — cat5만 거부되고 나머지는 통과해야 한다.
   const GBASE: Record<string, Any> = {
@@ -316,14 +331,17 @@ console.log("\n[G-34A] 7. 분류표 — 모집단 16경로군 × 34축 = 544자�
     "2009|non_benefit|outpatient": { amount: A, coverage: "non_benefit", visit: "outpatient", plan: "standard", facility: "clinic" },
     "2009|non_benefit|inpatient": { amount: 15_000_000, coverage: "non_benefit", visit: "inpatient", plan: "standard" },
     "2021|benefit|outpatient": { amount: A, coverage: "benefit", visit: "outpatient", tier: "clinic" },
-    "2021|benefit|inpatient": { amount: A, coverage: "benefit", visit: "inpatient", tier: "clinic" },
-    "2021|non_benefit|outpatient": { amount: A, coverage: "non_benefit", visit: "outpatient", tier: "clinic" },
-    "2021|non_benefit|inpatient": { amount: A, coverage: "non_benefit", visit: "inpatient", tier: "clinic" },
+    "2021|benefit|inpatient": { amount: A, coverage: "benefit", visit: "inpatient" },
+    "2021|non_benefit|outpatient": { amount: A, coverage: "non_benefit", visit: "outpatient" },
+    "2021|non_benefit|inpatient": { amount: A, coverage: "non_benefit", visit: "inpatient" },
     "2026|benefit|outpatient": { amount: A, coverage: "benefit", visit: "outpatient", tier: "clinic", nhisCoinsuranceRate: 0.2 },
-    "2026|benefit|inpatient": { amount: A, coverage: "benefit", visit: "inpatient", tier: "clinic" },
+    "2026|benefit|inpatient": { amount: A, coverage: "benefit", visit: "inpatient" },
     "2026|non_benefit|outpatient": { amount: A, coverage: "non_benefit", visit: "outpatient", severity: "critical", nonBenefitItem: "general" },
     "2026|non_benefit|inpatient": { amount: A, coverage: "non_benefit", visit: "inpatient", severity: "critical", nonBenefitItem: "general", tier: "hospital" },
   };
+  // ⚠ G-34C: `tier`를 쓰지 않는 4·5세대 경로의 기준 입력에서 `tier`를 뺐다. 종전에는 실어도
+  //   읽고 무시됐고(판단 보류 5자리) 이제는 세대 엔진이 거부한다. 남긴 자리는 실제 소비뿐이다 —
+  //   2021 급여 통원 · 2026 급여 통원 · 2026 비급여 입원.
   for (const g of Object.keys(GBASE).filter((k) => k.startsWith("2009"))) GBASE[g.replace("2009", "2017")] = { ...GBASE[g] };
   const PROBE_VAL: Record<string, unknown> = { ...NORMAL, generation: "2009", amount: 700_000, nhisCoinsuranceRate: 0.2,
     severity: "non_critical", nonBenefitItem: "general", priorAnnualDeductible: 1_000, perVisitCoverageLimit: 200_000 };
@@ -336,46 +354,69 @@ console.log("\n[G-34A] 7. 분류표 — 모집단 16경로군 × 34축 = 544자�
       //   값을 그대로 실어 "실려 있을 때 거부되는가"만 본다.
       const val = (ax === "coverage" || ax === "visit") ? base[ax] : PROBE_VAL[ax];
       const r = f(gen, { ...base, [ax]: val });
-      const rejected = statusOf(r) === "PENDING_UNVERIFIED" && note0(r).startsWith(`${gen}세대: `);
+      // ⚠ `tier`의 거부는 **세대 엔진**이 낸다(G-34C) — 라우터는 `coverage`까지 보는 조건을
+      //   쓸 수 없어 세대 소유로 넘긴다. 그래서 두 형식을 모두 거부로 인정한다. 나머지 축은
+      //   종전대로 라우터 형식(`{gen}세대: …`)이어야 한다 — 세대 엔진이 라우터를 앞지르면
+      //   여기서 잡힌다.
+      const note = note0(r);
+      const rejected = statusOf(r) === "PENDING_UNVERIFIED"
+        && (note.startsWith(`${gen}세대: `) || (ax === "tier" && note.includes("의료기관 종별(tier)")));
       if (rejected !== (catOf(grp, ax) === 5)) { bad++; if (first.length < 3) first.push(`${ax}(cat${catOf(grp, ax)}→${rejected ? "거부" : "통과"})`); }
     }
     check(`${grp}: 34축 분류와 구현 일치`, bad === 0, first.join(", "));
   }
 }
 
-console.log("\n[G-34A] 7b. 판단 보류 5자리 — 막지 않되 근거를 코드에 남긴다");
+console.log("\n[G-34A/34C] 7b. 판단 보류 5자리 — G-34C에서 전부 확정 stray로 닫혔다");
 {
-  // 보류는 "허용"이 아니다. 지금은 통과시키되, 무엇이 정해져야 확정되는지 코드에 적는다.
+  // ⚠ 종전 이 절은 "보류이므로 **막지 않는다**"를 고정했다. G-34C가 직접 진입점을 재분류해
+  //   다섯 자리를 확정 stray로 닫았고, 화면의 전달도 함께 정리했으므로 계약이 뒤집혔다.
+  //   그래서 기대를 지우지 않고 **반대 방향으로 교체**한다 — 이제 막혀야 한다.
+  //   ⚠ 거부 안내는 **세대 엔진**이 낸다. 라우터는 `visit`으로만 경로를 나눠 `coverage`까지
+  //     보는 조건을 쓸 수 없어 `tier`를 세대 소유로 넘긴다(engine.ts 소유권 표 주석).
   for (const [cov, v] of [["benefit", "inpatient"], ["non_benefit", "outpatient"], ["non_benefit", "inpatient"]] as const) {
     const r = f("2021", { amount: A, coverage: cov, visit: v, tier: "hospital" });
-    check(`2021 ${cov}·${v}: tier 보류(막지 않음)`, statusOf(r) === "OK", statusOf(r));
+    check(`2021 ${cov}·${v}: tier 거부(G-34C)`,
+      statusOf(r) === "PENDING_UNVERIFIED" && note0(r).includes("의료기관 종별(tier)"), note0(r).slice(0, 40));
   }
   const held26 = [
     f("2026", { amount: A, coverage: "benefit", visit: "inpatient", tier: "hospital" }),
     f("2026", { amount: A, coverage: "non_benefit", visit: "outpatient", severity: "critical", nonBenefitItem: "general", tier: "clinic" }),
   ];
-  held26.forEach((r, i) => check(`2026 보류 tier ${i + 1}: 막지 않음`, statusOf(r) === "OK", statusOf(r)));
+  held26.forEach((r, i) => check(`2026 tier ${i + 1}: 거부(G-34C)`,
+    statusOf(r) === "PENDING_UNVERIFIED" && note0(r).includes("의료기관 종별(tier)"), note0(r).slice(0, 40)));
   const src = readFileSync("src/lib/insurance/engine/engine.ts", "utf8");
   check("보류 칸의 이름이 '공통 통로'가 아니다", /readonly held: readonly RouterAxis\[\];/.test(src) && !/commonChannel/.test(src));
   check("UI 편의를 허용 근거로 쓰지 않는다고 적혀 있다",
     src.includes("UI 구현 편의**이지, 나머지 경로에서 조용히 버리는 것이 공개"));
   check("근거 있는 공통 통로가 아직 없다고 적혀 있다", src.includes("현재 **한 자리도 없다.**"));
-  check("2021 tier 보류의 확정 조건이 적혀 있다", src.includes("입력 구성을 함께 바꾸는 결정**이 있어야 확정된다"));
-  check("2026 tier 보류의 확정 조건이 적혀 있다", src.includes("확정 지점이 다른 파일"));
+  // ⚠ 종전 두 검사는 "보류의 **확정 조건**이 적혀 있다"였다. 확정됐으므로 그 문장은 사라졌고,
+  //   대신 **어디서 확정됐고 왜 판정을 세대 엔진에 맡기는지**가 적혀 있어야 한다.
+  check("2021 tier가 확정됐고 판정 자리가 적혀 있다", src.includes("그 3자리는 **확정 stray**로 닫혔고, 판정 자리는 `calc2021`이다"));
+  check("2026 tier가 확정됐고 판정 자리가 적혀 있다", src.includes("두 자리는 **확정\n  //   stray**로 닫혔고 판정 자리는 `calc2026`이다"));
+  // ⚠ 주석에 종전 값(`held: ["tier"]`)을 인용하고 있으므로 **선언 줄**만 본다.
+  check("보류 칸이 비어 있다 — 세 표 모두", !/^\s*held: \["tier"\]/m.test(src) && (src.match(/^\s*held: \[\],$/gm) ?? []).length === 3);
   const ui = readFileSync("src/components/calculators/HealthCalc.tsx", "utf8");
-  check("2021 화면이 네 경로 모두에 tier를 싣는 것은 사실이다(허용 근거는 아니다)",
-    /calculate\("2021", \{ amount: parsed, coverage, visit, tier \}\)/.test(ui));
+  // ⚠ 종전에는 "네 경로 모두에 싣는다(허용 근거는 아니다)"를 사실로 고정했다. G-34C에서
+  //   화면이 급여 통원에만 싣도록 바꿨으므로 그 사실도 바뀐다.
+  check("2021 화면이 급여 통원에만 tier를 싣는다",
+    ui.includes('tier: coverage === "benefit" && visit === "outpatient" ? tier : undefined'));
 }
 
 console.log("\n[G-34A] 8. 세대별 직접 진입점은 손대지 않는다");
 {
-  // 라우터가 막는 축을 직접 진입점에 그대로 넣으면 **종전대로** 계산된다(G-34C의 대상).
+  // ⚠ 종전 이 절은 "라우터가 막는 축을 직접 진입점에 넣으면 **종전대로 계산된다**"를 고정했다
+  //   — 그때는 그것이 사실이었고, 주석에 "G-34C의 대상"이라고 적어 두었다. G-34C가 세 진입점의
+  //   소유권을 닫았으므로 같은 자리에서 **거부**가 맞다. 기대를 지우지 않고 뒤집는다.
   const std = calcStandardized("2009", { amount: A, coverage: "benefit", visit: "outpatient", plan: "standard", facility: "clinic", ...( { cause: "injury" } as Any) } as unknown as ClaimInput);
-  check("calcStandardized: cause를 넣어도 종전대로 OK", std.status === "OK", std.status);
+  check("calcStandardized: cause → 거부(G-34C)", std.status === "PENDING_UNVERIFIED", std.status);
   const g21 = calc2021({ amount: A, coverage: "benefit", visit: "outpatient", tier: "clinic", ...({ plan: "standard" } as Any) } as unknown as ClaimInput);
-  check("calc2021: plan을 넣어도 종전대로 OK", g21.status === "OK", g21.status);
+  check("calc2021: plan → 거부(G-34C)", g21.status === "PENDING_UNVERIFIED", g21.status);
   const g26 = calc2026({ amount: A, coverage: "non_benefit", visit: "outpatient", severity: "critical", nonBenefitItem: "general", ...({ item: "mri" } as Any) } as never);
-  check("calc2026: item을 넣어도 종전대로 OK", g26.status === "OK", g26.status);
+  check("calc2026: item → 거부(G-34C)", g26.status === "PENDING_UNVERIFIED", g26.status);
+  // 라우터를 통과하는 정상 입력은 투영 덕분에 그대로 계산된다.
+  check("라우터 2009 정상 계산 무회귀", calculate("2009", { amount: A, coverage: "benefit", visit: "outpatient", plan: "standard", facility: "clinic" }).status === "OK");
+  check("라우터 2021 정상 계산 무회귀", calculate("2021", { amount: A, coverage: "benefit", visit: "outpatient", tier: "clinic" }).status === "OK");
 }
 
 console.log("\n[G-34A] 9. 소비 축과 산식은 그대로다");
@@ -384,7 +425,8 @@ console.log("\n[G-34A] 9. 소비 축과 산식은 그대로다");
   check("2009 표준형 통원 30만원 자기부담 60,000원", out.status === "OK" && out.ownPay === 60_000, String(out.ownPay));
   const inp = calculate("2017", { amount: 15_000_000, coverage: "benefit", visit: "inpatient", plan: "standard", priorAnnualPaid: 500_000 });
   check("2017 표준형 입원 1500만 + 기납부 50만 → 잔여 150만", inp.status === "OK" && inp.ownPay === 1_500_000, String(inp.ownPay));
-  const g21 = calculate("2021", { amount: A, coverage: "non_benefit", visit: "outpatient", tier: "clinic" });
+  // ⚠ G-34C: 비급여 통원은 종별을 쓰지 않으므로 기준 입력에서 뺐다. 산식은 그대로라 값도 같다.
+  const g21 = calculate("2021", { amount: A, coverage: "non_benefit", visit: "outpatient" });
   // 4세대 비급여 통원 30만원의 기준선 값(`5ea987c`)과 같다 — 이 커밋은 산식을 건드리지 않는다.
   check("2021 비급여 통원 30만원 종전 결과", g21.status === "OK" && g21.ownPay === 100_000, String(g21.ownPay));
   const g26 = calculate("2026", { amount: A, coverage: "non_benefit", visit: "outpatient", severity: "critical", nonBenefitItem: "general" } as never);
@@ -399,8 +441,12 @@ console.log("\n[G-34A] 10. 구조 — 소유권 표가 하나이고, 목록과 �
     /const OWNERSHIP: Record<Generation, Ownership> = \{/.test(code));
   check("거부 목록이 소유권 표에서 파생된다(따로 적지 않는다)",
     /return ROUTER_AXES\.filter\(\(k\) => !owned\.has\(k\)\);/.test(code));
+  // ⚠ G-34C: 경로 판정이 쓰는 `visit`은 **세대 엔진이 이미 읽은 값**이다(투영이 메모이제이션해
+  //   함께 내보낸다). 원본을 다시 읽으면 한 호출에서 같은 필드를 두 번 읽게 된다. 판정식의
+  //   모양("통원이면 통원 목록")은 종전과 같다.
   check("경로 판정식이 세대 엔진의 소비 분기와 같은 모양이다",
-    /input\.visit === "outpatient" \? byVisit\.outpatient : byVisit\.inpatient;/.test(code));
+    /visit === "outpatient" \? byVisit\.outpatient : byVisit\.inpatient;/.test(code)
+    && /function unusedKeysOf\(generation: Generation, visit: unknown\)/.test(code));
   check("타입 봉인이 같은 표에서 파생된다",
     /type ForeignAxis = \(typeof OTHER_ENTRY_AXES\)\[number\] \| \(typeof CONTAINER_AXES\)\[number\];/.test(code));
   check("경로별 축은 타입으로 닫지 않은 이유가 기록돼 있다",

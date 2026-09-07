@@ -96,7 +96,9 @@ const GEN21 = ["일반 비급여 통원", "일반 급여", "일반 비급여 입
 const RID21 = ["특약 도수치료", "특약 주사료", "특약 MRI"];
 // ── 5세대 다회 4경로 ─────────────────────────────────────────────────
 const G26M: Record<string, (e?: Any) => Any> = {
-  "비급여 통원": (e = {}) => ({ cause: "disease", coverage: "non_benefit", visit: "outpatient", tier: "clinic", severity: "non_critical", nonBenefitItem: "general", amounts: [AMT], priorAnnualOutpatientDays: 0, ...e }),
+  // ⚠ G-34C: 5세대 비급여 **통원**은 종별을 쓰지 않는다(종별이 갈리는 곳은 입원뿐). 픽스처에서
+  //   `tier`를 뺐다 — 종전에는 실어도 읽고 무시됐고 이제는 거부된다.
+  "비급여 통원": (e = {}) => ({ cause: "disease", coverage: "non_benefit", visit: "outpatient", severity: "non_critical", nonBenefitItem: "general", amounts: [AMT], priorAnnualOutpatientDays: 0, ...e }),
   "비급여 입원": (e = {}) => ({ cause: "disease", coverage: "non_benefit", visit: "inpatient", tier: "hospital", severity: "critical", nonBenefitItem: "general", amounts: [BIG], ...e }),
   "급여 통원": (e = {}) => ({ cause: "disease", coverage: "benefit", visit: "outpatient", tier: "clinic", nhisCoinsuranceRate: 0.4, amounts: [AMT], ...e }),
   // ⚠ 픽스처 갱신(G-31). 종전에는 `nhisCoinsuranceRate: 0.4`를 실었는데, 급여 **입원**은
@@ -540,10 +542,13 @@ console.log("\n[G-30] 11b. 단건 엔진(calc2026)의 미사용 금액 축");
   const single = (e: unknown) => wrap(() => calc2026(e as never));
   const isPending = (x: Caught) => !threw(x) && x.r.status === "PENDING_UNVERIFIED"
     && x.r.ownPay === null && x.r.insurancePay === null;
-  const NB_OUT = { amount: 1_000_000, coverage: "non_benefit", visit: "outpatient", tier: "clinic", severity: "non_critical", nonBenefitItem: "general" };
+  // ⚠ G-34C: 5세대 단건에서 `tier`를 소유하는 경로는 **급여 통원**과 **비급여 입원**뿐이다.
+  //   비급여 통원·급여 입원 픽스처에서 `tier`를 뺐다 — 종전에는 실어도 읽히지 않았고(조용한
+  //   폐기) 이제는 거부된다. 이 절이 지키려는 성질(금액 축의 소비·거부)은 그대로다.
+  const NB_OUT = { amount: 1_000_000, coverage: "non_benefit", visit: "outpatient", severity: "non_critical", nonBenefitItem: "general" };
   const NB_IN = { amount: 3_000_000, coverage: "non_benefit", visit: "inpatient", tier: "hospital", severity: "critical", nonBenefitItem: "general" };
   const BF_OUT = { amount: 1_000_000, coverage: "benefit", visit: "outpatient", tier: "clinic", nhisCoinsuranceRate: 0.4 };
-  const BF_IN = { amount: 1_000_000, coverage: "benefit", visit: "inpatient", tier: "hospital" };
+  const BF_IN = { amount: 1_000_000, coverage: "benefit", visit: "inpatient" };
   check("통원에서는 종전대로 소비한다", statusOf(single({ ...NB_OUT, perVisitCoverageLimit: 200_000 })) === "OK"
     && shape(single({ ...NB_OUT, perVisitCoverageLimit: 200_000 })) !== shape(single(NB_OUT)));
   for (const [l, base] of [["비급여 입원", NB_IN], ["급여 통원", BF_OUT], ["급여 입원", BF_IN]] as [string, Any][]) {
@@ -570,12 +575,15 @@ console.log("\n[G-30] 11b. 단건 엔진(calc2026)의 미사용 금액 축");
       statusOf(gen({ ...CONSUME, priorAnnualDeductible: 4_900_000 })) === "OK");
     check("소비 조합: 값이 실제로 상한에 반영된다",
       shape(gen({ ...CONSUME, priorAnnualDeductible: 4_900_000 })) !== shape(gen(CONSUME)));
+    // ⚠ G-34C: 비급여 **통원** 두 조합에서 `tier`를 뺐다 — 종별이 갈리는 곳은 입원뿐이라
+    //   통원에 실으면 이제 거부된다. 입원 세 조합은 종별을 계속 싣는다(실제 소비 축).
+    //   이 절이 지키려는 성질(미소비 조합에서 누적 공제금액을 막는다)은 그대로다.
     const UNUSED: [string, Any][] = [
-      ["중증 통원", { severity: "critical", visit: "outpatient", tier: "hospital" }],
+      ["중증 통원", { severity: "critical", visit: "outpatient" }],
       ["중증 병의원급 입원", { severity: "critical", visit: "inpatient", tier: "clinic" }],
       ["비중증 입원(상급종합)", { severity: "non_critical", visit: "inpatient", tier: "hospital" }],
       ["비중증 입원(병의원급)", { severity: "non_critical", visit: "inpatient", tier: "clinic" }],
-      ["비중증 통원", { severity: "non_critical", visit: "outpatient", tier: "clinic" }],
+      ["비중증 통원", { severity: "non_critical", visit: "outpatient" }],
     ];
     for (const [l, base] of UNUSED) {
       check(`${l}: 축을 싣지 않으면 종전대로 계산한다`, statusOf(gen(base)) === "OK");
@@ -652,9 +660,10 @@ console.log("\n[G-30] 11b. 단건 엔진(calc2026)의 미사용 금액 축");
   check("500만원 상한 산식은 그대로다(읽는 자리만 바뀌었다)",
     /const priorDeductible = Math\.max\(0, \(rawDeductible as number \| undefined\) \?\? 0\);/.test(code)
     && /const remaining = Math\.max\(c\.annualDeductibleCap - priorDeductible, 0\);/.test(code));
+  // ⚠ G-34C: `tier`를 호출당 한 번만 읽도록 `tierOf()`로 바꿨다. 확인하려는 조건식은 그대로다.
   check("단건 비급여 미소비 조합의 누적 공제금액 stray를 막는다(G-30)",
     /const rawDeductible: unknown = \(input as \{ priorAnnualDeductible\?: unknown \}\)\.priorAnnualDeductible;/.test(code)
-    && /input\.tier === undefined \|\| input\.tier === "hospital"/.test(code));
+    && /tierOf\(\) === undefined \|\| tierOf\(\) === "hospital"/.test(code));
   // 타입 봉인.
   type Sealed2<T, K extends string> = K extends keyof T
     ? (T[K] extends undefined ? true : false) : false;

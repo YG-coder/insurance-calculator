@@ -342,12 +342,11 @@ console.log("\n[범위] 2·3·5세대 무변경");
     std.status === "OK" && std.totalInsurancePay === 240_000);
   check("2·3세대 엔진은 4세대 파서를 재사용하지 않는다",
     !readFileSync("src/lib/insurance/engine/multiClaim.ts", "utf8").includes("GEN2021"));
-  const g5 = calculateMany2026({ cause: "disease", coverage: "non_benefit", visit: "outpatient",
-    tier: "clinic", severity: "critical", nonBenefitItem: "general", amounts: [500_000],
+  const g5 = calculateMany2026({ cause: "disease", coverage: "non_benefit", visit: "outpatient", severity: "critical", nonBenefitItem: "general", amounts: [500_000],
     priorAnnualOutpatientVisits: 0 } as never);
   check("5세대는 종전대로 계산", g5.status === "OK" && g5.totalInsurancePay === 350_000);
   check("5세대는 여전히 미입력을 차단", calculateMany2026({ cause: "disease",
-    coverage: "non_benefit", visit: "outpatient", tier: "clinic", severity: "critical",
+    coverage: "non_benefit", visit: "outpatient", severity: "critical",
     nonBenefitItem: "general", amounts: [500_000] } as never).status === "PENDING_UNVERIFIED");
 }
 

@@ -322,9 +322,15 @@ console.log("\n[G-14C] 10. 범위 밖 축 무변경");
     !threw(b) && b.status === "PENDING_UNVERIFIED" && b.totalAmount === 2_000_000
     && b.totalOwnPay === null && b.totalInsurancePay === null
     && String(b.notes?.[0]).startsWith("건강보험 본인부담률(nhisCoinsuranceRate)은 급여 통원 계산에만"));
+  // ⚠ 교체됨 (G-34C). 종전 이 검사는 "`tier`를 비급여 **통원**에 실어도 종전대로 계산된다"를
+  //   고정했다 — 그때는 읽고 무시되던 상태(판단 보류)를 고정한 것이다. 5세대 비급여에서 종별이
+  //   갈리는 곳은 입원뿐이므로 통원의 종별은 확정 stray이고, 이제 다회 진입점의 반환 계약
+  //   (`blocked` — 검증된 진료비 합계 보존, 행 없음)으로 막힌다.
   const c = call(nbOut({ tier: "hospital" }));
-  check("tier를 통원에 실어도 종전대로 계산",
-    !threw(c) && c.status === "OK" && c.totalInsurancePay === 210_000);
+  check("tier를 통원에 실으면 차단한다(G-34C)",
+    !threw(c) && c.status === "PENDING_UNVERIFIED" && c.totalAmount === OUT_AMT
+    && c.totalOwnPay === null && c.totalInsurancePay === null
+    && String(c.notes?.[0]).startsWith("의료기관 종별(tier)은 5세대 비급여에서"));
 }
 
 console.log(`\n[G-14C 다회 입력 계약] ✅ ${pass} / ❌ ${fail}`);

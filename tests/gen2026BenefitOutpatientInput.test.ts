@@ -154,11 +154,19 @@ console.log("\n[G-15] 5. 범위 밖 경로는 무변경");
   //   "종전 그대로 계산된다"를 고정했다. 그 계약은 이 축이 급여 입원에서 **조용히 폐기**되던
   //   상태(실측: 접근자 호출 0회)를 고정한 것이라, G-31이 명시적 거부로 바꾸면서 교체한다.
   //   G-15가 이 절에서 지키려던 것은 "**급여 통원 밖에서는 이 파일의 검증이 새 판정을 하지
-  //   않는다**"이고, 그 의미는 `tier` 두 사례로 그대로 유지된다.
+  //   않는다**"이고, 그 의미는 `tier` 두 사례로 유지돼 왔다.
+  // ⚠ 다시 교체됨 (G-34C). 그 `tier` 두 사례도 이제 거부된다 — 급여 **입원**은 약관이 정률
+  //   20%로 정해 종별을 읽지 않으므로 확정 stray다. G-15의 검증(급여 통원의 두 축)이 새 판정을
+  //   하지 않는다는 성질은 안내 문구로 확인한다: 거부 사유가 **종별 소유권**이지 G-15의 값
+  //   검증이 아니어야 한다.
   for (const [label, extra] of [
     ["tier 'ZZZ'", { tier: "ZZZ" }], ["tier null", { tier: null }],
   ] as [string, Record<string, unknown>][]) {
-    check(`급여 입원 + ${label} → 종전 그대로`, shape(call(inp(extra))) === baseInp, shape(call(inp(extra))));
+    const r = call(inp(extra));
+    check(`급여 입원 + ${label} → 종별 소유권으로 거부(G-34C)`,
+      !threw(r) && r.r.status === "PENDING_UNVERIFIED"
+      && notes(r).includes("급여 입원의 자기부담률은 약관이 20%로 정하고 있어 종별을 읽지 않습니다"),
+      threw(r) ? r.threw : notes(r).slice(0, 60));
   }
   // G-31로 바뀐 자리: 급여 입원에 실린 본인부담률은 값과 무관하게 거부한다.
   for (const [label, v] of [["'abc'", "abc"], ["null", null], ["20", 20], ["0", 0], ["0.2", 0.2]] as [string, unknown][]) {
@@ -170,13 +178,22 @@ console.log("\n[G-15] 5. 범위 밖 경로는 무변경");
     amount: 1_000_000, coverage: "non_benefit", nonBenefitItem: "general",
     severity: "critical", visit: "outpatient", ...extra,
   });
-  const baseNb = shape(call(nb()));
+  // ⚠ G-34C 이후 이 절의 `tier` 두 사례는 "종전 결과와 같은가"가 아니라 "종별 소유권으로
+  //   거부되는가"를 보므로 기준 shape가 더는 필요 없다. 기준 계산 자체는 아래 nhis 검사가
+  //   그대로 쓴다.
+  check("비급여 중증 통원 기준", shape(call(nb())).startsWith("own="), shape(call(nb())));
   // ⚠ 교체됨 (G-31). 종전 이 목록은 `nhisCoinsuranceRate`가 **비급여**에 실려도 "종전 그대로
-  //   계산된다"를 고정했다. 같은 이유로(조용한 폐기의 고정) 교체한다. `tier` 두 사례는 남긴다.
+  //   계산된다"를 고정했다. 같은 이유로(조용한 폐기의 고정) 교체했고, `tier` 두 사례를 남겼다.
+  // ⚠ 다시 교체됨 (G-34C). 비급여 **통원**의 자기부담률·최소공제에는 종별 구분이 없어(종별이
+  //   갈리는 곳은 입원뿐) 이 자리도 확정 stray다. 거부 사유가 종별 소유권임을 확인한다.
   for (const [label, extra] of [
     ["tier 'ZZZ'", { tier: "ZZZ" }], ["tier null", { tier: null }],
   ] as [string, Record<string, unknown>][]) {
-    check(`비급여 중증 통원 + ${label} → 종전 그대로`, shape(call(nb(extra))) === baseNb, shape(call(nb(extra))));
+    const r = call(nb(extra));
+    check(`비급여 중증 통원 + ${label} → 종별 소유권으로 거부(G-34C)`,
+      !threw(r) && r.r.status === "PENDING_UNVERIFIED"
+      && notes(r).includes("비급여 통원의 자기부담률과 최소공제에는 종별 구분이 없습니다"),
+      threw(r) ? r.threw : notes(r).slice(0, 60));
   }
   for (const [label, v] of [["'abc'", "abc"], ["null", null], ["0", 0], ["0.2", 0.2]] as [string, unknown][]) {
     const r = call(nb({ nhisCoinsuranceRate: v }));

@@ -32,7 +32,7 @@ const eng = readFileSync("src/lib/insurance/engine/multiClaim2026.ts", "utf8");
 const cr = (amounts: number[], visits: number | undefined,
   extra: Record<string, unknown> = {}, cause: Cause = "disease") =>
   calculateMany2026({
-    cause, coverage: "non_benefit", visit: "outpatient", tier: "clinic", severity: "critical",
+    cause, coverage: "non_benefit", visit: "outpatient", severity: "critical",
     nonBenefitItem: "general", amounts, priorAnnualOutpatientVisits: visits, ...extra,
   } as unknown as Gen2026MultiClaimInput);
 const paid = (r: MultiClaimResult) => r.lines.map((l) => l.insurancePay).join();
@@ -195,7 +195,9 @@ console.log("\n[범위] 두 번째 실행이 없는 경로");
     many({ coverage: "non_benefit", visit: "inpatient", tier: "clinic", severity: "non_critical",
       nonBenefitItem: "general" }).status === "OK");
   // 비중증 통원은 '일' 축의 별개 규칙이 담당한다.
-  const nc = many({ coverage: "non_benefit", visit: "outpatient", tier: "clinic",
+  // ⚠ G-34C: 비급여 통원은 종별을 쓰지 않으므로 픽스처에서 `tier`를 뺐다 — 종전에는 실어도
+  //   읽고 무시됐다. 확인하려는 것은 '일' 축의 차단 안내이고 그대로다.
+  const nc = many({ coverage: "non_benefit", visit: "outpatient",
     severity: "non_critical", nonBenefitItem: "general", priorAnnualOutpatientDays: 99 });
   check("비중증 통원은 '일' 규칙으로 차단(회 안내가 아니다)",
     nc.status === "PENDING_UNVERIFIED"
@@ -220,8 +222,7 @@ console.log("\n[입력축] 두 통원 카운터를 섞지 않는다");
   check("중증에 Days가 실리면 차단(값 0이어도)",
     cr([A], 0, { priorAnnualOutpatientDays: 0 }).status === "PENDING_UNVERIFIED");
   check("비중증에 Visits가 실리면 차단(값 0이어도)",
-    calculateMany2026({ cause: "disease", coverage: "non_benefit", visit: "outpatient",
-      tier: "clinic", severity: "non_critical", nonBenefitItem: "general", amounts: [A],
+    calculateMany2026({ cause: "disease", coverage: "non_benefit", visit: "outpatient", severity: "non_critical", nonBenefitItem: "general", amounts: [A],
       priorAnnualOutpatientVisits: 0, priorAnnualOutpatientDays: 0,
     } as unknown as Gen2026MultiClaimInput).status === "PENDING_UNVERIFIED");
   // ⚠ 종전에는 Visits만 nonNegInt의 관용(음수→0, 소수 내림)을 남겨 두 축의 안전성이 달랐다.

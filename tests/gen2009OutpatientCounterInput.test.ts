@@ -273,8 +273,7 @@ console.log("\n[범위] 4·5세대 무변경");
   check("4세대는 여전히 미입력을 차단", calculateMany2021({ cause: "disease",
     coverage: "non_benefit", visit: "outpatient", tier: "clinic", rider: "none",
     amounts: [100_000] } as never).status === "PENDING_UNVERIFIED");
-  const g5 = calculateMany2026({ cause: "disease", coverage: "non_benefit", visit: "outpatient",
-    tier: "clinic", severity: "critical", nonBenefitItem: "general", amounts: [500_000],
+  const g5 = calculateMany2026({ cause: "disease", coverage: "non_benefit", visit: "outpatient", severity: "critical", nonBenefitItem: "general", amounts: [500_000],
     priorAnnualOutpatientVisits: 0 } as never);
   check("5세대는 종전대로 계산", g5.status === "OK" && g5.totalInsurancePay === 350_000);
 }

@@ -40,6 +40,44 @@ function perVisitLimit(value: number | undefined): number | undefined {
   return Math.floor(value);
 }
 
+/* ────────────────────────────────────────────────────────────────────────
+ * 입력 소유권 (G-34C) — 이 진입점이 쓰지 않는 축을 조용히 버리지 않는다.
+ *
+ * 이 엔진이 읽는 축은 `amount`·`coverage`·`visit`·`plan`·`facility`·`priorAnnualPaid`·
+ * `perVisitCoverageLimit` 일곱뿐이다(실측: 8경로군 × 35축에서 접근자 호출과 결과 변화).
+ * 나머지는 **다른 세대·다른 진입점의 축**이고, 종전에는 접근자 호출 0회로 조용히 버려졌다.
+ *
+ * ⚠ 제네릭 라우터 `calculate()`는 세대별 소유 필드만 **지연 투영**해 넘기므로 이 검사에
+ *   걸리지 않는다. 여기서 막는 것은 이 함수를 **직접 호출**하는 경로다. 라우터의 G-34A
+ *   안내·순서·반환 계약은 그대로 앞선다.
+ * ⚠ 값이 `0`이어도 막고 `undefined`만 미제공으로 본다(`in`이 아니라 `!== undefined`).
+ * ⚠ 각 키를 **한 번만** 읽는다. 목록 순서가 안내 우선순위다.
+ * ⚠ 안내에 받은 값 자체를 넣지 않고 `typeof`만 넣는다 — 이 파일에는 `showValue()`가 없고,
+ *   무효 입력을 템플릿 리터럴에 끼우면 Symbol·`toString()`이 던지는 객체에서 안내를 만드는
+ *   중에 예외가 난다(`generation2026`의 G-15 계약과 같다).
+ * ⚠ 자리는 **`plan` preflight 뒤**다. 선행 차단이 결과를 정하는 경로에서 새 이름을 읽지 않는다.
+ * ──────────────────────────────────────────────────────────────────────── */
+const STD_UNUSED_KEYS = [
+  "amounts", "lines", "stays", "roomChargeTotal", "inpatientDays", "generation",
+  "cause", "severity", "tier", "route", "item", "rider", "nonBenefitItem",
+  "injectionPurpose", "nhisCoinsuranceRate", "outpatientCoverageLimit", "annualCoverageLimit",
+  "priorAnnualDeductible", "priorAnnualInpatientDeductible", "priorAnnualInsurancePaid",
+  "priorAnnualRiderPaid", "priorAnnualOutpatientVisits", "priorAnnualOutpatientDays",
+  "priorAnnualPrescriptions", "priorAnnualRiderVisits", "approvedThroughVisit",
+  "priorAnnualCoveredCount", "priorAnnualTreatmentActCount",
+] as const;
+
+/** 통원만 쓰는 축 — 입원에서는 stray다. 판정식은 아래 소비 분기와 **같은 모양**이다. */
+const STD_OUTPATIENT_ONLY_KEYS = ["facility", "perVisitCoverageLimit"] as const;
+/** 입원만 쓰는 축 — 통원에서는 stray다. */
+const STD_INPATIENT_ONLY_KEYS = ["priorAnnualPaid"] as const;
+
+const STD_PATH_WHY: Record<string, string> = {
+  facility: "통원 항목별 공제금액(<표1>)을 가르는 축이라 입원 계산에는 쓰이지 않습니다. 입원 자기부담은 정률과 연간 상한으로 정해집니다.",
+  perVisitCoverageLimit: "회(건)당 가입금액은 외래·처방조제비 항목의 축이라 입원 계산에는 쓰이지 않습니다.",
+  priorAnnualPaid: "연 누적 자기부담금은 입원 자기부담 연간 상한(200만원)에만 쓰입니다. 통원에는 그 상한이 없습니다.",
+};
+
 function pending(generation: StandardizedGeneration, amount: number, reasons: string[]): CalcResult {
   return {
     status: "PENDING_UNVERIFIED", generation, amount,
@@ -60,7 +98,23 @@ export function calcStandardized(generation: StandardizedGeneration, input: Clai
     ]);
   }
 
+  // `visit`은 어느 경로에서도 막지 않는 필수 축이라 여기서 한 번 읽어 아래 전부가 같은 값을 쓴다.
   const isOutpatient = input.visit === "outpatient";
+
+  const strayList: readonly string[] = [
+    ...STD_UNUSED_KEYS,
+    ...(isOutpatient ? STD_INPATIENT_ONLY_KEYS : STD_OUTPATIENT_ONLY_KEYS),
+  ];
+  for (const key of strayList) {
+    const got: unknown = (input as unknown as Record<string, unknown>)[key];
+    if (got === undefined) continue;
+    return pending(generation, amount, [
+      STD_PATH_WHY[key] ?? `${key}은(는) 2·3세대 단건 계산에 쓰이지 않는 입력입니다.`,
+      "쓰이지 않는 입력을 조용히 버리면 반영했다고 오해할 수 있어 계산하지 않았습니다.",
+      `받은 값의 형식: ${typeof got}`,
+    ]);
+  }
+
   const notes: string[] = [];
   const notAppliedList: string[] = [...notApplied.all];
   if (isOutpatient) notAppliedList.push(...notApplied.outpatient);

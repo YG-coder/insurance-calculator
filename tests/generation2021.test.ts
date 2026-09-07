@@ -21,11 +21,9 @@ const H2B = "H-2b 통원 회당 보험금 20만원 한도 적용 (2026-08-24)";
 const INTENDED_DIVERGENCES: Record<Key, Divergence> = {
   "0/benefit/outpatient/clinic":         { ownPay: 0,     insurancePay: 0, reason: R1 },
   "0/benefit/outpatient/hospital":       { ownPay: 0,     insurancePay: 0, reason: R1 },
-  "0/non_benefit/outpatient/clinic":     { ownPay: 0,     insurancePay: 0, reason: R1 },
-  "0/non_benefit/outpatient/hospital":   { ownPay: 0,     insurancePay: 0, reason: R1 },
+  "0/non_benefit/outpatient/-":     { ownPay: 0,     insurancePay: 0, reason: R1 },
   "15000/benefit/outpatient/hospital":   { ownPay: 15000, insurancePay: 0, reason: R1 },
-  "15000/non_benefit/outpatient/clinic": { ownPay: 15000, insurancePay: 0, reason: R1 },
-  "15000/non_benefit/outpatient/hospital": { ownPay: 15000, insurancePay: 0, reason: R1 },
+  "15000/non_benefit/outpatient/-": { ownPay: 15000, insurancePay: 0, reason: R1 },
 
   // H-2b: 통원 회당 보험금 지급 한도 20만원 적용. 2026-08-24 승인.
   //   근거: 급여 ABL생명 약관 제6조⑤ / 비급여 KDB생명 약관 제5조③ (constants.ts 참조)
@@ -33,36 +31,45 @@ const INTENDED_DIVERGENCES: Record<Key, Divergence> = {
   //   12건 모두 보험금이 20만원으로 수렴하고 본인부담이 그만큼 증가한다.
   "300000/benefit/outpatient/clinic":       { ownPay: 100000,  insurancePay: 200000, reason: H2B },
   "300000/benefit/outpatient/hospital":     { ownPay: 100000,  insurancePay: 200000, reason: H2B },
-  "300000/non_benefit/outpatient/clinic":   { ownPay: 100000,  insurancePay: 200000, reason: H2B },
-  "300000/non_benefit/outpatient/hospital": { ownPay: 100000,  insurancePay: 200000, reason: H2B },
+  "300000/non_benefit/outpatient/-":   { ownPay: 100000,  insurancePay: 200000, reason: H2B },
   "1000000/benefit/outpatient/clinic":       { ownPay: 800000,  insurancePay: 200000, reason: H2B },
   "1000000/benefit/outpatient/hospital":     { ownPay: 800000,  insurancePay: 200000, reason: H2B },
-  "1000000/non_benefit/outpatient/clinic":   { ownPay: 800000,  insurancePay: 200000, reason: H2B },
-  "1000000/non_benefit/outpatient/hospital": { ownPay: 800000,  insurancePay: 200000, reason: H2B },
+  "1000000/non_benefit/outpatient/-":   { ownPay: 800000,  insurancePay: 200000, reason: H2B },
   "5000000/benefit/outpatient/clinic":       { ownPay: 4800000, insurancePay: 200000, reason: H2B },
   "5000000/benefit/outpatient/hospital":     { ownPay: 4800000, insurancePay: 200000, reason: H2B },
-  "5000000/non_benefit/outpatient/clinic":   { ownPay: 4800000, insurancePay: 200000, reason: H2B },
-  "5000000/non_benefit/outpatient/hospital": { ownPay: 4800000, insurancePay: 200000, reason: H2B },
+  "5000000/non_benefit/outpatient/-":   { ownPay: 4800000, insurancePay: 200000, reason: H2B },
 };
 
 const amounts = [0, 15000, 30000, 50000, 100000, 300000, 1000000, 5000000]; // 8
 const coverages: Coverage[] = ["benefit", "non_benefit"];                    // 2
 const visits: Visit[] = ["outpatient", "inpatient"];                         // 2
 const tiers: Tier[] = ["clinic", "hospital"];                                // 2
-// 8 * 2 * 2 * 2 = 64 케이스
+// ⚠ **격자를 좁혔다(G-34C).** 종전에는 네 경로 전부에 종별 두 값을 돌려 64케이스였는데,
+//   `tier`는 4세대 **급여 통원**만 소유한다(나머지 세 경로는 확정 stray라 이제 거부된다).
+//   그래서 종별 축은 급여 통원에서만 돈다: 8금액 × (급여 통원 2 + 급여 입원 1 + 비급여 통원 1
+//   + 비급여 입원 1) = **40케이스**. 키의 종별 자리는 종별이 없는 경로에서 `-`다.
+//   ⚠ 기준선 비교 대상(reference2021)과 의도된 변경 목록의 **의미는 그대로**다 — 종별이
+//     결과를 가르지 않던 경로에서 같은 값이 한 줄로 합쳐졌을 뿐이다.
+const COMBOS: { coverage: Coverage; visit: Visit; tier?: Tier }[] = [];
+for (const coverage of coverages)
+  for (const visit of visits) {
+    if (coverage === "benefit" && visit === "outpatient") { for (const tier of tiers) COMBOS.push({ coverage, visit, tier }); }
+    else COMBOS.push({ coverage, visit });
+  }
 
 let total = 0, matched = 0, diverged = 0;
 const problems: string[] = [];
 const usedKeys = new Set<Key>();
 
 for (const amount of amounts)
-  for (const coverage of coverages)
-    for (const visit of visits)
-      for (const tier of tiers) {
+  for (const { coverage, visit, tier } of COMBOS) {
+      {
         total++;
-        const key: Key = `${amount}/${coverage}/${visit}/${tier}`;
-        const ref = reference2021(amount, coverage, visit, tier);
-        const got = calc2021({ amount, coverage, visit, tier });
+        const key: Key = `${amount}/${coverage}/${visit}/${tier ?? "-"}`;
+        // 기준선 함수는 종별을 항상 받으므로 종별이 없는 경로에는 종전 기본값("clinic")을 준다
+        // — 그 경로들은 종별로 결과가 갈리지 않으므로 기준선 값이 달라지지 않는다.
+        const ref = reference2021(amount, coverage, visit, tier ?? "clinic");
+        const got = calc2021({ amount, coverage, visit, ...(tier ? { tier } : {}) });
 
         // 자기부담률·최소공제는 어떤 경우에도 기준선과 같아야 한다.
         if (got.rateApplied !== ref.rate || got.minDeductible !== ref.minDeductible) {
@@ -95,6 +102,7 @@ for (const amount of amounts)
           diverged++;
         }
       }
+  }
 
 // 매트릭스에 존재하지 않는 키가 등록돼 있으면 오탐 방지를 위해 잡는다.
 for (const key of Object.keys(INTENDED_DIVERGENCES)) {

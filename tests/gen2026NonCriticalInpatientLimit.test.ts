@@ -116,9 +116,12 @@ console.log("\n[무회귀] 다른 축은 그대로");
 console.log("\n[가드] 소스에 종별 조건이 실제로 연결돼 있다");
 {
   const eng = readFileSync("src/lib/insurance/engine/generation2026.ts", "utf8");
-  check("한도를 종별로 고른다", /limitTiers\.includes\(input\.tier\) \? n\.inpatientPerVisitLimit : undefined/.test(eng));
+  // ⚠ G-34C: `tier`를 호출당 **한 번만** 읽도록 `tierOf()`로 바꿨고, preflight가 두 값으로
+  //   좁힌 뒤의 값을 `inpatientTier`에 담아 한도 판정에 쓴다. 확인하려는 성질은 종전과 같다 —
+  //   **한도를 종별로 고른다.**
+  check("한도를 종별로 고른다", /limitTiers\.includes\(inpatientTier\) \? n\.inpatientPerVisitLimit : undefined/.test(eng));
   check("한도를 무조건 적용하지 않음", !/settle\(amount, amount \* rate, n\.inpatientPerVisitLimit\)/.test(eng));
-  check("종별 미지정을 막는다", /input\.tier !== "clinic" && input\.tier !== "hospital"/.test(eng));
+  check("종별 미지정을 막는다", /tierOf\(\) !== "clinic" && tierOf\(\) !== "hospital"/.test(eng));
   check("적용 대상 목록을 상수에서 읽는다", /n\.inpatientPerVisitLimitTiers/.test(eng));
   check("소스에 종별 목록을 다시 나열하지 않음", !/\["clinic"\]/.test(eng));
   const eng2 = eng;
@@ -127,15 +130,17 @@ console.log("\n[가드] 소스에 종별 조건이 실제로 연결돼 있다");
   //   **중증 입원의 종별 미지정을 소비 후보로 남기는** 같은 조건식을 한 번 더 썼고, G-31이
   //   `nhisCoinsuranceRate` stray에도 같은 조건식을 한 번 더 쓴다 — 그래야 종별 preflight
   //   안내가 종전대로 먼저 나간다. 두 preflight 자체는 어느 커밋도 손대지 않았다.
+  // ⚠ 개수 앵커를 갱신했다(4 → 4, 다만 읽기 형태가 `input.tier` → `tierOf()`로 바뀌었다).
+  //   위치·기존 의미("두 종별 preflight가 미지정을 막는다")는 그대로다.
   check("중증 입원도 종별 미지정을 막는다",
-    /중증 비급여 입원: 의료기관 종별 미지정/.test(eng2) && (eng2.match(/input\.tier !== "clinic" && input\.tier !== "hospital"/g) ?? []).length === 4,
-    String((eng2.match(/input\.tier !== "clinic" && input\.tier !== "hospital"/g) ?? []).length));
+    /중증 비급여 입원: 의료기관 종별 미지정/.test(eng2) && (eng2.match(/tierOf\(\) !== "clinic" && tierOf\(\) !== "hospital"/g) ?? []).length === 4,
+    String((eng2.match(/tierOf\(\) !== "clinic" && tierOf\(\) !== "hospital"/g) ?? []).length));
   // ⚠ 앵커 갱신(G-32): 같은 조건식이 `input.severity` 대신 **검증된 지역 변수**를 쓴다.
   //   G-30이 세운 "중증 입원의 종별 미지정을 소비 후보로 남긴다"는 의미는 그대로다.
   check("세 번째 자리는 stray 검사의 '후보로 남긴다' 조건이다(G-30)",
-    /if \(input\.visit === "inpatient"\n\s*&& !\(severity === "critical" && input\.tier !== "clinic" && input\.tier !== "hospital"\)\) \{/.test(eng2));
+    /if \(visitOf\(\) === "inpatient"\n\s*&& !\(severity === "critical" && tierOf\(\) !== "clinic" && tierOf\(\) !== "hospital"\)\) \{/.test(eng2));
   check("네 번째 자리는 nhis stray의 '후보로 남긴다' 조건이다(G-31)",
-    /const tierPendingAhead = input\.visit === "inpatient"\n\s*&& input\.tier !== "clinic" && input\.tier !== "hospital";/.test(eng2));
+    /const tierPendingAhead = visitOf\(\) === "inpatient"\n\s*&& tierOf\(\) !== "clinic" && tierOf\(\) !== "hospital";/.test(eng2));
   const ui = [
     readFileSync("src/components/calculators/HealthCalc5th.tsx", "utf8"),
     readFileSync("src/components/calculators/HealthCalcMulti2026.tsx", "utf8"),
@@ -214,7 +219,10 @@ console.log("\n[가드] 소스에 종별 조건이 실제로 연결돼 있다");
     check(`${name}: 급여 종별은 종전 기본값 유지`,
       /useState<Tier>\("clinic"\)/.test(ui[i]) && /benefitTier/.test(ui[i]));
   }
-  check("단건: 급여 계산이 benefitTier를 쓴다", /coverage: "benefit", visit, tier: benefitTier/.test(ui[0]));
+  // ⚠ G-34C: 단건 5세대 화면도 급여 **통원**에만 종별을 싣는다(급여 입원은 엔진이 읽지 않는다).
+  //   지키려던 성질("급여 계산이 화면의 종별 선택을 쓴다")은 그대로다 — 모양만 바뀐다.
+  check("단건: 급여 계산이 benefitTier를 쓴다(통원에서만)",
+    /tier: visit === "outpatient" \? benefitTier : undefined/.test(ui[0]));
   // ⚠ 종전 의미: 다회 화면이 급여 계산에 `benefitTier`를 그대로 싣는다. **G-34B가 그 전달을
   //   경로별로 바꿨다** — 종별을 소비하는 것은 급여 **통원**뿐이고 급여 입원은 읽지 않으므로,
   //   화면도 통원에서만 싣는다. 지키려던 성질("급여 계산이 화면의 종별 선택을 쓴다")은

@@ -78,7 +78,10 @@ for (const cov of ["benefit", "non_benefit"]) for (const v of ["outpatient", "in
 }
 const G21: Record<string, Any> = {};
 for (const cov of ["benefit", "non_benefit"]) for (const v of ["outpatient", "inpatient"]) {
-  G21[`${cov}·${v}`] = { amount: A, coverage: cov, visit: v, tier: "clinic" };
+  // ⚠ G-34C: `tier`는 4세대 **급여 통원**만 소유한다. 나머지 세 경로에 실으면 `calc2021`이
+  //   거부하므로 기준 입력에서 뺐다 — 종전에는 실어도 읽고 무시됐다(판단 보류).
+  G21[`${cov}·${v}`] = { amount: A, coverage: cov, visit: v,
+    ...(cov === "benefit" && v === "outpatient" ? { tier: "clinic" } : {}) };
 }
 const f = (g: Generation, i: Any) => wrap(() => calculate(g, i as unknown as ClaimInput));
 
@@ -234,12 +237,14 @@ console.log("\n[G-33] 8. 5세대와 세대별 직접 진입점은 손대지 않�
   check("2026 정상 중증 계산이 그대로", (() => { const r = f("2026", NB); return !threw(r) && r.r.ownPay === 90_000; })());
   check("2026 severity 무효는 G-32 안내 그대로",
     note0(f("2026", { ...NB, severity: "x" })).startsWith("비급여: 중증/비중증(severity)은"));
-  // 직접 진입점은 stray를 보지 않는다 — 이 커밋의 범위가 아니다.
+  // ⚠ 종전 이 절은 "직접 진입점은 stray를 **보지 않는다**(이 커밋의 범위가 아니다)"를
+  //   고정했다. G-34C가 세 직접 진입점의 소유권을 닫았으므로 같은 자리에서 **거부**가 맞다.
+  //   기대를 지우지 않고 뒤집는다 — 라우터(G-33)의 안내는 위에서 그대로 확인한다.
   for (const key of FOUR) {
     const std = wrap(() => calcStandardized("2009", { ...STD["non_benefit·outpatient·standard"], [key]: NORMAL[key] } as never));
-    check(`calcStandardized는 ${key}를 종전대로 무시한다`, statusOf(std) === "OK");
+    check(`calcStandardized는 ${key}를 거부한다(G-34C)`, statusOf(std) === "PENDING_UNVERIFIED");
     const d21 = wrap(() => calc2021({ ...G21["non_benefit·outpatient"], [key]: NORMAL[key] } as never));
-    check(`calc2021은 ${key}를 종전대로 무시한다`, statusOf(d21) === "OK");
+    check(`calc2021은 ${key}를 거부한다(G-34C)`, statusOf(d21) === "PENDING_UNVERIFIED");
   }
   // ⚠ 종전 픽스처는 최상위에 `facility`를 실었다. G-34B가 그 자리를 닫았다 — 2·3세대 다회는
   //   행마다 `visit`·`facility`가 다를 수 있어 두 축을 **행 안에서만** 읽고, 최상위 값은
@@ -284,10 +289,15 @@ console.log("\n[G-33] 9. 구조 — 위치·목록·순서");
     /const GEN2021_OWNERSHIP: Ownership = \{[\s\S]*?\};/.exec(code)?.[0].includes("perVisitCoverageLimit") === false);
   check("위임 결과가 OK일 때만 stray를 본다 (세 세대 경로 모두)",
     (code.match(/if \(r\.status !== "OK"\) return r;/g) ?? []).length === 3);
+  // ⚠ G-34C: 라우터가 세대별 소유 필드만 **지연 투영**해 넘긴다. 확인하려는 성질은 종전과
+  //   같다 — 위임이 먼저이고 stray 검사는 그 뒤이며, stray 검사는 **원본**을 본다.
   check("stray 거부가 위임 뒤에 온다",
-    code.indexOf("calcStandardized(generation, input)") < code.indexOf("rejectUnusedAxes(generation, input, r)"));
+    code.indexOf("const r = calcStandardized(generation, p.input);") < code.indexOf("rejectUnusedAxes(generation, input, r, p.visitOf())"));
   check("2026 경로도 위임 뒤에 stray 검사를 거친다",
-    /const r = calc2026\(input as Gen2026ClaimInput\);\n\s*if \(r\.status !== "OK"\) return r;\n\s*return rejectUnusedAxes\(generation, input, r\) \?\? r;/.test(code));
+    /const r = calc2026\(p\.input as Gen2026ClaimInput\);\n\s*if \(r\.status !== "OK"\) return r;\n\s*return rejectUnusedAxes\(generation, input, r, p\.visitOf\(\)\) \?\? r;/.test(code));
+  check("stray 검사는 투영본이 아니라 원본을 본다",
+    (code.match(/rejectUnusedAxes\(generation, input, r, p\.visitOf\(\)\)/g) ?? []).length === 3
+      && !code.includes("rejectUnusedAxes(generation, projectOwned"));
   check("2026의 자기 축(급여·비급여 경로 판정)은 라우터가 다시 보지 않는다",
     /const GEN2026_OWNERSHIP: Ownership = \{[\s\S]*?\};/.exec(code)?.[0].includes('"severity"') === true);
   check("각 키를 한 번만 읽는다",
@@ -326,8 +336,10 @@ console.log("\n[G-33] 10. 타입 — 이전 세대 오버로드가 네 축을 �
 console.log("\n[G-33] 11. 화면 — 이 축들은 도달할 수 없다");
 {
   const ui = readFileSync("src/components/calculators/HealthCalc.tsx", "utf8");
+  // ⚠ G-34C에서 화면이 급여 통원에만 `tier`를 싣도록 바뀌었다. 확인하려는 것은 종전과 같다 —
+  //   **네 축과 perVisit이 화면에 없다**는 것. 호출 모양만 새 것으로 바꾼다.
   check("화면은 네 축과 perVisit을 싣지 않는다",
-    /calculate\("2021", \{ amount: parsed, coverage, visit, tier \}\)/.test(ui));
+    ui.includes('tier: coverage === "benefit" && visit === "outpatient" ? tier : undefined'));
   for (const key of [...FOUR, "perVisitCoverageLimit"]) {
     check(`화면 소스에 ${key}가 없다`, !ui.includes(key));
   }

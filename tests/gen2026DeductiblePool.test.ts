@@ -78,7 +78,10 @@ console.log("\n[5세대 500만원 공제 pool] 적용 범위 — 중증·입원�
   const gen = (e: Record<string, unknown>) => calc2026({ amount: 10_000_000, coverage: "non_benefit", nonBenefitItem: "general", ...e } as never);
   const out = gen({ severity: "critical", visit: "outpatient", tier: "hospital", priorAnnualDeductible: 4_900_000 });
   check("중증 통원: 미소비 조합이라 거부(G-30)", rejects(out), JSON.stringify(out));
-  const outNone = gen({ severity: "critical", visit: "outpatient", tier: "hospital" });
+  // ⚠ G-34C: 비급여 **통원**은 종별을 쓰지 않으므로 기준 입력에서 `tier`를 뺐다 — 종전에는
+  //   실어도 읽고 무시됐다. 이 검사가 지키려는 성질(누적 공제금액을 싣지 않으면 종전 계산
+  //   그대로)은 그대로다.
+  const outNone = gen({ severity: "critical", visit: "outpatient" });
   check("중증 통원: 축을 싣지 않으면 종전 계산 그대로",
     !outNone.appliedCaps.includes("GEN2026_CRITICAL_INPATIENT_DEDUCTIBLE_ANNUAL") && outNone.ownPay === 3_000_000, JSON.stringify(outNone));
   const nc = gen({ severity: "non_critical", visit: "inpatient", tier: "hospital", priorAnnualDeductible: 4_900_000 });
@@ -253,19 +256,30 @@ console.log("\n[불변식] 격자 — 정상 무회귀 / 의도된 거부 전환
   const priors = [undefined, 0, 1_000_000, 4_999_999, 5_000_000, 9_000_000];
   const NOTE = "누적 공제금액(priorAnnualDeductible)은 중증 비급여 입원 중 상급종합병원·종합병원에만 적용됩니다";
   let okCount = 0, rejCount = 0, bad = 0, firstBad = "";
+  // ⚠ **격자의 종별 차원을 입원으로 좁혔다(G-34C).** 5세대 비급여에서 종별이 갈리는 곳은
+  //   입원뿐이고(중증의 공제 상한·비중증의 1회당 한도), 통원에 실으면 이제 거부된다. 종전
+  //   격자는 통원에도 종별 두 값을 돌려 480건이었는데, 그 절반은 **이제 종별 소유권으로**
+  //   거부되어 이 절이 보려는 누적 공제금액 판정에 닿지 못한다. 그래서 조합을 6종으로 줄인다:
+  //     입원 × 종별 2 × 중증도 2 = 4 + 통원(종별 없음) × 중증도 2 = 2 → 6 × 10금액 × 6기존액 = 360
+  const COMBOS: { severity: Severity; visit: Visit; tier?: Tier }[] = [];
   for (const severity of ["critical", "non_critical"] as Severity[]) {
-    for (const visit of ["inpatient", "outpatient"] as Visit[]) {
-      for (const tier of ["clinic", "hospital"] as Tier[]) {
+    for (const tier of ["clinic", "hospital"] as Tier[]) COMBOS.push({ severity, visit: "inpatient", tier });
+    COMBOS.push({ severity, visit: "outpatient" });
+  }
+  {
+    {
+      for (const { severity, visit, tier } of COMBOS) {
         for (const amount of amounts) {
           for (const prior of priors) {
             const consumes = severity === "critical" && visit === "inpatient" && tier === "hospital";
-            const r = calc2026({ amount, coverage: "non_benefit", nonBenefitItem: "general", severity, visit, tier, priorAnnualDeductible: prior });
+            const r = calc2026({ amount, coverage: "non_benefit", nonBenefitItem: "general", severity, visit,
+              ...(tier ? { tier } : {}), priorAnnualDeductible: prior } as never);
             if (!consumes && prior !== undefined) {
               // B. 의도된 거부 — 진료비 합계 없이 pending, 안내는 다회 C군과 같은 문구.
               const good = r.status === "PENDING_UNVERIFIED" && r.ownPay === null && r.insurancePay === null
                 && String(r.notes?.[0]).startsWith(NOTE);
               if (good) rejCount++;
-              else { bad++; if (!firstBad) firstBad = `B ${severity}/${visit}/${tier}/${amount}/${prior} → ${JSON.stringify(r)}`; }
+              else { bad++; if (!firstBad) firstBad = `B ${severity}/${visit}/${tier ?? "-"}/${amount}/${prior} → ${JSON.stringify(r)}`; }
               continue;
             }
             // A. 정상 무회귀 — 불변식은 종전 그대로다.
@@ -274,17 +288,20 @@ console.log("\n[불변식] 격자 — 정상 무회귀 / 의도된 거부 전환
               && (r.ownPay ?? 0) + (r.insurancePay ?? 0) === r.amount
               && Number.isInteger(d) && d >= 0 && d <= r.amount && d <= (r.ownPay ?? 0);
             if (okAll) okCount++;
-            else { bad++; if (!firstBad) firstBad = `A ${severity}/${visit}/${tier}/${amount}/${prior} → ${JSON.stringify(r)}`; }
+            else { bad++; if (!firstBad) firstBad = `A ${severity}/${visit}/${tier ?? "-"}/${amount}/${prior} → ${JSON.stringify(r)}`; }
           }
         }
       }
     }
   }
-  check("A. 정상 무회귀 130건 (ownPay+insurancePay=amount, 0<=공제<=min(진료비, 자기부담금))",
-    okCount === 130 && bad === 0, `${okCount}건 / ${firstBad}`);
-  check("B. 의도된 거부 전환 350건 (미소비 조합 × 축 제공 — 숫자 0 포함)",
-    rejCount === 350 && bad === 0, `${rejCount}건 / ${firstBad}`);
-  check("두 묶음의 합이 종전 격자 480건과 같다", okCount + rejCount === amounts.length * priors.length * 8);
+  // ⚠ 앵커를 갱신했다(A 130 → 110 · B 350 → 250 · 합계 480 → 360). 줄어든 이유는 결함이
+  //   아니라 **격자의 종별 차원을 입원으로 좁혔기** 때문이다(위 주석). 나눈 기준과 두 묶음이
+  //   지키는 성질은 그대로다.
+  check("A. 정상 무회귀 110건 (ownPay+insurancePay=amount, 0<=공제<=min(진료비, 자기부담금))",
+    okCount === 110 && bad === 0, `${okCount}건 / ${firstBad}`);
+  check("B. 의도된 거부 전환 250건 (미소비 조합 × 축 제공 — 숫자 0 포함)",
+    rejCount === 250 && bad === 0, `${rejCount}건 / ${firstBad}`);
+  check("두 묶음의 합이 격자 360건과 같다", okCount + rejCount === amounts.length * priors.length * COMBOS.length);
 }
 
 console.log("\n[가드] 종전 명칭이 실행 코드·문서에 남지 않는다");

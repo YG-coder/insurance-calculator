@@ -107,14 +107,18 @@ const MNB: Record<string, (e?: Any) => Any> = {
   "다회 비급여 중증 입원": (e = {}) => ({ cause: "disease", coverage: "non_benefit", visit: "inpatient", tier: "hospital", severity: "critical", nonBenefitItem: "general", amounts: [BIG], ...e }),
   "다회 비급여 비중증 입원": (e = {}) => ({ cause: "disease", coverage: "non_benefit", visit: "inpatient", tier: "clinic", severity: "non_critical", nonBenefitItem: "general", amounts: [AMT], ...e }),
 };
+// ⚠ G-34C: `route: "general"`로 일반 상해·질병 비급여 산식에 복귀하는 **통원** 픽스처에서
+//   `tier`를 뺐다. 5세대 비급여에서 종별이 갈리는 곳은 입원뿐이라 통원에 실으면 이제 거부된다
+//   — 종전에는 실어도 읽고 무시됐다(판단 보류). 중증 MRI 입원 픽스처는 행 안의 종별을 그대로
+//   둔다(실제 소비 축이다).
 const I: Record<string, (e?: Any) => Any> = {
   "중증 근골격계": (e = {}) => ({ route: "special_item", coverage: "non_benefit", severity: "critical", item: "musculoskeletal_esw", lines: [{ amount: AMT, visit: "outpatient" }], priorAnnualTreatmentActCount: 0, ...e }),
   "중증 주사료": (e = {}) => ({ route: "special_item", coverage: "non_benefit", severity: "critical", item: "injection", injectionPurpose: "general", lines: [{ amount: AMT, visit: "outpatient" }], ...e }),
   "중증 MRI": (e = {}) => ({ route: "special_item", coverage: "non_benefit", severity: "critical", item: "mri", lines: [{ amount: BIG, visit: "inpatient", tier: "hospital" }], ...e }),
   "비중증 MRI": (e = {}) => ({ route: "special_item", coverage: "non_benefit", severity: "non_critical", item: "mri", lines: [{ amount: AMT, visit: "outpatient" }], ...e }),
-  "일반 전환 항암주사": (e = {}) => ({ route: "general", coverage: "non_benefit", cause: "disease", severity: "critical", item: "injection", injectionPurpose: "anticancer", amounts: [AMT], visit: "outpatient", tier: "clinic", priorAnnualOutpatientVisits: 0, ...e }),
-  "일반 전환 비중증 근골격": (e = {}) => ({ route: "general", coverage: "non_benefit", cause: "disease", severity: "non_critical", item: "musculoskeletal_esw", amounts: [AMT], visit: "outpatient", tier: "clinic", priorAnnualOutpatientDays: 0, ...e }),
-  "일반 전환 비중증 주사료": (e = {}) => ({ route: "general", coverage: "non_benefit", cause: "disease", severity: "non_critical", item: "injection", amounts: [AMT], visit: "outpatient", tier: "clinic", priorAnnualOutpatientDays: 0, ...e }),
+  "일반 전환 항암주사": (e = {}) => ({ route: "general", coverage: "non_benefit", cause: "disease", severity: "critical", item: "injection", injectionPurpose: "anticancer", amounts: [AMT], visit: "outpatient", priorAnnualOutpatientVisits: 0, ...e }),
+  "일반 전환 비중증 근골격": (e = {}) => ({ route: "general", coverage: "non_benefit", cause: "disease", severity: "non_critical", item: "musculoskeletal_esw", amounts: [AMT], visit: "outpatient", priorAnnualOutpatientDays: 0, ...e }),
+  "일반 전환 비중증 주사료": (e = {}) => ({ route: "general", coverage: "non_benefit", cause: "disease", severity: "non_critical", item: "injection", amounts: [AMT], visit: "outpatient", priorAnnualOutpatientDays: 0, ...e }),
 };
 const ROOM = (e: Any = {}) => ({ route: "room_charge", coverage: "non_benefit", cause: "disease", severity: "critical", stays: [{ roomChargeTotal: 400_000, inpatientDays: 2 }], ...e });
 

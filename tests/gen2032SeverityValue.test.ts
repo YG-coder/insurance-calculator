@@ -101,7 +101,9 @@ const I: Record<string, (e?: Any) => Any> = {
   "항목 중증 MRI": (e = {}) => ({ route: "special_item", coverage: "non_benefit", severity: "critical", item: "mri", lines: [{ amount: A, visit: "outpatient" }], ...e }),
   "항목 중증 근골격": (e = {}) => ({ route: "special_item", coverage: "non_benefit", severity: "critical", item: "musculoskeletal_esw", lines: [{ amount: A, visit: "outpatient" }], priorAnnualTreatmentActCount: 0, ...e }),
   "항목 비중증 MRI": (e = {}) => ({ route: "special_item", coverage: "non_benefit", severity: "non_critical", item: "mri", lines: [{ amount: A, visit: "outpatient" }], ...e }),
-  "항목 일반전환": (e = {}) => ({ route: "general", coverage: "non_benefit", cause: "disease", severity: "non_critical", item: "musculoskeletal_esw", amounts: [A], visit: "outpatient", tier: "clinic", priorAnnualOutpatientDays: 0, ...e }),
+  // ⚠ G-34C: 일반 복귀 **통원** 픽스처에서 `tier`를 뺐다 — 5세대 비급여의 종별은 입원만
+  //   가르므로 통원에 실으면 이제 거부된다(종전에는 읽고 무시됐다).
+  "항목 일반전환": (e = {}) => ({ route: "general", coverage: "non_benefit", cause: "disease", severity: "non_critical", item: "musculoskeletal_esw", amounts: [A], visit: "outpatient", priorAnnualOutpatientDays: 0, ...e }),
 };
 const ROOM = (e: Any = {}) => ({ route: "room_charge", coverage: "non_benefit", cause: "disease", severity: "critical", stays: [{ roomChargeTotal: 400_000, inpatientDays: 2 }], ...e });
 

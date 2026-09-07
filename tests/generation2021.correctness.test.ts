@@ -24,7 +24,11 @@ for (const amount of amounts)
     for (const visit of visits)
       for (const tier of tiers) {
         cases++;
-        const r = calc2021({ amount, coverage, visit, tier });
+        // ⚠ G-34C: `tier`는 **급여 통원**만 소유한다. 나머지 세 경로에 실으면 거부되므로,
+        //   스윕은 소비 경로에만 종별을 싣는다. 종전에는 네 경로 전부에 실었고 세 경로에서는
+        //   읽고 무시됐다 — 그래서 이 스윕이 종별을 네 경로에 돌려도 결과가 같았다.
+        const consumesTier = coverage === "benefit" && visit === "outpatient";
+        const r = calc2021({ amount, coverage, visit, ...(consumesTier ? { tier } : {}) });
         const id = `[${amount}/${coverage}/${visit}/${tier}]`;
         const own = r.ownPay ?? NaN;
         const ins = r.insurancePay ?? NaN;
@@ -38,17 +42,17 @@ for (const amount of amounts)
 
 // 비정상 입력 방어
 {
-  const neg = calc2021({ amount: -100000, coverage: "non_benefit", visit: "outpatient", tier: "clinic" });
+  const neg = calc2021({ amount: -100000, coverage: "non_benefit", visit: "outpatient" });
   check("음수 진료비 → 0 정규화", neg.amount === 0 && neg.ownPay === 0 && neg.insurancePay === 0, JSON.stringify(neg));
-  const nan = calc2021({ amount: NaN, coverage: "benefit", visit: "inpatient", tier: "clinic" });
+  const nan = calc2021({ amount: NaN, coverage: "benefit", visit: "inpatient" });
   check("NaN 진료비 → 0 정규화", nan.amount === 0 && nan.ownPay === 0 && nan.insurancePay === 0, JSON.stringify(nan));
-  const frac = calc2021({ amount: 10000.9, coverage: "benefit", visit: "inpatient", tier: "clinic" });
+  const frac = calc2021({ amount: 10000.9, coverage: "benefit", visit: "inpatient" });
   check("소수 진료비 → floor", frac.amount === 10000 && frac.ownPay === 2000, JSON.stringify(frac));
 }
 
 // R-1 회귀 방지: 소액 통원에서 자기부담금이 진료비를 넘지 않는다
 {
-  const a = calc2021({ amount: 10000, coverage: "non_benefit", visit: "outpatient", tier: "clinic" });
+  const a = calc2021({ amount: 10000, coverage: "non_benefit", visit: "outpatient" });
   check("R-1 비급여 통원 1만원 → 본인 1만원 / 보험 0원", a.ownPay === 10000 && a.insurancePay === 0, JSON.stringify(a));
   const b = calc2021({ amount: 15000, coverage: "benefit", visit: "outpatient", tier: "hospital" });
   check("R-1 급여 통원 1.5만원(상급) → 본인 1.5만원 / 보험 0원", b.ownPay === 15000 && b.insurancePay === 0, JSON.stringify(b));
@@ -64,13 +68,13 @@ for (const amount of amounts)
   check("급여 통원 경계+1: 초과분은 본인부담", overLimit.ownPay === 250001 - 200000, JSON.stringify(overLimit));
 
   // 비급여 통원: ownPay = max(0.3a, 3만), ins = 0.7a. ins가 20만이 되는 지점 ≒ 285,714
-  const nb = calc2021({ amount: 1000000, coverage: "non_benefit", visit: "outpatient", tier: "clinic" });
+  const nb = calc2021({ amount: 1000000, coverage: "non_benefit", visit: "outpatient" });
   check("비급여 통원 100만원 → 보험금 20만 한도", nb.insurancePay === 200000 && nb.ownPay === 800000, JSON.stringify(nb));
 
   // 입원에는 회당 한도가 없다
-  const inp = calc2021({ amount: 5000000, coverage: "benefit", visit: "inpatient", tier: "clinic" });
+  const inp = calc2021({ amount: 5000000, coverage: "benefit", visit: "inpatient" });
   check("급여 입원 500만원: 회당 한도 없음", inp.insurancePay === 4000000 && inp.appliedCaps.length === 0, JSON.stringify(inp));
-  const inpNb = calc2021({ amount: 5000000, coverage: "non_benefit", visit: "inpatient", tier: "clinic" });
+  const inpNb = calc2021({ amount: 5000000, coverage: "non_benefit", visit: "inpatient" });
   check("비급여 입원 500만원: 회당 한도 없음", inpNb.insurancePay === 3500000 && inpNb.appliedCaps.length === 0, JSON.stringify(inpNb));
 
 }
@@ -84,15 +88,15 @@ for (const amount of amounts)
   check("급여 통원: 비급여 100회 고지 없음", !n(benOut).includes("100회"), n(benOut));
   check("급여 통원: 3대비급여 고지 없음", !n(benOut).includes("3대비급여"), n(benOut));
 
-  const benIn = calc2021({ amount: 3000000, coverage: "benefit", visit: "inpatient", tier: "clinic" });
+  const benIn = calc2021({ amount: 3000000, coverage: "benefit", visit: "inpatient" });
   check("급여 입원: 연간 보상한도 고지 있음", n(benIn).includes("5,000만원"), n(benIn));
   check("급여 입원: 비급여 전용 고지 없음", !n(benIn).includes("100회") && !n(benIn).includes("3대비급여"), n(benIn));
 
-  const nbOut = calc2021({ amount: 300000, coverage: "non_benefit", visit: "outpatient", tier: "clinic" });
+  const nbOut = calc2021({ amount: 300000, coverage: "non_benefit", visit: "outpatient" });
   check("비급여 통원: 세 고지 모두 있음",
     n(nbOut).includes("5,000만원") && n(nbOut).includes("100회") && n(nbOut).includes("3대비급여"), n(nbOut));
 
-  const nbIn = calc2021({ amount: 3000000, coverage: "non_benefit", visit: "inpatient", tier: "clinic" });
+  const nbIn = calc2021({ amount: 3000000, coverage: "non_benefit", visit: "inpatient" });
   check("비급여 입원: 3대비급여 고지 있음", n(nbIn).includes("3대비급여"), n(nbIn));
   check("비급여 입원: 통원 전용 100회 고지 없음", !n(nbIn).includes("100회"), n(nbIn));
 }

@@ -242,7 +242,12 @@ export default function HealthCalc5th() {
             amount: num,
             coverage: "benefit",
             visit,
-            tier: benefitTier,
+            // ⚠ 종별은 급여 **통원**의 최소공제만 가른다(G-34C). 급여 입원의 자기부담률은
+            //   약관이 20%로 정하고 있어 엔진이 종별을 읽지 않는다. 종전에는 두 경로 모두에
+            //   실어 보냈고 입원에서는 **읽고 무시**됐다.
+            //   ⚠ 상태(`benefitTier`)와 선택 UI는 그대로 둔다 — 통원↔입원을 오가도 선택이
+            //     보존되고, 통원으로 돌아오면 같은 값이 다시 전달된다.
+            tier: visit === "outpatient" ? benefitTier : undefined,
             // ⚠ 여기서 깎지 않는다. 범위 판정은 파서가 이미 했다.
             nhisCoinsuranceRate: nhisRateNum === undefined ? undefined : nhisRateNum / 100,
           })

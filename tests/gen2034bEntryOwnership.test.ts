@@ -103,7 +103,10 @@ const BASE: Record<string, [(i: Any) => unknown, Any]> = {
   "별도|중증|근골격계": [(i) => calculateGen2026Item(i as never), { route: "special_item", coverage: "non_benefit", severity: "critical", item: "musculoskeletal_esw", lines: SL, priorAnnualTreatmentActCount: 15, approvedThroughVisit: 50 }],
   "별도|중증|주사료": [(i) => calculateGen2026Item(i as never), { route: "special_item", coverage: "non_benefit", severity: "critical", item: "injection", injectionPurpose: "general", lines: SL }],
   "별도|중증|MRI": [(i) => calculateGen2026Item(i as never), { route: "special_item", coverage: "non_benefit", severity: "critical", item: "mri", lines: [{ amount: 3_000_000, visit: "inpatient", tier: "hospital" }] }],
-  "일반복귀|비중증|근골격계": [(i) => calculateGen2026Item(i as never), { route: "general", coverage: "non_benefit", cause: "disease", severity: "non_critical", item: "musculoskeletal_esw", visit: "outpatient", tier: "clinic", amounts: [3_000_000], priorAnnualOutpatientDays: 0 }],
+  // ⚠ G-34C: 일반 복귀 **통원** 경로의 기준 입력에서 `tier`를 뺐다 — 5세대 비급여의 종별은
+  //   입원만 가르므로 통원에 실으면 이제 거부된다(종전에는 읽고 무시됐다). 이 경로군이 보려는
+  //   소유권 판정은 그대로다.
+  "일반복귀|비중증|근골격계": [(i) => calculateGen2026Item(i as never), { route: "general", coverage: "non_benefit", cause: "disease", severity: "non_critical", item: "musculoskeletal_esw", visit: "outpatient", amounts: [3_000_000], priorAnnualOutpatientDays: 0 }],
   "상급병실료|중증": [(i) => calculateRoomCharge2026(i as never), { route: "room_charge", coverage: "non_benefit", cause: "disease", severity: "critical", stays: [{ roomChargeTotal: 400_000, inpatientDays: 2 }] }],
 };
 
@@ -192,7 +195,7 @@ console.log("\n[G-34B] 5. 판단 보류 2자리 — 막지 않되 근거를 코�
   for (const sev of ["critical", "non_critical"] as const) {
     const r = wrap(() => calculateMany2026({
       cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: sev,
-      visit: "outpatient", tier: "clinic", amounts: [3_000_000],
+      visit: "outpatient", amounts: [3_000_000],
       ...(sev === "critical" ? { priorAnnualOutpatientVisits: 0 } : { priorAnnualOutpatientDays: 0 }),
     } as never));
     check(`5세대 비급여 통원 ${sev}: tier 보류(막지 않음)`, statusOf(r) === "OK", statusOf(r) + " " + note0(r).slice(0, 40));

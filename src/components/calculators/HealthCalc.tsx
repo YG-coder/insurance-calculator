@@ -57,7 +57,17 @@ export default function HealthCalc() {
   //   `abc`·`-1`이 0원·1원짜리 계산 결과를 만들었다.
   const result = parsed === null
     ? null
-    : calculate("2021", { amount: parsed, coverage, visit, tier });
+    // ⚠ 종별은 4세대 **급여 통원**의 최소공제만 가른다(G-34C). 급여 입원은 약관이 정률만
+    //   정하고, 비급여 통원의 최소공제는 종별 구분이 없으며, 비급여 입원에는 최소공제가 없다.
+    //   종전에는 네 경로 모두에 실어 보냈고 세 경로에서는 **읽고 무시**됐다 — 화면이 고른
+    //   종별이 반영된 것처럼 보였다. 공통 객체가 값을 싣는다는 사실은 허용 근거가 아니므로
+    //   런타임 거부와 함께 화면의 전달도 바로잡는다.
+    //   ⚠ 상태(`tier`)와 선택 UI는 그대로 둔다. 경로를 오가도 선택이 보존되고, 급여 통원으로
+    //     돌아오면 같은 값이 다시 전달된다. **비활성 경로에만 싣지 않는다.**
+    : calculate("2021", {
+        amount: parsed, coverage, visit,
+        tier: coverage === "benefit" && visit === "outpatient" ? tier : undefined,
+      });
   const num = parsed ?? 0;
   const rate = result?.rateApplied ?? 0;
   const minDeductible = result?.minDeductible ?? 0;

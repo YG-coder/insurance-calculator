@@ -127,18 +127,17 @@ const STANDARDIZED_OWNERSHIP: Ownership = {
 };
 
 const GEN2021_OWNERSHIP: Ownership = {
-  always: [],
+  // `tier`는 4세대 **급여 통원**만 소비한다 — 실측: `coverage === "benefit" && visit ===
+  // "outpatient"`에서만 접근자가 호출되고 값에 따라 결과가 달라진다.
+  //   ⚠ G-34C까지는 이 칸이 `held`였다(급여 입원·비급여 통원·비급여 입원 3자리 판단 보류).
+  //     그 3자리는 **확정 stray**로 닫혔고, 판정 자리는 `calc2021`이다 — 라우터는 `visit`으로만
+  //     경로를 나누므로 `coverage`까지 보는 조건을 여기서 다시 쓸 수 없고, 같은 판정을 두 곳에서
+  //     하면 안내가 갈린다(5세대 축을 `calc2026`에 맡기는 아래 표와 같은 이유다).
+  //     그래서 라우터는 이 축을 **세대 소유로 넘기고**, 경로별 거부·값 검증은 `calc2021`이 한다.
+  always: ["tier"],
   outpatientOnly: [],
   inpatientOnly: [],
-  // `tier`는 4세대 **급여 통원**만 소비한다 — 실측: `coverage === "benefit" && visit ===
-  // "outpatient"` 두 경로군에서만 접근자가 호출되고 값에 따라 결과가 달라진다.
-  //   급여 통원                       → 실제 소비
-  //   급여 입원 · 비급여 통원 · 비급여 입원 → **판단 보류**(3자리)
-  // ⚠ 보류인 이유는 "화면이 네 경로에 다 싣기 때문에 허용"이 아니다. 그것은 UI 구현 편의일 뿐
-  //   공개 엔진 계약의 근거가 못 된다. 막는 것이 옳아 보이지만, 막으면 유일한 외부 호출부
-  //   `src/components/calculators/HealthCalc.tsx`의 세 경로가 즉시 계산 불가가 된다. **화면의
-  //   입력 구성을 함께 바꾸는 결정**이 있어야 확정된다 — 그 결정 전에는 막지 않는다.
-  held: ["tier"],
+  held: [],
 };
 
 const GEN2026_OWNERSHIP: Ownership = {
@@ -147,16 +146,14 @@ const GEN2026_OWNERSHIP: Ownership = {
   // 라우터가 같은 판정을 두 번 하면 안내가 갈린다.
   always: [
     "nhisCoinsuranceRate", "severity", "nonBenefitItem",
-    "priorAnnualDeductible", "perVisitCoverageLimit", "priorAnnualPaid",
+    "priorAnnualDeductible", "perVisitCoverageLimit", "priorAnnualPaid", "tier",
   ],
   outpatientOnly: [],
   inpatientOnly: [],
-  // `tier`는 5세대 **비급여 입원**과 **급여 통원**이 소비하고, 급여 입원·비급여 통원은 읽지
-  // 않는다(2자리 **판단 보류**). 경로별로 좁히는 계약은 5세대 직접 진입점과 **같은 모양**이어야
-  // 하므로 라우터가 단독으로 정하지 않는다.
-  // ⚠ "확정 지점이 다른 파일"이라는 사실은 보류 사유이지 허용 근거가 아니다. 후속 과제(직접
-  //   진입점 재분류)에서 확정하기 전까지는 **보류로 남는다.**
-  held: ["tier"],
+  // ⚠ G-34C까지는 `held: ["tier"]`였다(급여 입원·비급여 통원 판단 보류). 두 자리는 **확정
+  //   stray**로 닫혔고 판정 자리는 `calc2026`이다 — 위 `always` 축들과 같은 이유로 라우터가
+  //   같은 판정을 두 번 하지 않는다. 그래서 `tier`도 `always`로 옮겼다.
+  held: [],
 };
 
 const OWNERSHIP: Record<Generation, Ownership> = {
@@ -189,9 +186,9 @@ const UNUSED: Record<Generation, { outpatient: readonly RouterAxis[]; inpatient:
  * ⚠ `visit`을 여기서 한 번 읽는다. `visit`은 어느 세대에서도 막지 않는 필수 축이라
  *   이 읽기가 stray 판정을 앞당기지 않는다.
  */
-function unusedKeysOf(generation: Generation, input: ClaimInput): readonly RouterAxis[] {
+function unusedKeysOf(generation: Generation, visit: unknown): readonly RouterAxis[] {
   const byVisit = UNUSED[generation];
-  return input.visit === "outpatient" ? byVisit.outpatient : byVisit.inpatient;
+  return visit === "outpatient" ? byVisit.outpatient : byVisit.inpatient;
 }
 
 /** 여러 진입점이 함께 쓰는 안내 문구 — 계열이 같으면 문구도 같아야 읽는 사람이 헷갈리지 않는다. */
@@ -262,8 +259,9 @@ function rejectUnusedAxes(
   generation: Generation,
   input: ClaimInput,
   ok: CalcResult,
+  visit: unknown,
 ): CalcResult | null {
-  for (const key of unusedKeysOf(generation, input)) {
+  for (const key of unusedKeysOf(generation, visit)) {
     const got: unknown = (input as unknown as Record<string, unknown>)[key];
     if (got === undefined) continue;
     return {
@@ -307,6 +305,73 @@ export type Gen2021ClaimInput = ClaimInput
 /** 2026 제네릭 호출의 입력. 5세대가 읽지 않는 2·3세대 축과 다른 진입점의 축을 닫는다. */
 export type Gen2026RouterInput = ClaimInput & SealNever<"plan" | "facility" | ForeignAxis>;
 
+/* ────────────────────────────────────────────────────────────────────────
+ * 세대별 입력 투영 (G-34C)
+ *
+ * 직접 엔진들이 자기 소유가 아닌 축을 **직접 호출**에서 거부하게 되면서, 라우터가 원본을
+ * 그대로 넘기면 그 새 가드가 이 파일의 G-34A 가드를 앞질러 안내·순서·반환 계약이 달라진다.
+ * 그래서 라우터는 **그 세대가 소유한 축만** 골라 넘기고, 원본은 아래 `rejectUnusedAxes`의
+ * stray 검사에만 쓴다. 직접 엔진은 투영된 입력으로 기존 preflight와 계산을 그대로 한다.
+ *
+ * ⚠ **지연 투영**이다. 즉시 복사(`{...input}`)하면 선행 preflight가 결과를 정하는 경로에서도
+ *   소유 축을 미리 읽어 접근자 호출이 늘고, 배포된 계약(던지는 getter의 예외 시점 포함)이
+ *   바뀐다. 아래 게터는 엔진이 그 이름을 실제로 읽을 때 원본을 읽는다.
+ * ⚠ 목록은 위 소유권 표에서 파생한 것과 같은 축이다 — 표와 투영이 따로 놀 수 없다.
+ *   `priorAnnualPaid`는 5세대에도 넘긴다: 5세대가 **자기 안내로** 거부하는 레거시 축이고,
+ *   라우터가 대신 막으면 그 안내가 사라진다(G-33에서 세운 계약).
+ * ──────────────────────────────────────────────────────────────────────── */
+const OWNED_AXES: Record<Generation, readonly string[]> = {
+  "2009": [...ALWAYS_ACCEPTED_AXES, "plan"],
+  "2017": [...ALWAYS_ACCEPTED_AXES, "plan"],
+  // 4·5세대의 경로별 축(`tier` 등)은 `coverage`×`visit`으로 갈리는데 이 표는 `visit`으로만
+  // 경로를 나눈다. 그래서 세대 소유로 넘기고 판정은 세대 엔진이 한다(위 소유권 표 주석).
+  "2021": [...ALWAYS_ACCEPTED_AXES, "tier"],
+  "2026": [...ALWAYS_ACCEPTED_AXES, "tier", "severity", "nonBenefitItem", "nhisCoinsuranceRate",
+    "perVisitCoverageLimit", "priorAnnualDeductible", "priorAnnualPaid"],
+};
+
+/**
+ * 치료 형태가 소유를 가르는 축 — 2·3세대는 이 표가 **경로까지 정확**하므로 라우터가 계속
+ * 소유한다. 상대 경로에서는 투영이 `undefined`를 돌려줘 세대 엔진이 그 이름을 보지 못하고,
+ * 그래서 G-34A 라우터 안내가 그대로 먼저 나간다.
+ */
+const PATH_OWNED_AXES: Partial<Record<Generation, Readonly<Record<string, "outpatient" | "inpatient">>>> = {
+  "2009": { facility: "outpatient", perVisitCoverageLimit: "outpatient", priorAnnualPaid: "inpatient" },
+  "2017": { facility: "outpatient", perVisitCoverageLimit: "outpatient", priorAnnualPaid: "inpatient" },
+};
+
+type Projection = { readonly input: ClaimInput; readonly visitOf: () => unknown };
+
+function projectOwned(generation: Generation, input: ClaimInput): Projection {
+  const out: Record<string, unknown> = {};
+  const src = input as unknown as Record<string, unknown>;
+  const pathOwned = PATH_OWNED_AXES[generation] ?? {};
+  // `visit`도 **한 번만** 읽는다 — 세대 엔진이 읽는 그 시점에 읽고, 경로별 축의 투영이
+  // 그 값을 함께 쓴다. 미리 읽으면 선행 preflight가 결과를 정하는 경로에서 접근자가 늘고,
+  // 던지는 getter의 예외 시점이 앞당겨진다.
+  let visitRead = false, visitVal: unknown;
+  const visitOf = (): unknown => {
+    if (!visitRead) { visitRead = true; visitVal = src.visit; }
+    return visitVal;
+  };
+  for (const key of OWNED_AXES[generation]) {
+    Object.defineProperty(out, key, {
+      get: key === "visit" ? visitOf : () => src[key],
+      enumerable: true, configurable: true,
+    });
+  }
+  for (const [key, owner] of Object.entries(pathOwned)) {
+    Object.defineProperty(out, key, {
+      get: () => ((visitOf() === "outpatient" ? "outpatient" : "inpatient") === owner ? src[key] : undefined),
+      enumerable: true, configurable: true,
+    });
+  }
+  // ⚠ `visitOf`를 밖으로 함께 내보낸다. 아래 stray 검사도 경로를 알아야 하는데, 원본을 다시
+  //   읽으면 **같은 필드를 두 번 읽는** 셈이 된다(실측: 라우터 한 호출에서 `visit` 2회).
+  //   세대 엔진이 이미 읽은 그 값을 그대로 쓴다.
+  return { input: out as unknown as ClaimInput, visitOf };
+}
+
 export function calculate(generation: "2009" | "2017", input: LegacyClaimInput): CalcResult;
 export function calculate(generation: "2021", input: Gen2021ClaimInput): CalcResult;
 export function calculate(generation: "2026", input: Gen2026RouterInput): CalcResult;
@@ -315,15 +380,17 @@ export function calculate(generation: Generation, input: ClaimInput): CalcResult
   switch (generation) {
     case "2009":
     case "2017": {
-      const r = calcStandardized(generation, input);
+      const p = projectOwned(generation, input);
+      const r = calcStandardized(generation, p.input);
       // 선행 preflight(표준형/선택형 미지정 등)가 결과를 정했다 — 미사용 축을 읽지 않는다.
       if (r.status !== "OK") return r;
-      return rejectUnusedAxes(generation, input, r) ?? r;
+      return rejectUnusedAxes(generation, input, r, p.visitOf()) ?? r;
     }
     case "2021": {
-      const r = calc2021(input);
+      const p = projectOwned("2021", input);
+      const r = calc2021(p.input);
       if (r.status !== "OK") return r;
-      return rejectUnusedAxes(generation, input, r) ?? r;
+      return rejectUnusedAxes(generation, input, r, p.visitOf()) ?? r;
     }
     case "2026": {
       // 제네릭 진입점은 세대별 필수 축을 타입으로 강제할 수 없다. 5세대 비급여 치료유형은
@@ -332,9 +399,10 @@ export function calculate(generation: Generation, input: ClaimInput): CalcResult
       //   ⚠ 5세대 자기 축(급여/비급여·통원/입원의 경로별 판정)은 이 함수가 손대지 않는다 —
       //     G-30·G-31·G-32가 calc2026 안에서 이미 닫았다. 여기서 막는 것은 **다른 세대·다른
       //     진입점의 축**뿐이고, 그래서 선행 preflight가 결과를 정하면 읽지 않는다.
-      const r = calc2026(input as Gen2026ClaimInput);
+      const p = projectOwned("2026", input);
+      const r = calc2026(p.input as Gen2026ClaimInput);
       if (r.status !== "OK") return r;
-      return rejectUnusedAxes(generation, input, r) ?? r;
+      return rejectUnusedAxes(generation, input, r, p.visitOf()) ?? r;
     }
     default: {
       const _exhaustive: never = generation;

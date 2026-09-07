@@ -207,8 +207,10 @@ console.log("\n[0원] 빈 값과 명시적 0을 구분하고 세대별 기존 �
 // ── 엔진 진입 게이트 ─────────────────────────────────────────────────
 console.log("\n[게이트] 무효 원문에서는 엔진을 호출하지 않는다");
 {
+  // ⚠ G-34C: 호출 인자에 경로별 `tier` 전달이 들어가 줄바꿈이 바뀌었다. 확인하려는 성질은
+  //   종전과 같다 — **무효한 원문에서는 엔진을 호출하지 않는다.**
   check("4세대: 엔진 호출이 파서 결과에 걸려 있다",
-    /const result = parsed === null\s*\n\s*\? null\s*\n\s*: calculate\("2021"/.test(ui4));
+    /const result = parsed === null\s*\n\s*\? null\s*\n[\s\S]{0,600}?: calculate\("2021"/.test(ui4));
   check("5세대: 엔진 호출이 파서 결과에 걸려 있다",
     /const result = amountInvalid\s*\n\s*\? null/.test(ui5));
   check("4세대: 무조건 호출하던 옛 줄이 없다",
@@ -311,8 +313,10 @@ console.log("\n[범위] 공용 위젯·다회·2·3세대·엔진은 건드리�
   check("2·3세대 그대로", /const stdAmount = \(v: string\): number \| null =>/.test(std));
   check("엔진 normalizeAmount는 그대로다",
     /return Number\.isFinite\(amount\) \? Math\.max\(0, Math\.floor\(amount\)\) : 0;/.test(settle));
+  // ⚠ G-34C: 4세대 화면이 급여 통원에만 `tier`를 싣도록 바뀌었다. 지키려는 성질("단건 화면이
+  //   검증된 금액을 그대로 넘긴다")은 그대로이므로 금액 인자를 기준으로 확인한다.
   check("단건이 엔진 호출 형태를 바꾸지 않았다",
-    /calculate\("2021", \{ amount: parsed, coverage, visit, tier \}\)/.test(ui4)
+    /calculate\("2021", \{\s*\n\s*amount: parsed, coverage, visit,/.test(ui4)
     && /amount: num,\n\s*coverage: "benefit",/.test(ui5));
 }
 

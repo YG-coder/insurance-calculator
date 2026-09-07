@@ -37,13 +37,13 @@ const CAP = "GEN2026_NONCRITICAL_OUTPATIENT_ANNUAL_DAYS";
 type Extra = Partial<Record<string, unknown>>;
 const nc = (amounts: number[], days: number | undefined, extra: Extra = {}, cause: Cause = "disease") =>
   calculateMany2026({
-    cause, coverage: "non_benefit", visit: "outpatient", tier: "clinic",
+    cause, coverage: "non_benefit", visit: "outpatient",
     severity: "non_critical", nonBenefitItem: "general", amounts,
     priorAnnualOutpatientDays: days, ...extra,
   } as unknown as Gen2026MultiClaimInput);
 const cr = (amounts: number[], visits: number | undefined, extra: Extra = {}) =>
   calculateMany2026({
-    cause: "disease", coverage: "non_benefit", visit: "outpatient", tier: "clinic",
+    cause: "disease", coverage: "non_benefit", visit: "outpatient",
     severity: "critical", nonBenefitItem: "general", amounts,
     priorAnnualOutpatientVisits: visits, ...extra,
   } as unknown as Gen2026MultiClaimInput);
@@ -214,7 +214,7 @@ console.log("\n[축 분리] 중증 100회 무회귀 · 다른 경로 미적용")
   check("급여에는 적용하지 않음", !benefit.appliedCaps.includes(CAP));
   for (const item of ["musculoskeletal_esw", "injection", "mri", "room_charge"] as const) {
     const r = calculateMany2026({
-      cause: "disease", coverage: "non_benefit", visit: "outpatient", tier: "clinic",
+      cause: "disease", coverage: "non_benefit", visit: "outpatient",
       severity: "non_critical", nonBenefitItem: item, amounts: [A],
       priorAnnualOutpatientDays: 100,
     } as unknown as Gen2026MultiClaimInput);

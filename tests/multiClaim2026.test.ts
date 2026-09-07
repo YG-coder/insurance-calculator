@@ -122,7 +122,7 @@ function check(name: string, ok: boolean, detail = "") {
   let leaked = 0;
   for (const visit of ["outpatient", "inpatient"] as const) {
     const r = calculateMany2026({
-      cause: "disease", coverage: "benefit", visit, tier: "clinic", amounts: [300_000],
+      cause: "disease", coverage: "benefit", visit, amounts: [300_000],
       nhisCoinsuranceRate: visit === "outpatient" ? 0.2 : undefined,
     });
     const joined = r.notes.join(" ");

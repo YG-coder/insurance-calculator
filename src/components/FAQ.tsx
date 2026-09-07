@@ -1,4 +1,6 @@
-type FAQItem = { q: string; a: string };
+import Link from "next/link";
+
+type FAQItem = { q: string; a: string; link?: { href: string; label: string } };
 
 type Props = {
   items: FAQItem[];
@@ -21,6 +23,7 @@ export default function FAQ({ items }: Props) {
           </summary>
           <p className="mt-3 pt-3 border-t border-slate-100 text-slate-700 leading-relaxed text-sm">
             {item.a}
+            {item.link && <Link href={item.link.href} className="mt-3 block w-fit rounded text-brand-700 underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">{item.link.label} →</Link>}
           </p>
         </details>
       ))}

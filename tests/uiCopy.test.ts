@@ -9,6 +9,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import Footer from "../src/components/Footer";
 import {
   GeneralAnnualLimitHelp, RoomChargeMoneyHelp, ZeroLimitPolicy,
 } from "../src/components/calculators/HealthCalcMulti2026";
@@ -24,7 +25,8 @@ const gen5Multi = readFileSync("src/components/calculators/HealthCalcMulti2026.t
 const site = readFileSync("src/lib/site.ts", "utf8");
 const gen4Page = readFileSync("src/app/health-insurance-calculator/page.tsx", "utf8");
 const healthGuides = readFileSync("src/lib/guides.ts", "utf8");
-const footer = readFileSync("src/components/Footer.tsx", "utf8");
+// 2026-09-08: 공통 계산기 목록을 쓰므로 소스 리터럴 대신 실제 출력의 세대 구분을 확인한다.
+const footer = renderToStaticMarkup(createElement(Footer));
 const disclaimer = readFileSync("src/app/disclaimer/page.tsx", "utf8");
 const about = readFileSync("src/app/about/page.tsx", "utf8");
 const gen5Page = readFileSync("src/app/5th-generation-health-insurance-calculator/page.tsx", "utf8");
@@ -167,7 +169,7 @@ check("5세대 페이지: 단건 미반영 범위를 연간 항목으로 한정"
 check("4세대 계산기: 홈 카드가 세대를 명시", site.includes('title: "4세대 실손보험 자기부담금 계산기"'));
 check("4세대 계산기: 페이지 제목이 세대를 명시", gen4Page.includes("4세대 실손보험 자기부담금 계산기"));
 check("4세대 계산기: 가이드 링크가 세대를 명시", healthGuides.includes('calcLabel: "4세대 실손보험 자기부담금 계산기"'));
-check("실손 계산기: 푸터가 2·3·4·5세대를 각각 명시", ["2·3세대 실손보험 계산기", "4세대 실손보험 계산기", "5세대 실손보험 계산기"].every((label) => footer.includes(label)));
+check("실손 계산기: 푸터가 2·3·4·5세대를 각각 명시", ["2·3세대 실손보험 자기부담금 계산기", "4세대 실손보험 자기부담금 계산기", "5세대 실손보험 자기부담금 계산기"].every((label) => footer.includes(label)));
 check("4세대 계산기: 면책 페이지 링크가 세대를 명시", disclaimer.includes("4세대 실손보험 계산기"));
 check("실손 계산기: 소개 페이지가 2·3·4·5세대를 모두 명시", about.includes("2·3·4·5세대"));
 check("4세대 계산기: 세대 없는 옛 링크 라벨 없음", !/>\s*실손보험 계산기\s*</.test(footer) && !/>\s*실손보험 계산기\s*</.test(disclaimer));

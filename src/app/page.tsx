@@ -3,7 +3,7 @@ import Link from "next/link";
 import FAQ from "@/components/FAQ";
 import { CALCULATORS, SITE } from "@/lib/site";
 import { publishedGuides } from "@/lib/guides";
-import { HOME_GROUPS, REVIEW_STEPS } from "@/lib/home";
+import { HOME_GROUPS, REVIEW_STEPS, PROTECTION_STEPS } from "@/lib/home";
 
 export const metadata: Metadata = {
   title: "보험계산기 | 실손 병원비·보험 해지·가족 보장 점검",
@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 };
 
 const faqs = [
-  { q: "내 실손보험이 몇 세대인지 모르겠어요.", a: "보험증권이나 보험사 앱에서 상품명과 적용 약관을 먼저 확인하세요. 전환·재가입했다면 처음 가입한 시점만으로 선택하지 말고 현재 적용되는 계약을 기준으로 선택하세요. 이 사이트는 2·3세대, 4세대, 5세대 계산기를 제공합니다." },
+  { q: "내 실손보험이 몇 세대인지 모르겠어요.", a: "보험증권이나 보험사 앱에서 상품명과 적용 약관을 먼저 확인하세요. 전환·재가입했다면 처음 가입한 시점만으로 선택하지 말고 현재 적용되는 계약을 기준으로 선택하세요. 이 사이트는 2·3세대, 4세대, 5세대 계산기를 제공합니다.", link: { href: "/guide/silson-generations", label: "실손보험 세대 구분 가이드" } },
   { q: "계산 결과가 실제 지급 보험금인가요?", a: "아닙니다. 입력한 조건에 따른 참고용 계산입니다. 보장 여부, 면책, 이미 사용한 한도와 상품별 약관 등에 따라 실제 지급액은 달라질 수 있습니다. 결과와 안내를 함께 확인하고 최종 금액은 보험사에 확인하세요. 기준이 확정되지 않은 일부 조건은 계산이 보류될 수 있습니다." },
   { q: "해지환급금도 자동으로 조회하나요?", a: "보험사 계약을 조회하지 않습니다. 보험사 앱이나 고객센터에서 확인한 현재 해지환급금과 납입 내역을 직접 입력해야 합니다. 해지·유지 계산은 금액을 비교하는 도구이며, 보장 상실이나 재가입 가능성까지 판단해 주지는 않습니다." },
   { q: "회원가입이나 상담 신청이 필요한가요?", a: "회원가입이나 상담 신청 없이 이용할 수 있습니다. 계산에 입력한 값은 브라우저에서 처리하며 계산을 위해 이름·연락처를 요구하지 않습니다." },
@@ -33,8 +33,8 @@ export default function HomePage() {
         <div className="container-base grid gap-9 py-10 sm:py-14 lg:grid-cols-[1.25fr_1fr] lg:items-center">
           <div>
             <p className="text-sm font-semibold text-brand-700">내 보험을 이해하는 첫 계산</p>
-            <h1 className="mt-4 text-3xl font-bold leading-tight tracking-tight text-slate-900 sm:text-5xl sm:leading-tight">
-              보험을 바꾸기 전에,<br />내가 부담할 금액부터
+            <h1 className="mt-4 break-keep text-3xl font-bold leading-tight tracking-tight text-slate-900 sm:text-4xl sm:leading-tight">
+              병원비·보험료·가족 보장,<br />필요한 금액을 확인하세요
             </h1>
             <p className="mt-5 max-w-xl text-base leading-7 text-slate-600">
               병원비, 남은 보험료, 가족에게 필요한 보장.{" "}<br className="hidden sm:block" />
@@ -63,14 +63,14 @@ export default function HomePage() {
       <section id="start" className="container-base scroll-mt-24 py-10 sm:py-14">
         <h2 className="text-2xl font-bold tracking-tight">지금 어떤 고민이 있으신가요?</h2>
         <p className="mt-2 text-sm leading-6 text-slate-600">계산기 이름을 몰라도 괜찮습니다. 확인하려는 상황에서 시작하세요.</p>
-        <div className="mt-6 grid gap-4 md:grid-cols-3">
-          {HOME_GROUPS.slice(0, 3).map((group, i) => (
+        <div className="mt-6 grid gap-4 md:grid-cols-2">
+          {HOME_GROUPS.map((group, i) => (
             <article key={group.id} className="flex flex-col rounded-2xl border border-slate-200 bg-white p-6">
               <span className="text-xs font-bold text-brand-600">0{i + 1} / {group.label}</span>
               <h3 className="mt-3 text-xl font-bold leading-snug">{group.question}</h3>
               <p className="mt-3 grow text-sm leading-6 text-slate-600">{group.description}</p>
               <Link href={group.start.href} className={`mt-5 inline-flex w-fit items-center rounded-lg bg-brand-600 px-4 py-3 text-sm font-semibold text-white hover:bg-brand-700 ${focus}`}>{group.start.label} →</Link>
-              <Link href={group.hub} className={`mt-4 w-fit text-sm text-slate-600 underline underline-offset-4 hover:text-brand-700 ${focus}`}>{group.label} 안내 읽기</Link>
+              <Link href={group.hub} className={`mt-4 w-fit text-sm text-slate-600 underline underline-offset-4 hover:text-brand-700 ${focus}`}>{group.id === "budget" ? "자동차보험 견적 비교하기" : `${group.label} 안내 읽기`}</Link>
             </article>
           ))}
         </div>
@@ -98,6 +98,14 @@ export default function HomePage() {
           {REVIEW_STEPS.map((step, i) => <li key={step.href} className="border-t-2 border-brand-200 pt-5"><p className="text-xs font-bold text-brand-600">STEP 0{i + 1}</p><h3 className="mt-2 text-lg font-bold">{step.title}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{step.description}</p><Link href={step.href} className={`mt-3 inline-block py-2 text-sm font-semibold text-brand-700 hover:underline ${focus}`}>{step.action} →</Link></li>)}
         </ol>
         <p className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">금액 비교만으로 해지를 결정하지 마세요. 사라지는 보장과 새 보험의 가입 가능성·면책 조건도 별도로 확인해야 합니다. 계산기 사이 입력값은 자동으로 전달되지 않습니다.</p>
+      </section>
+
+      <section id="protection" className="container-base scroll-mt-24 pb-10 sm:pb-14">
+        <div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-2xl font-bold">가족 보장은 생활비부터 차례로</h2><p className="mt-2 text-sm leading-6 text-slate-600">필요한 자금을 먼저 정하고, 이미 준비된 보장과 비교하세요.</p></div><Link href="/protection-planning" className={`text-sm font-semibold text-brand-700 hover:underline ${focus}`}>가족 보장 점검사항 →</Link></div>
+        <ol className="mt-6 grid gap-5 sm:grid-cols-3">
+          {PROTECTION_STEPS.map((step, i) => <li key={step.href} className="border-t-2 border-brand-200 pt-5"><p className="text-xs font-bold text-brand-600">STEP 0{i + 1}</p><h3 className="mt-2 text-lg font-bold">{step.title}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{step.description}</p><Link href={step.href} className={`mt-3 inline-block py-2 text-sm font-semibold text-brand-700 hover:underline ${focus}`}>{step.action} →</Link></li>)}
+        </ol>
+        <p className="mt-5 text-sm leading-6 text-slate-600">계산기 사이 입력값은 자동으로 전달되지 않습니다. 앞에서 확인한 금액을 메모해 다음 계산기에 직접 입력하세요.</p>
       </section>
 
       <section id="calculators" className="scroll-mt-24 border-y border-slate-200 bg-white py-10 sm:py-12">

@@ -69,6 +69,7 @@ export default function RootLayout({
     return (
         <html lang="ko">
         <body>
+        <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-white focus:px-5 focus:py-3 focus:text-brand-700 focus:shadow-lg focus:outline focus:outline-2 focus:outline-brand-600">본문으로 건너뛰기</a>
         <Script
             async
             src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT}`}
@@ -77,7 +78,7 @@ export default function RootLayout({
         />
 
         <Header />
-        <main className="min-h-[60vh]">{children}</main>
+        <main id="main-content" tabIndex={-1} className="min-h-[60vh] scroll-mt-24">{children}</main>
         <Footer />
 
         <Script

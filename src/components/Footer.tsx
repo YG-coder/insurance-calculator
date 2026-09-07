@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CALCULATORS } from "@/lib/site";
 
 export default function Footer() {
   return (
@@ -15,41 +16,7 @@ export default function Footer() {
           <div>
             <h4 className="text-white font-semibold mb-3">계산기</h4>
             <ul className="space-y-2 text-sm">
-              <li>
-                <Link href="/health-insurance-calculator" className="hover:text-brand-400">
-                  4세대 실손보험 계산기
-                </Link>
-              </li>
-              <li>
-                <Link href="/2nd-3rd-generation-health-insurance-calculator" className="hover:text-brand-400">
-                  2·3세대 실손보험 계산기
-                </Link>
-              </li>
-              <li>
-                <Link href="/5th-generation-health-insurance-calculator" className="hover:text-brand-400">
-                  5세대 실손보험 계산기
-                </Link>
-              </li>
-              <li>
-                <Link href="/surrender-value-calculator" className="hover:text-brand-400">
-                  해지환급금 계산기
-                </Link>
-              </li>
-              <li>
-                <Link href="/cancel-vs-keep-calculator" className="hover:text-brand-400">
-                  해지 vs 유지 계산기
-                </Link>
-              </li>
-              <li>
-                <Link href="/death-coverage-calculator" className="hover:text-brand-400">
-                  사망보장 계산기
-                </Link>
-              </li>
-              <li>
-                <Link href="/coverage-gap-calculator" className="hover:text-brand-400">
-                  보장 공백 계산기
-                </Link>
-              </li>
+              {CALCULATORS.map(calc => <li key={calc.href}><Link href={calc.href} className="rounded hover:text-brand-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400">{calc.title}</Link></li>)}
               <li>
                 <Link href="/guide" className="hover:text-brand-400">
                   보험 가이드

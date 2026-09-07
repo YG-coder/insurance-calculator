@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import HomePage from "../src/app/page";
+import Footer from "../src/components/Footer";
 import { CALCULATORS, HUBS } from "../src/lib/site";
 import { publishedGuides } from "../src/lib/guides";
-import { HOME_GROUPS, REVIEW_STEPS } from "../src/lib/home";
+import { HOME_GROUPS, REVIEW_STEPS, PROTECTION_STEPS } from "../src/lib/home";
 
 // 실제 렌더와 레지스트리를 대조한다. 링크 이름만 검사하거나 빈 배열을 통과시키지 않는다.
 const html = renderToStaticMarkup(React.createElement(HomePage));
@@ -34,6 +35,25 @@ for (const href of new Set(hrefs)) {
   else assert.fail(`예상 밖 외부 링크: ${href}`);
 }
 assert.deepEqual(REVIEW_STEPS.map(s => s.href), [...HUBS[0].steps]);
+assert.deepEqual(PROTECTION_STEPS.map(s => s.href), [...HUBS[1].steps]);
+const startSection = html.slice(html.indexOf('id="start"'), html.indexOf('id="silson"'));
+assert.equal((startSection.match(/<article/g) ?? []).length, 4);
+for (const group of HOME_GROUPS) {
+  assert.ok(group.question.length > 0);
+  assert.ok(startSection.includes(`href="${group.start.href}"`));
+  assert.ok(startSection.includes(`href="${group.hub}"`));
+}
+const protection = html.slice(html.indexOf('id="protection"'), html.indexOf('id="calculators"'));
+assert.equal((protection.match(/<li[ >]/g) ?? []).length, 3);
+for (const step of PROTECTION_STEPS) assert.ok(protection.includes(`href="${step.href}"`));
+assert.ok(protection.includes("입력값은 자동으로 전달되지 않습니다"));
+const footer = renderToStaticMarkup(React.createElement(Footer));
+for (const calc of CALCULATORS) assert.equal(footer.split(`href="${calc.href}"`).length - 1, 1);
+const firstFAQ = html.slice(html.indexOf("<details"), html.indexOf("</details>"));
+assert.ok(firstFAQ.includes('href="/guide/silson-generations"'));
+const layout = readFileSync("src/app/layout.tsx", "utf8");
+assert.ok(layout.indexOf('href="#main-content"') < layout.indexOf("<Header"));
+assert.match(layout, /<main id="main-content" tabIndex=\{-1\}/);
 assert.ok(html.includes("현재 적용 약관"));
 assert.ok(html.includes("1세대 전용 계산기는 제공하지 않습니다"));
 assert.ok(html.includes("입력값은 자동으로 전달되지 않습니다"));

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import Script from "next/script";
+import JsonLd from "@/components/JsonLd";
 import FAQ from "@/components/FAQ";
 import { SITE, CALCULATORS } from "@/lib/site";
 import { publishedGuides } from "@/lib/guides";
@@ -172,12 +172,9 @@ export default function HubPage({
         </section>
       )}
 
-      <Script id={`ld-hub-itemlist-${hub.slug}`} type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListJsonLd) }} />
-      <Script id={`ld-hub-faq-${hub.slug}`} type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />
-      <Script id={`ld-hub-breadcrumb-${hub.slug}`} type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
+      <JsonLd id={`ld-hub-itemlist-${hub.slug}`} data={itemListJsonLd} />
+      <JsonLd id={`ld-hub-faq-${hub.slug}`} data={faqJsonLd} />
+      <JsonLd id={`ld-hub-breadcrumb-${hub.slug}`} data={breadcrumbJsonLd} />
     </article>
   );
 }

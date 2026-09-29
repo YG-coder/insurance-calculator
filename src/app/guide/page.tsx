@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Script from "next/script";
+import JsonLd from "@/components/JsonLd";
 import Link from "next/link";
 import { SITE } from "@/lib/site";
 import {
@@ -136,16 +136,8 @@ export default function GuideHubPage() {
         })}
       </div>
 
-      <Script
-        id="ld-guide-collection"
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(collectionJsonLd) }}
-      />
-      <Script
-        id="ld-guide-breadcrumb"
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
-      />
+      <JsonLd id="ld-guide-collection" data={collectionJsonLd} />
+      <JsonLd id="ld-guide-breadcrumb" data={breadcrumbJsonLd} />
     </div>
   );
 }

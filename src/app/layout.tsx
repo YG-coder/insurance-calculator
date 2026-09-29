@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Script from "next/script";
+import JsonLd from "@/components/JsonLd";
 import "./globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -81,11 +82,7 @@ export default function RootLayout({
         <main id="main-content" tabIndex={-1} className="min-h-[60vh] scroll-mt-24">{children}</main>
         <Footer />
 
-        <Script
-            id="ld-json-website"
-            type="application/ld+json"
-            dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-        />
+        <JsonLd id="ld-json-website" data={jsonLd} />
         </body>
         </html>
     );

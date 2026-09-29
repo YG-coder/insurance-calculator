@@ -1,5 +1,5 @@
 import Link from "next/link";
-import Script from "next/script";
+import JsonLd from "@/components/JsonLd";
 import { CALCULATORS, SITE } from "@/lib/site";
 
 type Props = {
@@ -23,11 +23,7 @@ export default function RelatedCalculators({ currentHref }: Props) {
   return (
     <section className="mt-12">
       {jsonLd && (
-        <Script
-          id={`calculator-jsonld-${currentHref.replaceAll("/", "-")}`}
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replaceAll("<", "\\u003c") }}
-        />
+        <JsonLd id={`calculator-jsonld-${currentHref.replaceAll("/", "-")}`} data={jsonLd} />
       )}
       <h2 className="text-xl font-bold text-slate-900 mb-4">관련 계산기</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

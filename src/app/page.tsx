@@ -4,12 +4,43 @@ import FAQ from "@/components/FAQ";
 import { CALCULATORS, SITE } from "@/lib/site";
 import { publishedGuides } from "@/lib/guides";
 import { HOME_GROUPS, REVIEW_STEPS, PROTECTION_STEPS } from "@/lib/home";
+import { REGULATORY_RULES } from "@/lib/insurance/engine/regulatoryRules";
+
+const HOME_TITLE = "보험계산기 | 실손 병원비·해지환급금·가족 보장 무료 계산";
+const HOME_DESCRIPTION = "실손보험 세대별 병원비 자기부담금, 해지환급금과 앞으로 낼 보험료, 가족에게 필요한 사망보장까지. 회원가입 없이 입력한 값으로 바로 계산하는 무료 보험 계산기입니다.";
 
 export const metadata: Metadata = {
-  title: "보험계산기 | 실손 병원비·보험 해지·가족 보장 점검",
-  description: "병원비 중 내 부담은 얼마인지, 보험을 유지하면 얼마를 더 내는지, 가족에게 필요한 보장은 얼마인지. 상황에 맞는 보험 계산기와 준비할 자료를 한곳에서 확인하세요.",
+  // absolute: 레이아웃의 title.template("%s | 보험계산기")이 붙지 않게 명시한다.
+  title: { absolute: HOME_TITLE },
+  description: HOME_DESCRIPTION,
   alternates: { canonical: SITE.url },
+  // ⚠ openGraph는 레이아웃 값을 통째로 대체한다(얕은 병합) — type·locale·siteName도 다시 적는다.
+  //   종전에는 홈 og:title이 레이아웃 기본값이라 <title>과 달랐다.
+  openGraph: {
+    type: "website",
+    locale: "ko_KR",
+    url: SITE.url,
+    siteName: SITE.name,
+    title: HOME_TITLE,
+    description: HOME_DESCRIPTION,
+  },
 };
+
+/**
+ * 규정 대조일 — 확정(CONFIRMED) 규정 상수를 원문과 마지막으로 대조한 날(verifiedAt 최댓값).
+ * ⚠ 페이지 수정일이 아니다. 홈은 관리하는 콘텐츠 수정일이 없어 dateModified를 두지 않는다.
+ * ⚠ 값이 없으면 빌드에서 멈춘다 — 날짜를 지어내지 않는다.
+ */
+function regulationCheckedAt(): string {
+  const latest = Object.values(REGULATORY_RULES)
+    .filter((rule) => rule.status === "CONFIRMED")
+    .map((rule) => rule.verifiedAt)
+    .sort()
+    .at(-1);
+  if (!latest) throw new Error("홈 규정 대조일: CONFIRMED 규정이 없습니다");
+  return latest;
+}
+const REGULATION_CHECKED_AT = regulationCheckedAt();
 
 const faqs = [
   { q: "내 실손보험이 몇 세대인지 모르겠어요.", a: "보험증권이나 보험사 앱에서 상품명과 적용 약관을 먼저 확인하세요. 전환·재가입했다면 처음 가입한 시점만으로 선택하지 말고 현재 적용되는 계약을 기준으로 선택하세요. 이 사이트는 2·3세대, 4세대, 5세대 계산기를 제공합니다.", link: { href: "/guide/silson-generations", label: "실손보험 세대 구분 가이드" } },
@@ -34,17 +65,25 @@ export default function HomePage() {
           <div>
             <p className="text-sm font-semibold text-brand-700">내 보험을 이해하는 첫 계산</p>
             <h1 className="mt-4 break-keep text-3xl font-bold leading-tight tracking-tight text-slate-900 sm:text-4xl sm:leading-tight">
-              병원비·보험료·가족 보장,<br />필요한 금액을 확인하세요
+              병원비·보험료·가족 보장,{" "}<br />필요한 금액을 확인하세요
             </h1>
             <p className="mt-5 max-w-xl text-base leading-7 text-slate-600">
-              병원비, 남은 보험료, 가족에게 필요한 보장.{" "}<br className="hidden sm:block" />
-              지금 궁금한 것부터 하나씩 확인하세요.
+              보험계산기는 실손보험 자기부담금, 해지환급금과 앞으로 낼 보험료, 가족에게 필요한
+              사망보장을 직접 입력한 값으로 계산하는 무료 참고용 계산 도구입니다. 2·3세대부터
+              5세대까지 실손 계산기를 포함한 {CALCULATORS.length}개 계산기를 상황별로 나눠 두었고,
+              계산 결과는 실제 지급 보험금을 확정하지 않습니다.
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
               <Link href="#start" className={`btn-primary ${focus}`}>내 상황에 맞게 시작하기 ↓</Link>
               <Link href="#calculators" className={`inline-flex items-center rounded-xl border border-slate-300 px-5 py-3 font-semibold text-slate-700 hover:bg-slate-50 ${focus}`}>전체 계산기 {CALCULATORS.length}개</Link>
             </div>
             <p className="mt-5 text-xs leading-6 text-slate-500">회원가입 없이 · 입력값은 브라우저에서 계산 · 결과는 참고용</p>
+            {/* 적용 대상은 실손 계산기뿐이다 — 해지·가족 보장 계산기는 표준약관 기반이 아니다.
+                ⚠ 외부 링크는 두지 않는다: tests/homeNavigation.test.ts가 홈의 외부 링크를 금지한다. */}
+            <p className="mt-1 text-xs leading-6 text-slate-500">
+              실손 계산 기준: 금융감독원 「보험업감독업무시행세칙」 [별표 15] 표준약관 · 규정 대조일{" "}
+              <time dateTime={REGULATION_CHECKED_AT}>{REGULATION_CHECKED_AT}</time>
+            </p>
           </div>
           <aside aria-labelledby="before-start" className="rounded-2xl bg-slate-900 p-6 text-white sm:p-8">
             <p className="text-xs font-semibold tracking-widest text-indigo-200">계산 전 준비</p>

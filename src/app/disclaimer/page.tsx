@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Script from "next/script";
+import JsonLd from "@/components/JsonLd";
 import NoticeBox from "@/components/NoticeBox";
 import FAQ from "@/components/FAQ";
 import { SITE } from "@/lib/site";
@@ -262,16 +262,8 @@ export default function DisclaimerPage() {
         </div>
       </div>
 
-      <Script
-        id="ld-disclaimer-page"
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(pageJsonLd) }}
-      />
-      <Script
-        id="ld-disclaimer-faq"
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
-      />
+      <JsonLd id="ld-disclaimer-page" data={pageJsonLd} />
+      <JsonLd id="ld-disclaimer-faq" data={faqJsonLd} />
     </article>
   );
 }

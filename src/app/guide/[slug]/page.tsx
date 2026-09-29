@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Script from "next/script";
+import JsonLd from "@/components/JsonLd";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import FAQ from "@/components/FAQ";
@@ -220,22 +220,10 @@ export default async function GuidePage({
         </Link>
       </div>
 
-      <Script
-        id={`ld-breadcrumb-${g.slug}`}
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
-      />
-      <Script
-        id={`ld-article-${g.slug}`}
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }}
-      />
+      <JsonLd id={`ld-breadcrumb-${g.slug}`} data={breadcrumbJsonLd} />
+      <JsonLd id={`ld-article-${g.slug}`} data={articleJsonLd} />
       {faqJsonLd && (
-        <Script
-          id={`ld-faq-${g.slug}`}
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
-        />
+        <JsonLd id={`ld-faq-${g.slug}`} data={faqJsonLd} />
       )}
     </article>
   );

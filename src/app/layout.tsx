@@ -1,12 +1,9 @@
 import type { Metadata } from "next";
-import Script from "next/script";
 import JsonLd from "@/components/JsonLd";
 import "./globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { SITE } from "@/lib/site";
-
-const ADSENSE_CLIENT = "ca-pub-6405509957088169";
 
 export const metadata: Metadata = {
     metadataBase: new URL(SITE.url),
@@ -47,10 +44,6 @@ export const metadata: Metadata = {
             "naver-site-verification": "dae405d642587eca39fd9ecbf8558e23fa85bae2",
         },
     },
-
-    other: {
-        "google-adsense-account": ADSENSE_CLIENT,
-    },
 };
 
 export default function RootLayout({
@@ -71,13 +64,6 @@ export default function RootLayout({
         <html lang="ko">
         <body>
         <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-white focus:px-5 focus:py-3 focus:text-brand-700 focus:shadow-lg focus:outline focus:outline-2 focus:outline-brand-600">본문으로 건너뛰기</a>
-        <Script
-            async
-            src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT}`}
-            crossOrigin="anonymous"
-            strategy="afterInteractive"
-        />
-
         <Header />
         <main id="main-content" tabIndex={-1} className="min-h-[60vh] scroll-mt-24">{children}</main>
         <Footer />

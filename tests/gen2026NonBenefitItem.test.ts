@@ -20,13 +20,13 @@ function check(name: string, cond: boolean, detail = "") {
 }
 
 /** 차단이란 "숫자를 하나도 돌려주지 않는 것"이다. 근사치는 이번 결함의 원인이었다. */
-function noNumbers(r: CalcResult | MultiClaimResult): boolean {
+function noNumbers(r: CalcResult | MultiClaimResult, status: "PENDING_UNVERIFIED" | "EXCLUDED" = "PENDING_UNVERIFIED"): boolean {
   if ("lines" in r) {
-    return r.status === "PENDING_UNVERIFIED" &&
+    return r.status === status &&
       r.totalOwnPay === null && r.totalInsurancePay === null &&
       r.lines.length === 0 && r.appliedCaps.length === 0;
   }
-  return r.status === "PENDING_UNVERIFIED" &&
+  return r.status === status &&
     r.ownPay === null && r.insurancePay === null &&
     r.rateBased === null && r.rateApplied === null && r.minDeductible === null &&
     r.appliedCaps.length === 0;
@@ -61,11 +61,11 @@ for (const item of BLOCKED) {
   for (const severity of ["critical", "non_critical"] as const) {
     for (const visit of ["inpatient", "outpatient"] as const) {
       const r = calc2026({ amount: 1_000_000, coverage: "non_benefit", visit, severity, nonBenefitItem: item, priorAnnualDeductible: 4_800_000 });
-      check(`단건 ${label}/${severity}/${visit}: 숫자 반환 없이 차단`, noNumbers(r), JSON.stringify(r));
+      check(`단건 ${label}/${severity}/${visit}: 숫자 반환 없이 차단`, noNumbers(r, severity === "non_critical" && item === "musculoskeletal_esw" ? "EXCLUDED" : "PENDING_UNVERIFIED"), JSON.stringify(r));
       check(`단건 ${label}/${severity}/${visit}: 항목명을 밝힘`, r.notes.some((n) => n.includes(label)), JSON.stringify(r.notes));
 
       const m = calculateMany2026({ cause: "injury", coverage: "non_benefit", visit, severity, nonBenefitItem: item, amounts: [1_000_000, 1_000_000] });
-      check(`다회 ${label}/${severity}/${visit}: 숫자 반환 없이 차단`, noNumbers(m), JSON.stringify(m));
+      check(`다회 ${label}/${severity}/${visit}: 숫자 반환 없이 차단`, noNumbers(m, severity === "non_critical" && item === "musculoskeletal_esw" ? "EXCLUDED" : "PENDING_UNVERIFIED"), JSON.stringify(m));
     }
   }
 }

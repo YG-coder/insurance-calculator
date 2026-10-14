@@ -20,7 +20,16 @@ export interface RegulatedConstant<T> {
   evidenceGrade: EvidenceGrade;
   verifiedAt: string;
   sources: readonly RegulatorySource[];
+  /** 원문 발행·시행일과 구분한, 대상 상품·계약의 적용 시작 확인 기록. */
+  application?: RegulatoryApplication;
   note?: string;
+}
+
+export interface RegulatoryApplication {
+  startsOn: string;
+  scope: string;
+  verifiedAt: string;
+  sources: readonly RegulatorySource[];
 }
 
 export function regulated<T>(rule: RegulatedConstant<T>): Readonly<RegulatedConstant<T>> {

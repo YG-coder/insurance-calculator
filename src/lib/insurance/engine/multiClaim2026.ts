@@ -1,3 +1,4 @@
+import { routeOfGen2026Item, excludedMany2026 } from "./itemRouting2026";
 // ⚠ `normalizeAmount`를 더 이상 import하지 않는다(G-27). 진료비를 조용히 고치던 유일한
 //   자리(`(input.amounts ?? []).map(normalizeAmount)`)가 엄격 검증으로 바뀌어 사용처가
 //   사라졌다. 남겨 두면 다음에 추가되는 금액 축이 다시 조용히 변형될 자리가 생긴다.
@@ -208,7 +209,7 @@ function buildNotes(
   // 여기부터는 일반 비급여(nonBenefitItem === "general")만 도달한다.
   //   3대비급여·MRI·상급병실료는 계산 전에 PENDING_UNVERIFIED로 차단된다.
   notes.push(
-    "이 계산은 일반 비급여((1)상해비급여·(2)질병비급여)만 다룹니다. 근골격계 이학요법·체외충격파, 비급여 주사료, 비급여 MRI, 상급병실료 차액은 약관상 별도 보장종목이라 이 결과에 포함되지 않습니다.",
+    "이 계산은 일반 비급여((1)상해비급여·(2)질병비급여)의 공제·한도를 적용합니다. 중증 근골격계 이학요법·체외충격파와 일반 비급여 주사료, 비급여 MRI, 상급병실료 차액은 별도 산식입니다. 비중증 근골격계·체외충격파·일반 주사료는 면책이며, 예외 약제로 확인한 주사료만 일반 경로를 이용할 수 있습니다.",
   );
   // 아래 두 안내는 비급여 통원에만 해당한다. 급여 통원에 붙이면 사실과 다르다.
   const isNonBenefitOutpatient = input.visit === "outpatient";
@@ -328,6 +329,24 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
     status: "PENDING_UNVERIFIED", generation: "2026", lines: [],
     totalAmount, totalOwnPay: null, totalInsurancePay: null, appliedCaps: [], notes,
   });
+
+  // 면책은 통원 카운터·보험가입금액을 계산하기 전에 공통 판정으로 구분한다.
+  let exceptionalInjection = false;
+  let itemSeverity: Severity | undefined;
+  if (nb) {
+    const item = nb.nonBenefitItem;
+    if ((item === "musculoskeletal_esw" || item === "injection") && nb.severity === "non_critical") {
+      itemSeverity = "non_critical";
+      const purpose = item === "injection" ? nb.injectionPurpose : undefined;
+      if (purpose !== undefined && !["general", "anticancer", "antibiotic", "orphan_drug"].includes(purpose)) {
+        return blocked(["약제 용도(injectionPurpose)를 올바르게 선택해 주세요."]);
+      }
+      const route = routeOfGen2026Item(itemSeverity, item, purpose);
+      if (route === "excluded") return excludedMany2026(totalAmount, item);
+      if (route === "missing_purpose") return blocked(["비중증 주사료의 약제 용도를 선택해 주세요. 선택 전에는 면책 예외 여부를 판정하지 않습니다(특별약관2 제4조 p.299·302)."]);
+      exceptionalInjection = route === "general";
+    }
+  }
 
   /**
    * 검증 전이지만 **한 번만 읽은** 건강보험 본인부담률 (G-31).
@@ -459,6 +478,7 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
     //   `readCount`가 같은 이름을 2회 읽어, 값이 달라지는 접근자에서 검사한 값과 안내에
     //   실리는 값이 갈릴 수 있었다. 먼저 찾은 키에서 반환하는 계약과 안내 문구는 그대로다.
     for (const stray of SPECIAL_ITEM_ONLY_KEYS) {
+      if (exceptionalInjection && stray === "injectionPurpose") continue;
       const got = readCount(input, stray);
       if (got === undefined) continue;
       return blocked([
@@ -495,7 +515,7 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
     const probe = calc2026({
       amount: 0, coverage: "non_benefit", visit: nb.visit, tier: nb.tier,
       severity: "critical", // 치료유형 검사가 severity보다 먼저라 결과에 영향이 없다
-      nonBenefitItem: (nb as { nonBenefitItem?: Gen2026NonBenefitItem }).nonBenefitItem as Gen2026NonBenefitItem,
+      nonBenefitItem: exceptionalInjection ? "general" : (nb as { nonBenefitItem?: Gen2026NonBenefitItem }).nonBenefitItem as Gen2026NonBenefitItem,
     });
     if (probe.status !== "OK") return blocked(probe.notes);
 
@@ -529,7 +549,7 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
     //   ⚠ **여기서 한 번만 읽는다.** 이 값을 아래 판정·산식·안내가 모두 쓴다.
     //   ⚠ 반환은 이 진입점의 기존 실패 계약 `blocked()` 그대로다 — 검증된 진료비 합계를
     //     보존하고 행·후보 보험금을 노출하지 않는다.
-    const rawSeverity = readCount(nb, "severity");
+    const rawSeverity = exceptionalInjection ? itemSeverity : readCount(nb, "severity");
     if (rawSeverity !== undefined
       && rawSeverity !== "critical" && rawSeverity !== "non_critical") {
       return blocked([
@@ -861,7 +881,7 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
       let single = nb
         ? calc2026({
             amount, coverage: "non_benefit", visit: nb.visit, tier: nb.tier, severity,
-            nonBenefitItem: nb.nonBenefitItem,
+            nonBenefitItem: exceptionalInjection ? "general" : nb.nonBenefitItem,
             // ⚠ 위에서 한 번 읽은 원값을 재사용한다. 여기서 다시 읽으면 행마다·해석마다
             //   다른 값이 적용될 수 있다.
             perVisitCoverageLimit: outpatientLimitRaw as number | undefined,

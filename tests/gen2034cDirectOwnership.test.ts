@@ -311,7 +311,7 @@ console.log("\n[G-34C] 9. 화면 — 비활성 경로에 종별을 싣지 않고
     && ui4.includes('tier === "clinic"') && ui4.includes('tier === "hospital"'));
   check("5세대 화면: 급여는 통원에만 전달", /tier: visit === "outpatient" \? benefitTier : undefined/.test(ui5));
   check("5세대 화면: 비급여 입원은 기존 종별 계약 그대로",
-    /tier: visit === "inpatient" \? nbInpatientTier \?\? undefined : undefined/.test(ui5));
+    /tier: isGeneralPath && visit === "inpatient" \? nbInpatientTier \?\? undefined : undefined/.test(ui5));
   check("화면에 as 단언을 더하지 않았다",
     !/tier: \w+ as Tier/.test(ui4) && !/tier: \w+ as Tier/.test(ui5));
 }
@@ -350,7 +350,7 @@ console.log("\n[G-34C] 11. 목록과 자리 — 구조 계약");
     s1.indexOf("표준형/선택형(plan) 미지정") < s1.indexOf("2·3세대 단건 계산에 쓰이지 않는 입력입니다"));
   check("5세대 공통 목록은 각 분기의 기존 검사 뒤에서 호출된다",
     s3.indexOf("5세대 급여: perVisitCoverageLimit") < s3.indexOf("const foreign = rejectForeignAxes(input, amount);")
-    && s3.indexOf("건강보험 본인부담률(nhisCoinsuranceRate)은 급여 통원 계산에만") < s3.indexOf("const foreignNonBenefit = rejectForeignAxes(input, amount);"));
+    && s3.indexOf("건강보험 본인부담률(nhisCoinsuranceRate)은 급여 통원 계산에만") < s3.indexOf("const foreignNonBenefit = rejectForeignAxes(input, amount, exceptionalInjection);"));
   check("각 키를 한 번만 읽는다(세 파일 공통 모양)",
     [s1, s2, s3].every((s) => /const got: unknown = \(input as unknown as Record<string, unknown>\)\[key\];\n\s*if \(got === undefined\) continue;/.test(s)));
   check("안내에 받은 값 자체를 넣지 않는다(typeof만)",

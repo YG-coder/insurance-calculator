@@ -1,3 +1,4 @@
+// 2026-10-14: 승인된 비중증 면책·주사 예외 엔진 및 페이지의 잘못된 보장 안내 변경에 한해 기준 해시를 갱신했다.
 // 커밋 D — 5세대 잔여 HOLD의 근거·문서 정리.
 //
 // ⚠ 이 커밋은 **계산 결과와 공개 UI 동작을 바꾸지 않는다.** 확정된 사실만 규칙으로 올리고,
@@ -468,7 +469,7 @@ console.log("\n[커밋 D·E] 계산·화면 무변경 (기준 30dee21)");
     //     (3) `coverage`·`visit`·`tier`를 호출당 **한 번만** 읽는다(종전 2~4회). 첫 사용
     //         시점에 읽는 메모이제이션이라 선행 차단 경로의 접근자 순서는 그대로다.
     //   ⚠ 산식·상수·상한 절삭·`ok()`/`pending()`의 반환값·기존 안내 문구는 그대로다.
-    "src/lib/insurance/engine/generation2026.ts": "98a0d0612b5728b1ac81fae833153244295bbb3af7be595577377754a1c17ce1",
+    "src/lib/insurance/engine/generation2026.ts": "fb821b1b0e0aee489093fc7c292b233e9d589aa4d686215328b5dfcff3aac4f3",
     // ⚠ G-33에서 **의도적으로** 갱신했다(종전 da28c9f7…). 제네릭 진입점이 **선택된 세대가
     //   소비하지 않는 5세대 전용 축**을 명시적으로 거부한다 — 종전에는 2009·2017·2021의
     //   모든 경로에서 `nhisCoinsuranceRate`·`severity`·`nonBenefitItem`·
@@ -486,7 +487,7 @@ console.log("\n[커밋 D·E] 계산·화면 무변경 (기준 30dee21)");
     //   ⚠ 소유권 표에서 `held: ["tier"]` 두 칸이 비었다 — G-34C가 확정 stray로 닫았고 판정은
     //     세대 엔진이 한다(라우터는 `coverage`까지 보는 조건을 쓸 수 없다).
     //   ⚠ 세대별 산식·상수·반환 계약·stray 안내 문구와 그 순서는 그대로다.
-    "src/lib/insurance/engine/engine.ts": "aa858be2de0e8b99e30715d4cd726411871d37b0c1a77470e3da0a27ff0ac31b",
+    "src/lib/insurance/engine/engine.ts": "9da65dd73b70c5b5ae913cd662a511d15eeaa1e346528fa2822dc130bfb29e88",
     "src/lib/insurance/engine/capLabels.ts": "23d0bc4b40a1b408cf74ec0189457e1a3c9f6bc75988e4bcde4e7c2c8554410d",
     // ⚠ G-14D에서 **의도적으로** 갱신했다(종전 c10d2fea…).
     //   `rejected()`의 '받은 값' 표시가 `JSON.stringify(got) ?? String(got)`이라
@@ -504,7 +505,7 @@ console.log("\n[커밋 D·E] 계산·화면 무변경 (기준 30dee21)");
     //   ⚠ `isPositiveInt`·`oneOf`·`showValue`·`rejected`와 값 목록 4종은 그대로다.
     //     `rejected()`의 안전 표시 계약(G-14D)도 그대로 재사용한다.
     "src/lib/insurance/engine/itemGuards.ts": "546f476a59ff0dd8ca85fd6e84c25eedeeaed80f63d042e1d662bdff0e1ebc94",
-    "src/app/5th-generation-health-insurance-calculator/page.tsx": "7bc5927da6e9245189cd71524883b432594a8e720d1d2d4c0f73c3c04b1ed375",
+    "src/app/5th-generation-health-insurance-calculator/page.tsx": "f4911800f4425117b0432602a6d43906868549cdaaeb1c4bdd5bd80e1af33902",
   };
   for (const [file, want] of Object.entries(FROZEN)) {
     const got = createHash("sha256").update(readFileSync(file)).digest("hex");
@@ -529,10 +530,11 @@ console.log("\n[커밋 D·E] 계산·화면 무변경 (기준 30dee21)");
       /GEN2026_SINGLE_AMOUNT_FORMAT\.test\(v\)\) return null;[\s\S]{0,80}replace\(\/,\/g/.test(g5));
     check("변경 의도(G-4): 무효 원문에서 엔진을 호출하지 않는다",
       /const result = amountInvalid\s*\n\s*\? null/.test(g5));
-    check("무변경(G-4): 별도 보장종목·선택 게이트 3종이 그대로",
-      /const needsItem = coverage === "non_benefit" && nonBenefitItem === null;/.test(g5)
-      && /const needsSeverity =\s*\n\s*coverage === "non_benefit" && nonBenefitItem === "general" && severity === null;/.test(g5)
-      && /const needsTier =\s*\n\s*coverage === "non_benefit" && nonBenefitItem === "general" && severity !== null\s*\n\s*&& visit === "inpatient" && nbInpatientTier === null;/.test(g5));
+    // 2026-10-14: 면책 판정을 위해 근골격계·주사료에도 질환 구분을 묻고 주사 용도 게이트를 추가한다.
+    check("면책 수정: 치료유형·질환 구분·종별·약제 용도 게이트를 연결한다",
+      g5.includes('const needsItem = coverage === "non_benefit" && nonBenefitItem === null;')
+      && g5.includes('nonBenefitItem === "musculoskeletal_esw" || nonBenefitItem === "injection"')
+      && /needsItem \|\| needsSeverity \|\| needsTier \|\| needsPurpose \|\| limits === null/.test(g5));
     // ⚠ **낡은 계약을 교체했다.** 종전에는 5세대 단건의 0원 정책(`num > 0`)이 G-4 이후
     //   **무변경**이라는 것을 고정했다. G-35가 그 정책을 의도적으로 바꿨다 — 정상 계산의
     //   0원 결과를 감추면 계산 실패와 구분되지 않기 때문이다. HOLD 관점에서 지켜야 할 것은

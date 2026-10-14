@@ -62,21 +62,10 @@ export const GEN2026_MSK_APPROVED_THROUGH_VALUES: readonly Gen2026MskApprovedThr
  * 입력 조합이 어느 경로에서 보상되는지. UI와 엔진이 같은 판단을 쓰도록 한 곳에 둔다.
  *   "missing_purpose" — 중증 주사료인데 약제 용도를 고르지 않아 경로를 정할 수 없다.
  */
-export type Gen2026ItemRoute = "special_item" | "general" | "missing_purpose";
-
-export function routeOfGen2026Item(
-  severity: Severity,
-  item: Gen2026SpecialItem,
-  injectionPurpose?: Gen2026InjectionPurpose,
-): Gen2026ItemRoute {
-  if (severity === "critical") {
-    if (item !== "injection") return "special_item"; // 근골격계·MRI는 (3)3대비급여
-    if (injectionPurpose === undefined) return "missing_purpose";
-    return GEN2026_INJECTION_GENERAL_ROUTE_DRUGS.includes(injectionPurpose) ? "general" : "special_item";
-  }
-  // 비중증 — 특약2 (1)①·(2)①이 배제하는 것은 MRI뿐이다.
-  return item === "mri" ? "special_item" : "general";
-}
+export { routeOfGen2026Item } from "./itemRouting2026";
+export type { Gen2026ItemRoute } from "./itemRouting2026";
+import { routeOfGen2026Item, excludedMany2026 } from "./itemRouting2026";
+import type { Gen2026ExcludedResult } from "./types";
 
 interface ItemSpec {
   fixed: number;
@@ -277,7 +266,7 @@ function rejectPathUnusedAxes(raw: Record<string, unknown>): Gen2026RejectedResu
 
 function validateItemInput(
   input: Exclude<Gen2026ItemClaimInput, Gen2026RoomChargeInput>,
-): Gen2026RejectedResult | CheckedItemInput {
+): Gen2026RejectedResult | Gen2026ExcludedResult | CheckedItemInput {
   const raw = input as unknown as Record<string, unknown>;
   if (raw.route !== "special_item" && raw.route !== "general") return rejected("경로(route)", raw.route);
   if (raw.coverage !== "non_benefit") return rejected("급여 구분(coverage)", raw.coverage);
@@ -286,11 +275,11 @@ function validateItemInput(
 
   // 약제 용도는 중증 비급여 주사료에서만 의미가 있다. 그 밖의 조합에 실려 오면 막는다.
   const purpose = raw.injectionPurpose;
-  const usesPurpose = raw.item === "injection" && raw.severity === "critical";
+  const usesPurpose = raw.item === "injection";
   if (usesPurpose) {
     if (purpose !== undefined && !oneOf(purpose, PURPOSE_VALUES)) return rejected("약제 용도(injectionPurpose)", purpose);
   } else if (purpose !== undefined) {
-    return rejected("약제 용도(injectionPurpose)는 중증 비급여 주사료에서만 사용합니다 —", purpose);
+    return rejected("약제 용도(injectionPurpose)는 비급여 주사료에서만 사용합니다 —", purpose);
   }
 
   // ── 경로 대조 — 리터럴 네 축이 유효해지는 즉시, 경로별 축을 읽기 **전에** ──────
@@ -309,10 +298,11 @@ function validateItemInput(
   );
   if (expectedRoute === "missing_purpose") {
     return rejected(
-      "비급여 주사료의 약제 용도(injectionPurpose)가 없어 보상 보장종목을 정할 수 없습니다(특별약관1 제3조(3)제2항) —",
+      "비급여 주사료의 약제 용도(injectionPurpose)가 없어 보장 경로와 면책 여부를 정할 수 없습니다(특별약관1 제3조(3)제2항·특별약관2 제4조 p.299·302) —",
       purpose,
     );
   }
+  if (expectedRoute === "excluded") return excludedMany2026(0, raw.item as "musculoskeletal_esw" | "injection");
   if (expectedRoute !== raw.route) {
     return rejected(
       `이 조합은 ${expectedRoute === "general" ? "일반 상해·질병 비급여" : "별도 보장종목"} 경로에서 계산해야 합니다. 요청된 경로(route)`,
@@ -328,7 +318,7 @@ function validateItemInput(
 
   // ── (3) 별도 보장종목 전용 두 축도 **경로와 무관하게 먼저** 본다 ──
   //   ⚠ 위 통원 카운터와 같은 이유다. `special_item` 분기가 먼저 return하면 일반 (1)(2)로
-  //     되돌아가는 조합(항암제 등 주사료·비중증 근골격계/주사료)에 실린 값이 검사에 닿지
+  //     되돌아가는 조합(중증·비중증 예외 주사료)에 실린 값이 검사에 닿지
   //     못하고 조용히 버려진다. 두 축은 **route === "special_item"에서만** 쓰인다.
 
   // ── '보상한 횟수'(priorAnnualCoveredCount) ───────────────────────
@@ -848,7 +838,7 @@ function routeNote(input: Gen2026RoutedGeneralInput): string {
   if (input.severity === "critical") {
     return `${GEN2026_INJECTION_PURPOSE_LABEL[input.injectionPurpose]}를 위해 사용된 비급여 주사료는 약관상 3대비급여가 아니라 상해비급여·질병비급여에서 보상합니다(특별약관1 제3조(3)제2항). 일반 비급여 산식으로 계산했습니다.`;
   }
-  return `비중증 ${GEN2026_SPECIAL_ITEM_LABEL[input.item]}는 약관상 별도 보장종목이 아니라 상해비급여·질병비급여에서 보상합니다(특별약관2 제3조 (1)제1항·(2)제1항 — 배제 대상은 비급여 자기공명영상진단뿐입니다). 일반 비급여 산식으로 계산했습니다.`;
+  return "비중증 주사료의 약제 용도가 특별약관2 제4조(p.299·302)의 면책 예외에 해당하여 일반 비급여 산식을 적용했습니다. 다른 보장 조건과 면책은 별도로 확인해야 합니다.";
 }
 
 /** ⚠ export하지 않는다. 위와 같은 이유다. */

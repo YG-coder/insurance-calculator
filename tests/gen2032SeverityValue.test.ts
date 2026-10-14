@@ -1,3 +1,4 @@
+// 2026-10-14: 일반 경로 입력 검증은 비중증 면책 예외 주사로 대조한다. 면책 자체는 gen2026NonCriticalExclusions.test.ts에서 별도 검증한다.
 // G-32 — 5세대 비급여 **중증/비중증(severity)** 입력의 열거값 검증.
 //   G-30이 미사용 금액 축을, G-31이 미사용 비금액 축을 닫았다. 여기서는 **실제로 소비하는**
 //   축의 값 검증을 다룬다 — 미사용 축의 stray 계약과는 다른 종류의 결함이다.
@@ -103,7 +104,7 @@ const I: Record<string, (e?: Any) => Any> = {
   "항목 비중증 MRI": (e = {}) => ({ route: "special_item", coverage: "non_benefit", severity: "non_critical", item: "mri", lines: [{ amount: A, visit: "outpatient" }], ...e }),
   // ⚠ G-34C: 일반 복귀 **통원** 픽스처에서 `tier`를 뺐다 — 5세대 비급여의 종별은 입원만
   //   가르므로 통원에 실으면 이제 거부된다(종전에는 읽고 무시됐다).
-  "항목 일반전환": (e = {}) => ({ route: "general", coverage: "non_benefit", cause: "disease", severity: "non_critical", item: "musculoskeletal_esw", amounts: [A], visit: "outpatient", priorAnnualOutpatientDays: 0, ...e }),
+  "항목 일반전환": (e = {}) => ({ route: "general", coverage: "non_benefit", cause: "disease", severity: "non_critical", item: "injection", amounts: [A], visit: "outpatient", priorAnnualOutpatientDays: 0, ...e , injectionPurpose: "anticancer" }),
 };
 const ROOM = (e: Any = {}) => ({ route: "room_charge", coverage: "non_benefit", cause: "disease", severity: "critical", stays: [{ roomChargeTotal: 400_000, inpatientDays: 2 }], ...e });
 
@@ -294,12 +295,12 @@ console.log("\n[G-32] 9. 구조 — 한 자리에서 읽고, 원본을 다시 �
   const gen = readFileSync("src/lib/insurance/engine/generation2026.ts", "utf8");
   const mul = readFileSync("src/lib/insurance/engine/multiClaim2026.ts", "utf8");
   check("generation2026: 검증 뒤 지역 변수를 쓴다",
-    /const rawSeverity: unknown = \(input as \{ severity\?: unknown \}\)\.severity;/.test(gen)
+    /const rawSeverity: unknown = exceptionalInjection \? itemSeverity : \(input as \{ severity\?: unknown \}\)\.severity;/.test(gen)
     && /const severity: Severity = rawSeverity;/.test(gen));
   check("generation2026: truthy 통과 검사가 사라졌다",
     !/if \(!input\.severity\) \{/.test(gen.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ")));
   check("generation2026: 본문이 input.severity를 다시 읽지 않는다",
-    (gen.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ").match(/input\.severity/g) ?? []).length === 0);
+    (gen.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ").match(/input\.severity/g) ?? []).length === 1); // 비중증 면책 판정 경로에서만 먼저 읽고 재사용한다.
   check("generation2026: 두 열거값만 통과시킨다",
     /rawSeverity !== "critical" && rawSeverity !== "non_critical"/.test(gen));
   check("multiClaim2026: 한 자리에서만 읽는다",
@@ -311,9 +312,9 @@ console.log("\n[G-32] 9. 구조 — 한 자리에서 읽고, 원본을 다시 �
     /severity: Severity \| undefined,\n\): string\[\] \{/.test(mul)
     && /notes: buildNotes\(input, limitState, outpatientLimitState, severity\),/.test(mul));
   check("multiClaim2026: 검증이 통원 카운터 축 분리 앞이다",
-    mul.indexOf('const rawSeverity = readCount(nb, "severity");') < mul.indexOf("// ── 통원 카운터 축 분리"));
+    mul.indexOf('const rawSeverity = exceptionalInjection ? itemSeverity : readCount(nb, "severity");') < mul.indexOf("// ── 통원 카운터 축 분리"));
   check("multiClaim2026: 검증이 입원 카운터 stray 뒤다",
-    mul.indexOf('const rawSeverity = readCount(nb, "severity");') > mul.indexOf("통원 횟수·일수 카운터는 입원 계산에 쓰이지 않습니다."));
+    mul.indexOf('const rawSeverity = exceptionalInjection ? itemSeverity : readCount(nb, "severity");') > mul.indexOf("통원 횟수·일수 카운터는 입원 계산에 쓰이지 않습니다."));
   check("multiClaim2026: undefined는 여기서 막지 않는다",
     /if \(rawSeverity !== undefined\n\s*&& rawSeverity !== "critical" && rawSeverity !== "non_critical"\) \{/.test(mul));
   // 항목·상급병실료는 종전 그대로 공용 가드를 쓴다.

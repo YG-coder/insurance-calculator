@@ -1,4 +1,4 @@
-import { regulated, RegulatorySource } from "./regulatory";
+import { regulated, RegulatoryApplication, RegulatorySource } from "./regulatory";
 
 // 발령일 2021. 7. 1. = 시행일 2021. 7. 1.(일부개정).
 //   2026-09-04 국가법령정보센터 현행행정규칙 "보험업감독업무시행세칙" → 연혁 목록 39번
@@ -306,10 +306,27 @@ const SAMSUNG_ROOM_CHARGE_EXAMPLE: RegulatorySource = {
   locator: "'의료실비보험 기준 및 상급 병실 보상 내용' — 산식과 보상사례 2건(1일 평균금액 10만원 이하·초과)",
 };
 
-/** 특약2 (1)①·(2)① — 배제 대상이 MRI뿐이라 비중증 근골격계·주사료는 일반 경로다. */
-const GEN5_NONCRITICAL_GENERAL_SCOPE: RegulatorySource = {
+/** 특약2 제4조의 면책과 주사료 예외. 제3조의 보장종목 구분과 별개다. */
+const GEN5_NONCRITICAL_TREATMENT_EXCLUSIONS: RegulatorySource = {
   ...GEN5_DIRECT_BASE,
-  locator: "별표/서식 → [별표 15] 표준약관(별표 식별번호 3216359) → 특별약관2 제3조 (1)상해비급여 제1항·(2)질병비급여 제1항, 2026. 5. 6. 공포·시행본 인쇄 p.287·p.290",
+  locator: "별표 식별번호 3216359 → 특별약관2 제4조 (1)상해비급여 제3항 제15~17호, 인쇄 p.299; (2)질병비급여 제3항 제16~18호, 인쇄 p.302; 2026.5.6 공포·시행본 PDF flSeq=163984377",
+};
+
+/** 규칙 전체의 시행일을 복사하지 않고, 실제 상품 판매 개시와 계약 적용 범위를 대조했다. */
+const GEN5_TREATMENT_APPLICATION: RegulatoryApplication = {
+  startsOn: "2026-05-06",
+  scope: "2026.5.6 판매가 시작된 5세대 실손 중 이 판본의 특별약관1·2를 채택한 계약의 보험기간 중 의료비. 개별 보험사의 판매 일정과 계약의 보장개시일은 별도로 확인하며, 기존 세대 계약에 소급 적용하지 않는다.",
+  verifiedAt: "2026-10-14",
+  sources: [
+    {
+      ...GEN5_FSC_RELEASE,
+      locator: "본문 2.(2) 중증·비중증 비급여 개편 및 2.(4) 가입방법: 2026.5.6부터 16개 보험회사에서 판매(신한EZ손보 6.1 별도 일정). 법령 전체의 시행일 대신 실제 상품 출시·판매 개시를 확인",
+    },
+    {
+      ...GEN5_DIRECT_BASE,
+      locator: "별표 식별번호 3216359 → 특별약관1·2 제3조 도입 문장의 '이 계약의 보험기간 중', 인쇄 p.257·286. 해당 약관을 채택한 계약의 보험기간에 적용",
+    },
+  ],
 };
 
 const GEN5_NONCRITICAL_ANNUAL_TERMS: RegulatorySource = {
@@ -409,6 +426,7 @@ const confirmed = <T>(
   sources: readonly RegulatorySource[],
   note?: string,
   verifiedAt = "2026-08-24",
+  application?: RegulatoryApplication,
 ) => regulated({
   ruleId,
   generation,
@@ -417,6 +435,7 @@ const confirmed = <T>(
   evidenceGrade: "A" as const,
   verifiedAt,
   sources,
+  ...(application ? { application } : {}),
   note,
 });
 
@@ -860,15 +879,24 @@ export const REGULATORY_RULES = {
     [GEN5_THIRD_DEDUCT_UNIT],
     "제3조(3)④ — 근골격계는 2종류 이상·동일 2회 이상을 각 치료행위 1회로, 주사는 1회 통원(입원)의 2회 이상 주사치료도 1회로, MRI는 2개 이상 부위·동일 부위 2회를 각 진단행위 1회로 본다",
   ),
-  GEN2026_INJECTION_GENERAL_ROUTE_DRUGS: confirmed5th(
-    "GEN2026-INJECTION-GENERAL-ROUTE-DRUGS",
+  GEN2026_INJECTION_GENERAL_ROUTE_DRUGS: confirmed(
+    "GEN2026-INJECTION-GENERAL-ROUTE-DRUGS", "2026",
     ["anticancer", "antibiotic", "orphan_drug"] as const,
     [GEN5_INJECTION_EXCEPTION],
-    "제3조(3)② — 항암제, 항생제(항진균제 포함), 희귀의약품을 위해 사용된 비급여 주사료는 (1)상해비급여 또는 (2)질병비급여에서 보상한다",
+    "제3조(3)② — 항암제, 항생제(항진균제 포함), 희귀의약품을 위해 사용된 비급여 주사료는 (1)상해비급여 또는 (2)질병비급여에서 보상한다", "2026-10-14", GEN5_TREATMENT_APPLICATION,
   ),
-  GEN2026_NONCRITICAL_MSK_INJECTION_GENERAL_ROUTE: confirmed5th(
-    "GEN2026-NONCRITICAL-MSK-INJECTION-GENERAL-ROUTE", true, [GEN5_NONCRITICAL_GENERAL_SCOPE],
-    "특약2 (1)①·(2)①이 배제하는 것은 '비급여 자기공명영상진단'뿐이다. 비중증 근골격계·주사료는 일반 상해·질병 비급여에서 보상한다",
+  // 정정: 제3조에서 MRI만 별도 보장종목이라는 사실은 제4조 면책을 배제하지 않는다.
+  GEN2026_NONCRITICAL_EXCLUDED_TREATMENTS: confirmed(
+    "GEN2026-NONCRITICAL-EXCLUDED-TREATMENTS", "2026",
+    ["musculoskeletal_esw", "injection_general"] as const,
+    [GEN5_NONCRITICAL_TREATMENT_EXCLUSIONS],
+    "근골격계 이학요법·체외충격파에 수반된 일체의 의료비와, 항암제·항생제·희귀의약품을 제외한 주사치료 비용은 면책이다. 종전 일반 경로 규칙은 제3조만 읽어 제4조를 누락한 오류였다.", "2026-10-14", GEN5_TREATMENT_APPLICATION,
+  ),
+  GEN2026_NONCRITICAL_INJECTION_EXCEPTION_DRUGS: confirmed(
+    "GEN2026-NONCRITICAL-INJECTION-EXCEPTION-DRUGS", "2026",
+    ["anticancer", "antibiotic", "orphan_drug"] as const,
+    [GEN5_NONCRITICAL_TREATMENT_EXCLUSIONS],
+    "제4조 (1)③15·(2)③16의 주사치료 면책 예외: 항암제, 항생제, 희귀의약품. 특약1 p.265에는 항생제(항진균제 포함)라고 적혀 있지만 이 조항에는 괄호가 없다. 문구가 달라 목록과 근거를 분리하며 항진균제를 자동으로 포함하지 않는다. 이 예외가 다른 면책까지 해제하지 않는다.", "2026-10-14", GEN5_TREATMENT_APPLICATION,
   ),
   GEN2026_SPECIAL_ITEM_CARRYOVER_BASIS: confirmed5th(
     "GEN2026-SPECIAL-ITEM-CARRYOVER-BASIS",
@@ -1027,7 +1055,7 @@ export const REGULATORY_RULES = {
   ),
   GEN2026_NONCRITICAL_EXCLUSION_ITEMS: held(
     "GEN2026-NONCRITICAL-EXCLUSION-ITEMS", "2026", [GEN5_NONCRITICAL_EXCLUSIONS],
-    "확인됨: 특별약관2 제4조에 면책 항목이 모두 실려 있다(정신 및 행동장애 F04~F99, 습관성 유산·불임·인공수정 합병증 N96~N98, 치과치료 K00~K08, 직장·항문질환 K60~K62·K64, 혁신의료기술·평가유예 신의료기술, 첨단재생의료, 신의료기술 사용대상 외, 외모개선 목적 치료, 예방진료, 불임검사·보조생식술·인공유산 등). 시행세칙은 이미 공포·시행 중이므로 종전 사유 '시행세칙 공포 대기'는 사실이 아니었다. "
+    "정정(2026-10-14): 제4조의 근골격계·체외충격파·일반 주사료 면책은 입력 축으로 판정 가능하여 별도 CONFIRMED 규칙으로 분리했다. 아래 HOLD는 나머지 면책의 판정 축이 없다는 뜻이며, 모든 면책 항목을 망라한 목록이 아니다. 확인됨: 특별약관2 제4조에 다음 면책 항목이 실려 있다(정신 및 행동장애 F04~F99, 습관성 유산·불임·인공수정 합병증 N96~N98, 치과치료 K00~K08, 직장·항문질환 K60~K62·K64, 혁신의료기술·평가유예 신의료기술, 첨단재생의료, 신의료기술 사용대상 외, 외모개선 목적 치료, 예방진료, 불임검사·보조생식술·인공유산 등). 시행세칙은 이미 공포·시행 중이므로 종전 사유 '시행세칙 공포 대기'는 사실이 아니었다. "
     + "막힌 이유: 판정 단위가 ①질병분류코드 ②치료 유형(혁신의료기술·첨단재생의료·신의료기술 사용대상 여부) ③진료 목적(외모개선·예방진료)인데, 현재 입력은 금액·급여구분·치료형태·의료기관 종별뿐이라 어느 축으로도 판정할 수 없다. 해제 조건은 세 축을 입력으로 받는 설계 확정.",
     "2026-09-03",
   ),

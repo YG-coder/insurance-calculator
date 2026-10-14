@@ -1,3 +1,4 @@
+// 2026-10-14: 일반 경로 입력 검증은 비중증 면책 예외 주사로 대조한다. 면책 자체는 gen2026NonCriticalExclusions.test.ts에서 별도 검증한다.
 // G-30 — 4·5세대 **미사용 금액 축**의 런타임 거부와 경로별 타입 봉인.
 //   확장 안전성 점검의 마지막 독립 과제다. G-16~G-29가 활성 축의 값 검증과 단일 읽기를
 //   닫았고, 여기서는 **그 축이 쓰이지 않는 경로에 실려 왔을 때**의 계약을 세운다.
@@ -117,7 +118,7 @@ const G26I: Record<string, (e?: Any) => Any> = {
   "비중증 MRI": (e = {}) => ({ route: "special_item", coverage: "non_benefit", severity: "non_critical", item: "mri", lines: [inp(AMT)], ...e }),
 };
 const ROUTED: Record<string, (e?: Any) => Any> = {
-  "일반전환 비중증 근골격계": (e = {}) => ({ route: "general", coverage: "non_benefit", severity: "non_critical", item: "musculoskeletal_esw", cause: "disease", visit: "outpatient", amounts: [AMT], priorAnnualOutpatientDays: 0, ...e }),
+  "일반전환 비중증 근골격계": (e = {}) => ({ route: "general", coverage: "non_benefit", severity: "non_critical", item: "injection", cause: "disease", visit: "outpatient", amounts: [AMT], priorAnnualOutpatientDays: 0, ...e , injectionPurpose: "anticancer" }),
   "일반전환 항암제": (e = {}) => ({ route: "general", coverage: "non_benefit", severity: "critical", item: "injection", injectionPurpose: "anticancer", cause: "disease", visit: "outpatient", amounts: [AMT], priorAnnualOutpatientVisits: 0, ...e }),
 };
 const RC = (e: Any = {}) => ({ route: "room_charge", coverage: "non_benefit", cause: "disease", severity: "non_critical", stays: [{ roomChargeTotal: 1_000_000, inpatientDays: 5 }], ...e });
@@ -344,8 +345,8 @@ console.log("\n[G-30] 7. 일반 전환 경로 — 세 축을 그대로 소비한
   }
   // 일반 전환 **입원**에서는 통원 가입금액이 하류 다회 계약으로 차단된다.
   const inpRouted = fSI({ route: "general", coverage: "non_benefit", severity: "non_critical",
-    item: "musculoskeletal_esw", cause: "disease", visit: "inpatient", tier: "hospital",
-    amounts: [BIG], outpatientCoverageLimit: 100_000 });
+    item: "injection", cause: "disease", visit: "inpatient", tier: "hospital",
+    amounts: [BIG], outpatientCoverageLimit: 100_000 , injectionPurpose: "anticancer" });
   check("일반 전환 입원 + 통원 가입금액 → route general 유지, 진료비 합계 보존",
     !threw(inpRouted) && inpRouted.r.route === "general" && inpRouted.r.status === "PENDING_UNVERIFIED"
     && inpRouted.r.totalAmount === BIG, shape(inpRouted));

@@ -218,8 +218,8 @@ console.log("\n[축 분리] 중증 100회 무회귀 · 다른 경로 미적용")
       severity: "non_critical", nonBenefitItem: item, amounts: [A],
       priorAnnualOutpatientDays: 100,
     } as unknown as Gen2026MultiClaimInput);
-    check(`${item}은 별도 보장종목이라 도달하지 않음`,
-      r.status === "PENDING_UNVERIFIED" && !r.appliedCaps.includes(CAP));
+    check(`${item}의 면책 또는 별도 보장종목을 구분`,
+      r.status === (item === "musculoskeletal_esw" ? "EXCLUDED" : "PENDING_UNVERIFIED") && !r.appliedCaps.includes(CAP));
   }
 }
 
@@ -257,10 +257,10 @@ console.log("\n[차단] 교차 필드와 잘못된 값");
 //   비중증 근골격계 이학요법·체외충격파와 주사료는 일반 (1)(2)에서 보상하므로
 //   **같은 연 100일 한도가 걸린다.** 라우터가 카운터를 버리면 한도가 통째로 사라진다.
 console.log("\n[일반 전환] 비중증 근골격계·주사료도 같은 100일 한도");
-const ROUTED = ["musculoskeletal_esw", "injection"] as const;
+const ROUTED = ["injection"] as const; // 근골격계 면책은 전용 회귀 테스트에서 확인한다.
 const routed = (item: (typeof ROUTED)[number], amounts: number[], extra: Record<string, unknown> = {}) =>
   calculateGen2026Item({
-    route: "general", coverage: "non_benefit", severity: "non_critical", item,
+    route: "general", coverage: "non_benefit", severity: "non_critical", item, injectionPurpose: "anticancer",
     cause: "disease", visit: "outpatient", amounts, ...extra,
   } as unknown as Gen2026ItemClaimInput) as Gen2026ItemClaimResult & {
     lines: { covered: boolean; insurancePay: number | null; appliedCaps: string[] }[];
@@ -305,7 +305,7 @@ for (const item of ROUTED) {
   }
   // 입원에는 통원 카운터가 실리면 안 된다
   const inp = calculateGen2026Item({
-    route: "general", coverage: "non_benefit", severity: "non_critical", item,
+    route: "general", coverage: "non_benefit", severity: "non_critical", item, injectionPurpose: "anticancer",
     cause: "disease", visit: "inpatient", tier: "clinic", amounts: [300_000],
     priorAnnualOutpatientDays: 0,
   } as unknown as Gen2026ItemClaimInput);
@@ -537,7 +537,7 @@ console.log("\n[화면] 상태 전이");
   //   ⚠ 두 항목을 각각 검사한다 — 한쪽만 고쳐도 통과하면 안 된다.
   for (const item of ROUTED) {
     const it = (over: Record<string, unknown> = {}) =>
-      setup({ nonBenefitItem: item, ...over }).render();
+      setup({ nonBenefitItem: item, nonCriticalInjectionPurpose: "anticancer", ...over }).render();
     check(`⑩ ${item}: 통원일수 입력 노출`, it().has(DAYS_LABEL));
     check(`⑩ ${item}: 통원 횟수 입력 미노출`, !it().has(VISITS_LABEL));
     check(`⑩ ${item}: 빈 값이면 계산 차단`,

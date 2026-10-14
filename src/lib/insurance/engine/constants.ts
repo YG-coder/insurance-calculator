@@ -133,6 +133,7 @@ export const GEN2026 = {
     },
     /** 제3조(3)②가 (1)(2)로 보내는 약제. **여기가 유일한 원천이다** — 어디서도 다시 나열하지 않는다. */
     injectionGeneralRouteDrugs: R.GEN2026_INJECTION_GENERAL_ROUTE_DRUGS.value,
+    nonCriticalInjectionExceptionDrugs: R.GEN2026_NONCRITICAL_INJECTION_EXCEPTION_DRUGS.value,
     /** 지급 0원 행위의 횟수 소진은 원문 미확정(HOLD). null이면 두 해석을 비교한다. */
     countOnZeroPay: R.GEN2026_SPECIAL_ITEM_COUNT_ON_ZERO_PAY.value,
   },

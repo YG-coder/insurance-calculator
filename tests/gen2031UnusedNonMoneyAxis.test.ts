@@ -1,3 +1,4 @@
+// 2026-10-14: 일반 경로 입력 검증은 비중증 면책 예외 주사로 대조한다. 면책 자체는 gen2026NonCriticalExclusions.test.ts에서 별도 검증한다.
 // G-31 — 5세대 **비금액 미사용 축**의 경로별 입력 계약 정렬.
 //   G-16~G-29가 활성 축의 값 검증과 단일 읽기를 닫았고, G-30이 미사용 **금액** 축을 닫았다.
 //   여기서는 이름에 금액이 들어가지 않는 세 축이 쓰이지 않는 경로에 실려 왔을 때의 계약을 세운다.
@@ -117,8 +118,8 @@ const I: Record<string, (e?: Any) => Any> = {
   "중증 MRI": (e = {}) => ({ route: "special_item", coverage: "non_benefit", severity: "critical", item: "mri", lines: [{ amount: BIG, visit: "inpatient", tier: "hospital" }], ...e }),
   "비중증 MRI": (e = {}) => ({ route: "special_item", coverage: "non_benefit", severity: "non_critical", item: "mri", lines: [{ amount: AMT, visit: "outpatient" }], ...e }),
   "일반 전환 항암주사": (e = {}) => ({ route: "general", coverage: "non_benefit", cause: "disease", severity: "critical", item: "injection", injectionPurpose: "anticancer", amounts: [AMT], visit: "outpatient", priorAnnualOutpatientVisits: 0, ...e }),
-  "일반 전환 비중증 근골격": (e = {}) => ({ route: "general", coverage: "non_benefit", cause: "disease", severity: "non_critical", item: "musculoskeletal_esw", amounts: [AMT], visit: "outpatient", priorAnnualOutpatientDays: 0, ...e }),
-  "일반 전환 비중증 주사료": (e = {}) => ({ route: "general", coverage: "non_benefit", cause: "disease", severity: "non_critical", item: "injection", amounts: [AMT], visit: "outpatient", priorAnnualOutpatientDays: 0, ...e }),
+  "일반 전환 비중증 근골격": (e = {}) => ({ route: "general", coverage: "non_benefit", cause: "disease", severity: "non_critical", item: "injection", amounts: [AMT], visit: "outpatient", priorAnnualOutpatientDays: 0, ...e , injectionPurpose: "anticancer" }),
+  "일반 전환 비중증 주사료": (e = {}) => ({ route: "general", coverage: "non_benefit", cause: "disease", severity: "non_critical", item: "injection", amounts: [AMT], visit: "outpatient", priorAnnualOutpatientDays: 0, ...e , injectionPurpose: "anticancer" }),
 };
 const ROOM = (e: Any = {}) => ({ route: "room_charge", coverage: "non_benefit", cause: "disease", severity: "critical", stays: [{ roomChargeTotal: 400_000, inpatientDays: 2 }], ...e });
 

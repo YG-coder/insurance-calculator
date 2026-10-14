@@ -4,6 +4,7 @@ import { useState } from "react";
 import NoticeBox from "@/components/NoticeBox";
 import RawAmountInput from "@/components/RawAmountInput";
 import ResultCard from "@/components/ResultCard";
+import { excludedMany2026, GEN2026_NONCRITICAL_INJECTION_PURPOSE_LABEL } from "@/lib/insurance/engine/itemRouting2026";
 import { calculateMany2026 } from "@/lib/insurance/engine/multiClaim2026";
 import {
   GEN2026_INJECTION_PURPOSE_LABEL, GEN2026_MSK_APPROVED_THROUGH_VALUES,
@@ -324,7 +325,7 @@ const gen2026Money = (v: string): number | null => {
  *   <표1>은 "각 상해·질병 치료행위를 합산"하므로 **cause는 축을 가르지 않는다**.
  *   중증 MRI(특약1 (3))와 비중증 MRI(특약2 (3))는 **다른 약관의 다른 보장종목**이라 갈린다.
  *
- * ⚠ 일반 직접 경로·**일반 전환 경로**(중증 예외적 용도 주사·비중증 근골격계·주사료)·
+ * ⚠ 일반 직접 경로·**일반 전환 경로**(중증·비중증 예외적 용도 주사)·
  *   **상급병실료**는 모두 (1)(2) 보장종목에 귀속되므로 같은 일반 축을 **공유**한다.
  *   ⚠ 이는 각 청구가 (1)(2)로 보내진다는 **보장종목 귀속에 따른 해석**이다. "전환된 청구가
  *     (1)(2)의 가입금액을 소진한다"는 명문을 새로 확인한 것이 아니다.
@@ -392,6 +393,7 @@ export default function HealthCalcMulti2026() {
   const [nonBenefitItem, setNonBenefitItem] = useState<Gen2026NonBenefitItem | "">("");
   // "" = 미선택. 약제 용도가 보상하는 보장종목을 바꾼다(특약1 제3조(3)②).
   const [injectionPurpose, setInjectionPurpose] = useState<Gen2026InjectionPurpose | "">("");
+  const [nonCriticalInjectionPurpose, setNonCriticalInjectionPurpose] = useState<Gen2026InjectionPurpose | "">("");
   // 급여 통원의 의료기관 종별. 종전부터 기본값이 있었고 이번에 바꾸지 않는다.
   const [benefitTier, setBenefitTier] = useState<Tier>("clinic");
   // 비급여 **입원**의 의료기관 종별. ⚠ 기본값을 두지 않는다.
@@ -468,8 +470,9 @@ export default function HealthCalcMulti2026() {
   const needsSeverity = coverage === "non_benefit" && nonBenefitItem !== "" && severity === "";
 
   // 경로 판정은 엔진과 같은 함수를 쓴다. 화면과 계산이 다른 판단을 하지 않게 한다.
+  const selectedInjectionPurpose = severity === "non_critical" ? nonCriticalInjectionPurpose : injectionPurpose;
   const route = specialItem !== null && severity !== ""
-    ? routeOfGen2026Item(severity, specialItem, injectionPurpose === "" ? undefined : injectionPurpose)
+    ? routeOfGen2026Item(severity, specialItem, selectedInjectionPurpose === "" ? undefined : selectedInjectionPurpose)
     : null;
   const needsPurpose = route === "missing_purpose";
   const showSpecialForm = route === "special_item";
@@ -707,7 +710,7 @@ export default function HealthCalcMulti2026() {
   if (money !== null && deductibles !== null
       && coverage === "non_benefit" && specialItem !== null && severity !== "" && !rowsIncomplete
       && !rowAmountsIncomplete
-      && !needsPriorActs && !needsPriorCount
+      && !needsPriorActs && !needsPriorCount && !needsPurpose && route !== "excluded"
       && !(route === "general" && (cause === "" || (visit === "inpatient" && nbInpatientTier === "")
         || needsOutDays || needsOutVisits || amountsIncomplete))) {
     const generalCommon = {
@@ -776,7 +779,7 @@ export default function HealthCalcMulti2026() {
       });
     } else if (specialItem === "injection") {
       itemResult = calculateGen2026Item({
-        ...generalCommon, severity: "non_critical", item: "injection",
+        ...generalCommon, severity: "non_critical", item: "injection", injectionPurpose: nonCriticalInjectionPurpose || undefined,
         priorAnnualOutpatientDays: outDays,
       } satisfies Gen2026NonCriticalInjectionInput);
     } else if (specialItem === "musculoskeletal_esw") {
@@ -844,7 +847,8 @@ export default function HealthCalcMulti2026() {
       : null;
 
   const result: Gen2026ItemClaimResult | ReturnType<typeof calculateMany2026> | null =
-    itemResult ?? roomResult ?? plainResult;
+    route === "excluded" && (specialItem === "musculoskeletal_esw" || specialItem === "injection")
+      ? excludedMany2026(0, specialItem) : itemResult ?? roomResult ?? plainResult;
   // ⚠ 타입 단언 없이 route로만 좁힌다.
   const special = itemResult !== null && itemResult.route === "special_item" ? itemResult : null;
   const room = roomResult !== null && roomResult.route === "room_charge" ? roomResult : null;
@@ -873,7 +877,7 @@ export default function HealthCalcMulti2026() {
       {!showSpecialForm && !isRoomCharge && <label className="text-sm font-semibold">치료 형태<select className="input-base mt-1" value={visit} onChange={(e) => setVisit(e.target.value as Visit)}><option value="outpatient">통원</option><option value="inpatient">입원</option></select></label>}
       {coverage === "non_benefit" && <label className="text-sm font-semibold">치료유형<select className="input-base mt-1" value={nonBenefitItem} onChange={(e) => setNonBenefitItem(e.target.value as Gen2026NonBenefitItem | "")}><option value="">선택해 주세요</option>{NON_BENEFIT_ITEMS.map((it) => <option key={it} value={it}>{GEN2026_NON_BENEFIT_ITEM_LABEL[it]}</option>)}</select></label>}
       {coverage === "non_benefit" && nonBenefitItem !== "" && <label className="text-sm font-semibold">질환 구분<select className="input-base mt-1" value={severity} onChange={(e) => setSeverity(e.target.value as Severity | "")}><option value="">선택해 주세요</option><option value="critical">중증</option><option value="non_critical">비중증</option></select></label>}
-      {coverage === "non_benefit" && nonBenefitItem === "injection" && severity === "critical" && <label className="text-sm font-semibold">약제 용도<select className="input-base mt-1" value={injectionPurpose} onChange={(e) => setInjectionPurpose(e.target.value as Gen2026InjectionPurpose | "")}><option value="">선택해 주세요</option>{INJECTION_PURPOSES.map((p) => <option key={p} value={p}>{GEN2026_INJECTION_PURPOSE_LABEL[p]}</option>)}</select></label>}
+      {coverage === "non_benefit" && nonBenefitItem === "injection" && severity !== "" && <label className="text-sm font-semibold">약제 용도<select className="input-base mt-1" value={selectedInjectionPurpose} onChange={(e) => (severity === "non_critical" ? setNonCriticalInjectionPurpose : setInjectionPurpose)(e.target.value as Gen2026InjectionPurpose | "")}><option value="">선택해 주세요</option>{INJECTION_PURPOSES.map((p) => <option key={p} value={p}>{severity === "non_critical" ? GEN2026_NONCRITICAL_INJECTION_PURPOSE_LABEL[p] : GEN2026_INJECTION_PURPOSE_LABEL[p]}</option>)}</select></label>}
       {coverage === "benefit" && visit === "outpatient" && <label className="text-sm font-semibold">의료기관<select className="input-base mt-1" value={benefitTier} onChange={(e) => setBenefitTier(e.target.value as Tier)}><option value="clinic">병·의원급</option><option value="hospital">상급종합·종합병원</option></select></label>}
       {showGeneralForm && severity !== "" && visit === "inpatient" && <label className="text-sm font-semibold">입원 의료기관<select className="input-base mt-1" value={nbInpatientTier} onChange={(e) => setNbInpatientTier(e.target.value as Tier | "")}><option value="">선택해 주세요</option><option value="clinic">병·의원급</option><option value="hospital">상급종합·종합병원</option></select></label>}
       {showSpecialForm && specialItem === "musculoskeletal_esw" && <label className="text-sm font-semibold">보상 승인 회차<select className="input-base mt-1" value={approvedThrough} onChange={(e) => setApprovedThrough(Number(e.target.value) as Gen2026MskApprovedThrough)}>{GEN2026_MSK_APPROVED_THROUGH_VALUES.map((v) => <option key={v} value={v}>{v}회까지</option>)}</select></label>}
@@ -886,10 +890,10 @@ export default function HealthCalcMulti2026() {
            정했다는 근거가 아니다. 노출 조건은 엔진 소비 조건(`usesNhisRate`)과 같은 식을 쓴다. */}
     {usesNhisRate && <label className="mt-4 block max-w-sm text-sm font-semibold">건강보험 본인부담률 (%)<input className="input-base mt-1" type="text" inputMode="decimal" autoComplete="off" aria-describedby="gen2026-multi-nhis-rate-help" value={nhisRate} onChange={(e) => setNhisRate(e.target.value)} placeholder="진료비 영수증·보험사 안내에서 확인" /><span id="gen2026-multi-nhis-rate-help" className="mt-2 block text-xs font-normal text-slate-500">건강보험 본인부담률은 <b>0~100 사이의 숫자</b>로 입력해 주세요(소수 가능, 예: <b>20</b> 또는 <b>12.5</b>). 부호·지수 표기·쉼표·문자는 계산기가 임의로 고치지 않습니다. 참고로 약관상 실제 적용되는 최소 자기부담률은 <b>20%</b>이며, 그보다 낮은 값을 입력해도 계산에는 20%가 적용됩니다 — 입력하신 값을 20으로 바꾸는 것은 아닙니다.</span></label>}
 
-    {coverage === "non_benefit" && <div className="mt-4"><NoticeBox variant="info">5세대 비급여는 보장종목이 나뉘어 있습니다. <b>중증</b>의 근골격계 이학요법·체외충격파, 비급여 주사료(일반 주사), 비급여 MRI는 특별약관1 (3)3대비급여이고, <b>비중증</b>의 비급여 MRI는 특별약관2 (3)의 별도 보장종목입니다. 반대로 <b>비중증</b> 근골격계·주사료와 항암제·항생제(항진균제 포함)·희귀의약품을 위한 <b>중증</b> 주사료는 약관이 일반 상해·질병 비급여에서 보상합니다. <b>상급병실료 차액</b>은 같은 표의 별도 행이라 <b>차액의 50%·1일 평균 보험금 10만 원 한도</b>로 따로 계산합니다.</NoticeBox></div>}
+    {coverage === "non_benefit" && <div className="mt-4"><NoticeBox variant="info">5세대 비급여는 보장종목이 나뉘어 있습니다. <b>중증</b>의 근골격계 이학요법·체외충격파, 비급여 주사료(일반 주사), 비급여 MRI는 특별약관1 (3)3대비급여이고, <b>비중증</b>의 비급여 MRI는 특별약관2 (3)의 별도 보장종목입니다. <b>비중증</b> 근골격계·체외충격파는 면책이며, 주사료는 항암제·항생제·희귀의약품 예외를 확인해야 합니다(특별약관2 제4조 p.299·302). <b>중증</b>의 항암제·항생제(항진균제 포함)·희귀의약품 주사료는 일반 비급여 경로로 계산합니다. <b>상급병실료 차액</b>은 같은 표의 별도 행이라 <b>차액의 50%·1일 평균 보험금 10만 원 한도</b>로 따로 계산합니다.</NoticeBox></div>}
     {isRoomCharge && <div className="mt-4"><NoticeBox variant="info">입력할 금액은 전체 병실료가 아니라 <b>실제 사용 병실과 기준병실의 비급여 차액</b>입니다(특별약관1 제2조). 약관의 입원 보상금액은 &lsquo;비급여 의료비(<b>비급여 병실료는 제외</b>합니다)&rsquo;이므로 <b>일반 입원 의료비와 합쳐 넣지 마세요</b>. <b>1행은 1회의 입원</b>이며, 보험금은 차액의 <b>50%</b>이고 <b>1일 평균 보험금 10만 원</b>이 한도입니다.</NoticeBox></div>}
     {showRoomChargeForm && <div className="mt-4"><NoticeBox variant="info">연간 보험가입금액은 약관상 <b>상해비급여·질병비급여 각각</b>, <b>중증·비중증 보장축별로</b> 계약 시 정한 금액입니다(특별약관1·2 제5조 제1항). 상급병실료 차액은 일반 입원·통원 보상금액과 <b>같은 한도를 나눠 씁니다</b>. 병실 변경·부분일·외박·복수 병원 입원의 일수 판단은 약관에 정의가 없어 계산기가 하지 않습니다. 계약 종료 후 180일 계속 입원과 공제금액 상한 500만 원은 이 계산에 반영하지 않았습니다.</NoticeBox></div>}
-    {route === "general" && <div className="mt-4"><NoticeBox variant="info">{severity === "critical" ? "항암제·항생제(항진균제 포함)·희귀의약품을 위해 사용된 비급여 주사료는 약관상 3대비급여가 아니라 상해비급여·질병비급여에서 보상합니다(특별약관1 제3조(3)제2항). 일반 비급여 입력으로 전환했습니다." : `비중증 ${GEN2026_SPECIAL_ITEM_LABEL[specialItem ?? "injection"]}는 약관상 별도 보장종목이 아니라 상해비급여·질병비급여에서 보상합니다(특별약관2 제3조 (1)제1항·(2)제1항 — 배제 대상은 비급여 자기공명영상진단뿐입니다). 일반 비급여 입력으로 전환했습니다.`}</NoticeBox></div>}
+    {route === "general" && <div className="mt-4"><NoticeBox variant="info">{severity === "critical" ? "항암제·항생제(항진균제 포함)·희귀의약품을 위해 사용된 비급여 주사료는 약관상 3대비급여가 아니라 상해비급여·질병비급여에서 보상합니다(특별약관1 제3조(3)제2항). 일반 비급여 입력으로 전환했습니다." : "비중증 주사료의 약제 용도가 특별약관2 제4조(p.299·302)의 면책 예외에 해당하여 일반 비급여 입력으로 전환했습니다. 비중증 조항에는 ‘항진균제 포함’ 문구가 없습니다. 다른 면책 조건은 따로 확인해 주세요."}</NoticeBox></div>}
 
     {/* ── 일반 비급여 입력 (일반 비급여 + 일반 경로로 전환된 조합) ── */}
     {showGeneralForm && severity !== "" && visit === "outpatient" && <div className="mt-4"><NoticeBox variant="info">{severity === "non_critical" ? "비중증 통원은 약관상 '통원 1일당(외래 및 처방·조제비 합산)' 기준입니다. 같은 날 청구는 한 행으로 합쳐 입력해 주세요." : "약관은 ①동일한 의료기관에서 같은 날 받은 외래와 처방조제, ②하루에 같은 치료를 목적으로 2회 이상 받은 통원을 각각 1회의 통원으로 봅니다. 이 경우에만 한 행으로 합쳐 입력해 주세요. 치료 목적이 다르거나 다른 의료기관이면 행을 나눠 입력합니다."}</NoticeBox></div>}
@@ -1010,7 +1014,7 @@ export default function HealthCalcMulti2026() {
            입력값을 20으로 바꿨다고 표현하지 않는다. */}
     {submitted && nhisRateInvalid && !amountsIncomplete && <div className="mt-5"><NoticeBox variant="warning">건강보험 본인부담률은 <b>0~100 사이의 숫자</b>로 입력해 주세요(소수 가능, 예: <b>20</b> 또는 <b>12.5</b>). 부호·지수 표기(<b>1e3</b>)·쉼표·문자·공백은 계산하지 않으며, 100을 넘는 값도 100으로 깎지 않고 그대로 차단합니다. 모르면 비워 두시면 됩니다. 참고로 약관상 실제 적용되는 최소 자기부담률은 <b>20%</b>입니다.</NoticeBox></div>}
     {submitted && needsSeverity && <div className="mt-5"><NoticeBox variant="warning">비급여는 <b>중증 / 비중증</b>에 따라 자기부담률과 한도가 다릅니다. 질환 구분을 선택해 주세요. 선택 전에는 계산하지 않습니다.</NoticeBox></div>}
-    {submitted && needsPurpose && <div className="mt-5"><NoticeBox variant="warning">비급여 주사료는 <b>약제 용도</b>에 따라 보상하는 보장종목이 달라집니다(특별약관1 제3조(3)제2항). 약제 용도를 선택해 주세요. 선택 전에는 계산하지 않습니다.</NoticeBox></div>}
+    {submitted && needsPurpose && <div className="mt-5"><NoticeBox variant="warning">비급여 주사료는 <b>약제 용도</b>에 따라 보상하는 보장종목이 달라집니다(특별약관1 제3조(3)제2항·특별약관2 제4조 p.299·302). 약제 용도를 선택해 주세요. 선택 전에는 계산하지 않습니다.</NoticeBox></div>}
     {submitted && rcIncomplete && <div className="mt-5"><NoticeBox variant="warning">각 입원의 <b>차액 총액</b>과 <b>총 입원일수</b>를 올바르게 입력해 주세요. 차액 총액은 <b>0 이상의 숫자</b>, 총 입원일수는 <b>1 이상의 정수</b>여야 합니다. 음수·문자가 섞인 값은 계산기가 임의로 고치지 않고, 약관에 일수 산정 방법이 정해져 있지 않아 일수도 추정하지 않습니다. 올바르게 입력하기 전에는 계산하지 않습니다.</NoticeBox></div>}
     {submitted && amountsIncomplete && <div className="mt-5"><NoticeBox variant="warning">{badAmountRows.join("·")}번째 행의 <b>진료비</b>를 올바르게 입력해 주세요. <b>0 이상의 정수</b>만 받습니다 — <b>300000</b> 또는 <b>300,000</b> 형식입니다. 진료비가 실제로 0원이면 <b>0</b>을 입력하세요. 빈 값이나 잘못된 입력(음수·소수·문자·지수 표기·잘못된 쉼표)을 계산기가 <b>임의로 다른 금액으로 바꾸지 않으며</b>, 빈 값을 0원으로 보지도 않습니다. <b>모든 행에 올바른 진료비를 입력해야 계산할 수 있습니다.</b> 유효한 행만 모아 부분합을 내지도 않습니다.</NoticeBox></div>}
     {submitted && rowAmountsIncomplete && <div className="mt-5"><NoticeBox variant="warning">{badRowAmounts.join("·")}번째 행의 <b>{specialItem === "injection" ? "1회 주사료 합산액" : "행위 진료비"}</b>을(를) 올바르게 입력해 주세요. <b>0 이상의 정수</b>만 받습니다 — <b>300000</b> 또는 <b>300,000</b> 형식입니다. 실제로 0원이면 <b>0</b>을 입력하세요. 빈 값이나 잘못된 입력(음수·소수·문자·지수 표기·잘못된 쉼표)을 계산기가 <b>임의로 다른 금액으로 바꾸지 않으며</b>, 빈 값을 0원으로 보지도 않습니다. <b>모든 행에 올바른 진료비를 입력해야 계산할 수 있습니다.</b> 유효한 행만 모아 부분합을 내지도 않습니다.</NoticeBox></div>}
@@ -1038,6 +1042,7 @@ export default function HealthCalcMulti2026() {
       <b>이미 누적된 공제금액</b>(중증 비급여 MRI·MRA, 500만 원 상한)을 올바르게 입력해 주세요. <b>0 이상의 정수</b>만 받습니다 — <b>3000000</b> 또는 <b>3,000,000</b> 형식입니다. 이미 누적된 공제금액이 없으면 <b>0</b>을 입력하세요(완전히 비운 값도 0으로 봅니다). 공백만 입력한 값은 빈 값으로 보지 않습니다. 음수·소수·문자·지수 표기·잘못된 쉼표는 계산기가 임의로 고치지 않습니다. 500만 원을 넘는 값도 그대로 받습니다 — 상한 처리는 약관 산식이 합니다.
     </NoticeBox></div>}
     {submitted && rowsIncomplete && <div className="mt-5"><NoticeBox variant="warning">각 행의 <b>치료 형태</b>{needsRowTier ? <>와 입원 행의 <b>의료기관 종별</b></> : null}를 선택해 주세요.{needsRowTier ? " 중증 비급여 MRI 입원은 의료기관 종별에 따라 공제금액 상한 500만 원 적용 여부가 달라지므로 기본값으로 계산하지 않습니다." : ""}</NoticeBox></div>}
+    {submitted && result?.status === "EXCLUDED" && <div className="mt-5" role="status" aria-live="polite"><NoticeBox variant="info">{result.notes.join(" ")}</NoticeBox></div>}
     {submitted && result && result.status === "PENDING_UNVERIFIED" && <div className="mt-5"><NoticeBox variant="warning">{result.notes.join(" ")}</NoticeBox></div>}
 
     {/* ⚠ **정책 교체.** 종전 `result.totalAmount > 0`을 뺐다. 이 게이트는 일반·별도

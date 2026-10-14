@@ -7,6 +7,8 @@ import NoticeBox from "@/components/NoticeBox";
 import { calc2026, GEN2026_NON_BENEFIT_ITEM_LABEL } from "@/lib/insurance/engine/generation2026";
 import { Coverage, Visit, Tier, Severity, Gen2026NonBenefitItem } from "@/lib/insurance/engine/types";
 import { CAP_LABELS } from "@/lib/insurance/engine/capLabels";
+import { routeOfGen2026Item, GEN2026_NONCRITICAL_INJECTION_PURPOSE_LABEL } from "@/lib/insurance/engine/itemRouting2026";
+import type { Gen2026InjectionPurpose } from "@/lib/insurance/engine/types";
 import { GEN2026 } from "@/lib/insurance/engine/constants";
 
 const won = (n: number) =>
@@ -131,6 +133,7 @@ export default function HealthCalc5th() {
   const [outpatientLimit, setOutpatientLimit] = useState<string>("");
   const [nhisRate, setNhisRate] = useState<string>("");
   const [submitted, setSubmitted] = useState(false);
+  const [injectionPurpose, setInjectionPurpose] = useState<Gen2026InjectionPurpose | "">("");
 
   // ⚠ 원문이 유효한 형식일 때만 숫자가 된다. 실패를 0으로 바꾸지 않는다.
   const parsed = gen2026SingleAmount(amount);
@@ -140,14 +143,20 @@ export default function HealthCalc5th() {
   // 비급여는 ①치료유형 ②중증/비중증을 모두 고른 뒤에만 계산한다(엔진 호출 전 UI 가드).
   //   치료유형이 "일반 비급여"가 아니면 질환 구분과 무관하게 엔진이 차단한다.
   const needsItem = coverage === "non_benefit" && nonBenefitItem === null;
+  const itemRoute = coverage === "non_benefit" && severity !== null
+    && (nonBenefitItem === "musculoskeletal_esw" || nonBenefitItem === "injection")
+    ? routeOfGen2026Item(severity, nonBenefitItem, injectionPurpose || undefined) : null;
+  const needsPurpose = itemRoute === "missing_purpose" && severity === "non_critical";
+  const isGeneralPath = nonBenefitItem === "general" || itemRoute === "general";
+
   const needsSeverity =
-    coverage === "non_benefit" && nonBenefitItem === "general" && severity === null;
+    coverage === "non_benefit" && (nonBenefitItem === "general" || nonBenefitItem === "musculoskeletal_esw" || nonBenefitItem === "injection") && severity === null;
   // 비급여 입원은 종별을 고르기 전에는 계산하지 않는다(중증·비중증 모두).
   //   ⚠ 종별 입력은 질환 구분을 고른 뒤에야 화면에 나타난다. severity 조건을 빼면
   //     아직 보이지도 않는 입력을 선택하라는 안내가 질환 구분 안내와 함께 뜬다.
   //     안내 순서를 화면에 나타나는 순서와 맞춘다.
   const needsTier =
-    coverage === "non_benefit" && nonBenefitItem === "general" && severity !== null
+    coverage === "non_benefit" && isGeneralPath && severity !== null
     && visit === "inpatient" && nbInpatientTier === null;
 
   // ── 두 금액 입력의 활성 조건 (G-11A) ────────────────────────────────
@@ -166,9 +175,9 @@ export default function HealthCalc5th() {
    *   노출·검증·전달을 하나의 조건으로 모은다.
    */
   const usesOutpatientLimit =
-    coverage === "non_benefit" && nonBenefitItem === "general" && visit === "outpatient";
+    coverage === "non_benefit" && isGeneralPath && visit === "outpatient";
   const usesPriorDeductible =
-    coverage === "non_benefit" && nonBenefitItem === "general"
+    coverage === "non_benefit" && isGeneralPath
     && severity === "critical" && visit === "inpatient" && nbInpatientTier === "hospital";
   /**
    * 건강보험 본인부담률의 활성 조건 (G-11B). 엔진이 이 값을 읽는 곳은 **급여 통원 분기뿐**이다
@@ -251,16 +260,17 @@ export default function HealthCalc5th() {
             // ⚠ 여기서 깎지 않는다. 범위 판정은 파서가 이미 했다.
             nhisCoinsuranceRate: nhisRateNum === undefined ? undefined : nhisRateNum / 100,
           })
-      : needsItem || needsSeverity || needsTier || limits === null
+      : needsItem || needsSeverity || needsTier || needsPurpose || limits === null
         ? null
         : calc2026({
             amount: num,
             coverage: "non_benefit",
             visit,
             // ⚠ 빈 값을 Tier로 단언해 넘기지 않는다. 위 게이트가 미선택을 이미 배제한다.
-            tier: visit === "inpatient" ? nbInpatientTier ?? undefined : undefined,
+            tier: isGeneralPath && visit === "inpatient" ? nbInpatientTier ?? undefined : undefined,
             severity: severity ?? undefined,
             nonBenefitItem: nonBenefitItem as Gen2026NonBenefitItem,
+            ...(nonBenefitItem === "injection" && severity === "non_critical" && injectionPurpose !== "" ? { injectionPurpose } : {}),
             priorAnnualDeductible: limits.deductible,
             perVisitCoverageLimit: limits.perVisit,
           });
@@ -322,16 +332,22 @@ export default function HealthCalc5th() {
               ))}
             </div>
             <p className="mt-2 text-xs text-slate-500">
-              5세대 비급여는 <b>보장종목이 나뉘어</b> 있습니다. 근골격계 이학요법·체외충격파,
-              비급여 주사료, 비급여 MRI는 약관상 <b>별도 보장종목</b>이라 일반 상해·질병 비급여에서
-              제외되고, 상급병실료 차액도 입원 의료비와 별도 산식입니다. 이 계산기는 현재
-              <b> 일반 비급여만</b> 계산하므로 치료유형을 먼저 선택해 주세요.
+              5세대 비급여는 치료유형과 질환 구분에 따라 보장과 면책이 달라집니다. 비중증 근골격계·체외충격파는 면책이고 주사료는 약제 용도를 확인해야 합니다. 중증 3대비급여·MRI·상급병실료는 아래 여러 건 합산 계산을 이용해 주세요.
             </p>
           </div>
         )}
 
-        {/* 일반 비급여일 때만 중증/비중증 노출 (조건부) */}
-        {coverage === "non_benefit" && nonBenefitItem === "general" && (
+        {coverage === "non_benefit" && nonBenefitItem === "injection" && severity === "non_critical" && (
+          <div className="sm:col-span-2"><label className="label-base" htmlFor="med5-injection-purpose">약제 용도</label>
+            <select id="med5-injection-purpose" className="input-base" value={injectionPurpose} onChange={e => setInjectionPurpose(e.target.value as Gen2026InjectionPurpose | "")}>
+              <option value="">선택해 주세요</option>
+              {Object.entries(GEN2026_NONCRITICAL_INJECTION_PURPOSE_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select><p className="mt-2 text-xs text-slate-500">약관상 예외에 해당하는 약제 용도를 확인해 주세요. 비중증 조항에는 ‘항진균제 포함’ 문구가 없습니다.</p>
+          </div>
+        )}
+
+        {/* 질환 구분은 근골격계·주사료의 면책 판정에도 필요하다. */}
+        {coverage === "non_benefit" && (isGeneralPath || nonBenefitItem === "musculoskeletal_esw" || nonBenefitItem === "injection") && (
           <div className="sm:col-span-2">
             <label className="label-base">질환 구분</label>
             <div className="grid grid-cols-2 gap-2 max-w-md">
@@ -392,7 +408,7 @@ export default function HealthCalc5th() {
           </>
         )}
 
-        {coverage === "non_benefit" && nonBenefitItem === "general" && visit === "outpatient" && (
+        {coverage === "non_benefit" && isGeneralPath && visit === "outpatient" && (
           <div className="sm:col-span-2 max-w-md">
             <label className="label-base" htmlFor="med5-outpatient-limit">
               통원 가입금액 (선택)
@@ -422,7 +438,7 @@ export default function HealthCalc5th() {
             중증 — 상급종합·종합병원에만 공제금액 상한 500만원(특별약관1 제5조⑤)
             비중증 — 병·의원급에만 1회당 300만원 한도(특별약관2 제3조 (1)①·(2)①)
             둘 다 종별에 따라 보험금이 달라지므로 기본값으로 계산하지 않는다. */}
-        {coverage === "non_benefit" && nonBenefitItem === "general" && severity !== null && visit === "inpatient" && (
+        {coverage === "non_benefit" && isGeneralPath && severity !== null && visit === "inpatient" && (
           <>
             <div className="sm:col-span-2">
               <label className="label-base">입원 의료기관</label>
@@ -554,6 +570,8 @@ export default function HealthCalc5th() {
             </NoticeBox>
           )}
 
+          {!amountInvalid && needsPurpose && <NoticeBox variant="info">비중증 주사료의 약제 용도를 선택해 주세요. 선택 전에는 면책 예외 여부를 판정하지 않습니다.</NoticeBox>}
+          {result?.status === "EXCLUDED" && <div role="status" aria-live="polite"><NoticeBox variant="info">{result.notes.join(" ")}</NoticeBox></div>}
           {/* 차단 사유는 엔진이 만든 문구를 그대로 보여준다. 화면에서 지어내지 않는다. */}
           {result && result.status === "PENDING_UNVERIFIED" && (
             <NoticeBox variant="warning">{result.notes.join(" ")}</NoticeBox>
@@ -593,7 +611,7 @@ export default function HealthCalc5th() {
               {result.notes.length > 0 && (
                 <NoticeBox variant="info">{result.notes.join(" ")}</NoticeBox>
               )}
-              {coverage === "non_benefit" && nonBenefitItem === "general" && visit === "outpatient" && (
+              {coverage === "non_benefit" && isGeneralPath && visit === "outpatient" && (
                 <NoticeBox variant="info">
                   {severity === "non_critical"
                     ? "비중증 통원은 약관상 '통원 1일당(외래 및 처방·조제비 합산)' 기준입니다. 같은 날 여러 번 다녀왔다면 하루치를 합산한 금액을 입력해 주세요."

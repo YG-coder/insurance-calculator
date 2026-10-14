@@ -179,8 +179,8 @@ const goAxis = (h: H, axis: Axis, opts: { cause?: string; visit?: string } = {})
 const goGeneralRoute = (h: H, kind: "critical_injection_exceptional" | "non_critical_injection" | "non_critical_msk", cause = "disease") => {
   pick(h, COV, "benefit"); pick(h, COV, "non_benefit");
   if (kind === "critical_injection_exceptional") { pick(h, ITEM, "injection"); pick(h, SEV, "critical"); pick(h, PUR, "anticancer"); }
-  if (kind === "non_critical_injection") { pick(h, ITEM, "injection"); pick(h, SEV, "non_critical"); }
-  if (kind === "non_critical_msk") { pick(h, ITEM, "musculoskeletal_esw"); pick(h, SEV, "non_critical"); }
+  if (kind === "non_critical_injection") { pick(h, ITEM, "injection"); pick(h, SEV, "non_critical"); pick(h, PUR, "anticancer"); }
+  if (kind === "non_critical_msk") { pick(h, ITEM, "injection"); pick(h, SEV, "non_critical"); pick(h, PUR, "anticancer"); }
   pick(h, CAUSE, cause); pick(h, VIS, "outpatient");
   h.set("priorVisits", "0"); h.set("priorOutDays", "0");
   return h;

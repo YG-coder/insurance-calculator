@@ -1,3 +1,4 @@
+// 2026-10-14: 일반 경로 입력 검증은 비중증 면책 예외 주사로 대조한다. 면책 자체는 gen2026NonCriticalExclusions.test.ts에서 별도 검증한다.
 // G-28 — `priorAnnualTreatmentActCount`(승인 구간 전용 축)의 경로별 입력 계약.
 //   G-27까지 남아 있던 "일반 전환 경로 조용한 폐기"를 닫는다.
 //
@@ -90,11 +91,11 @@ const CMRI = (e: Any = {}) => ({ route: "special_item", coverage: "non_benefit",
 const NMRI = (e: Any = {}) => ({ route: "special_item", coverage: "non_benefit", severity: "non_critical",
   item: "mri", lines: [out(300_000)], ...e });
 const GEN_MSK = (e: Any = {}) => ({ route: "general", coverage: "non_benefit", severity: "non_critical",
-  item: "musculoskeletal_esw", cause: "disease", visit: "outpatient", amounts: [300_000],
-  priorAnnualOutpatientDays: 0, ...e });
+  item: "injection", cause: "disease", visit: "outpatient", amounts: [300_000],
+  priorAnnualOutpatientDays: 0, ...e , injectionPurpose: "anticancer" });
 const GEN_INJ = (e: Any = {}) => ({ route: "general", coverage: "non_benefit", severity: "non_critical",
   item: "injection", cause: "disease", visit: "outpatient", amounts: [300_000],
-  priorAnnualOutpatientDays: 0, ...e });
+  priorAnnualOutpatientDays: 0, ...e , injectionPurpose: "anticancer" });
 const GEN_ANTI = (e: Any = {}) => ({ route: "general", coverage: "non_benefit", severity: "critical",
   item: "injection", injectionPurpose: "anticancer", cause: "disease", visit: "outpatient",
   amounts: [300_000], priorAnnualOutpatientVisits: 0, ...e });
@@ -117,7 +118,7 @@ const MIS_PURPOSE = (e: Any = {}) => ({ route: "general", coverage: "non_benefit
   priorAnnualOutpatientVisits: 0, ...e });
 /** 반대 방향 — `route: "special_item"`이지만 약관상 일반 전환인 조합(종전 계약 그대로). */
 const MIS_REV = (e: Any = {}) => ({ route: "special_item", coverage: "non_benefit",
-  severity: "non_critical", item: "musculoskeletal_esw", lines: [out(300_000)], ...e });
+  severity: "non_critical", item: "injection", lines: [out(300_000)], ...e , injectionPurpose: "anticancer" });
 const RC = (e: Any = {}) => ({ route: "room_charge", coverage: "non_benefit", cause: "disease",
   severity: "non_critical", stays: [{ roomChargeTotal: 1_000_000, inpatientDays: 5 }], ...e });
 const BENEFIT = (e: Any = {}) => ({ cause: "disease", coverage: "benefit", visit: "outpatient",
@@ -446,7 +447,7 @@ console.log("\n[G-28] 7. 전달 검사 — 어느 진입점에 무엇이 넘어�
   const mcSrc = readFileSync("src/lib/insurance/engine/multiClaim2026.ts", "utf8");
   const mcCode = mcSrc.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
   check("다회 stray 루프도 한 번만 읽는다",
-    /for \(const stray of SPECIAL_ITEM_ONLY_KEYS\) \{\n\s*const got = readCount\(input, stray\);\n\s*if \(got === undefined\) continue;/.test(mcCode));
+    /for \(const stray of SPECIAL_ITEM_ONLY_KEYS\) \{\n\s*if \(exceptionalInjection && stray === "injectionPurpose"\) continue;\n\s*const got = readCount\(input, stray\);\n\s*if \(got === undefined\) continue;/.test(mcCode));
   check("다회 목록에 이 키가 그대로 있다", /"priorAnnualTreatmentActCount"/.test(mcCode));
   // 축 교차 금지.
   check("승인 축과 보상 횟수 축을 서로 대신 쓰지 않는다",

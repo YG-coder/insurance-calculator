@@ -1,3 +1,4 @@
+// 2026-10-14: 일반 경로 입력 검증은 비중증 면책 예외 주사로 대조한다. 면책 자체는 gen2026NonCriticalExclusions.test.ts에서 별도 검증한다.
 // G-26 — 5세대 **진료비 축 세 곳**의 값 검증.
 //   대상: `roomCharge2026.ts`의 `stays[].roomChargeTotal`
 //         `specialItem2026.ts`의 `lines[].amount`(별도 보장종목)
@@ -87,9 +88,9 @@ const Bcont = (lines: unknown) => wrap(() => calculateGen2026Item({
   injectionPurpose: "general", lines, priorAnnualCoveredCount: 0,
 } as never));
 const C = (amounts: unknown) => wrap(() => calculateGen2026Item({
-  route: "general", coverage: "non_benefit", severity: "non_critical", item: "musculoskeletal_esw",
+  route: "general", coverage: "non_benefit", severity: "non_critical", item: "injection",
   cause: "disease", visit: "outpatient", amounts, priorAnnualOutpatientDays: 0,
-} as never));
+ injectionPurpose: "anticancer" } as never));
 const PATHS: [string, (a: unknown[]) => Caught][] = [
   ["A 상급병실료", A], ["B 별도 보장종목", B], ["C 일반 전환", (a) => C(a)],
 ];
@@ -220,12 +221,12 @@ console.log("\n[G-26] 9. 안내 우선순위 — 선행 preflight가 그대로 �
       priorAnnualCoveredCount: 0 } as never))));
   check("C: 원인 무효가 진료비보다 앞선다",
     first(wrap(() => calculateGen2026Item({ route: "general", coverage: "non_benefit",
-      severity: "non_critical", item: "musculoskeletal_esw", cause: "x", visit: "outpatient",
-      amounts: [-1], priorAnnualOutpatientDays: 0 } as never))).startsWith("원인(cause)"));
+      severity: "non_critical", item: "injection", cause: "x", visit: "outpatient",
+      amounts: [-1], priorAnnualOutpatientDays: 0 , injectionPurpose: "anticancer" } as never))).startsWith("원인(cause)"));
   check("C: 진료비가 통원 카운터 축 분리보다 앞선다",
     first(wrap(() => calculateGen2026Item({ route: "general", coverage: "non_benefit",
-      severity: "non_critical", item: "musculoskeletal_esw", cause: "disease", visit: "outpatient",
-      amounts: [-1], priorAnnualOutpatientVisits: 0 } as never))).startsWith("1번째 진료비(amounts)"));
+      severity: "non_critical", item: "injection", cause: "disease", visit: "outpatient",
+      amounts: [-1], priorAnnualOutpatientVisits: 0 , injectionPurpose: "anticancer" } as never))).startsWith("1번째 진료비(amounts)"));
 }
 
 console.log("\n[G-26] 10. 0원 행의 기존 소진·HOLD 계약 — 무회귀");
@@ -317,8 +318,8 @@ console.log("\n[G-26] 11. 접근자 — 정확히 1회, 선행 차단 0회");
     Object.defineProperty(arr, "0", { enumerable: true, configurable: true, get() { n.v++; return get(); } });
     arr.length = 1;
     const x = wrap(() => calculateGen2026Item({ route: "general", coverage: "non_benefit",
-      severity: "non_critical", item: "musculoskeletal_esw", cause: "disease", visit: "outpatient",
-      amounts: arr, priorAnnualOutpatientDays: 0, ...over } as never));
+      severity: "non_critical", item: "injection", cause: "disease", visit: "outpatient",
+      amounts: arr, priorAnnualOutpatientDays: 0, ...over , injectionPurpose: "anticancer" } as never));
     return { n: n.v, x };
   };
   check("C: 정상 경로에서 정확히 1회 읽는다(종전 2회)", withArr(() => 300_000).n === 1,

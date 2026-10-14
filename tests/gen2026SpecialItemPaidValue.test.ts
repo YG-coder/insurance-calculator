@@ -1,3 +1,4 @@
+// 2026-10-14: 일반 경로 입력 검증은 비중증 면책 예외 주사로 대조한다. 면책 자체는 gen2026NonCriticalExclusions.test.ts에서 별도 검증한다.
 // G-23 — 별도 보장종목(3대비급여·비중증 MRI) 진입점의 **기존 지급보험금 축** 값 검증.
 //   대상: `specialItem2026.ts`의 `priorAnnualInsurancePaid`
 //
@@ -345,8 +346,8 @@ console.log("\n[G-23] 8. 안내 우선순위 — preflight가 먼저, 그 뒤에
     notes(call(MSK({ approvedThroughVisit: 15, priorAnnualInsurancePaid: -1 })))
       .includes("보상 승인 회차(approvedThroughVisit)"));
   check("경로 대조가 지급보험금보다 먼저",
-    notes(call({ ...MRI(), severity: "non_critical", item: "musculoskeletal_esw",
-      priorAnnualInsurancePaid: -1 })).includes("이 조합은"));
+    notes(call({ ...MRI(), severity: "non_critical", item: "injection",
+      priorAnnualInsurancePaid: -1 , injectionPurpose: "anticancer" })).includes("이 조합은"));
 
   // ⚠ **preflight 안내가 이 축의 형식 거부보다 먼저다.** 무효값이 실려 있어도 preflight
   //   안내가 그대로 나가야 한다 — 종전 계약이고, 이번에 바꾸지 않았다.

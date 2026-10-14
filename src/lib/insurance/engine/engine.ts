@@ -145,7 +145,7 @@ const GEN2026_OWNERSHIP: Ownership = {
   // 여기에 둔다 — 경로별로 좁히는 일은 5세대 자기 진입점(G-30·G-31·G-32)이 이미 하고 있고,
   // 라우터가 같은 판정을 두 번 하면 안내가 갈린다.
   always: [
-    "nhisCoinsuranceRate", "severity", "nonBenefitItem",
+    "nhisCoinsuranceRate", "severity", "nonBenefitItem", "injectionPurpose",
     "priorAnnualDeductible", "perVisitCoverageLimit", "priorAnnualPaid", "tier",
   ],
   outpatientOnly: [],
@@ -327,7 +327,7 @@ const OWNED_AXES: Record<Generation, readonly string[]> = {
   // 경로를 나눈다. 그래서 세대 소유로 넘기고 판정은 세대 엔진이 한다(위 소유권 표 주석).
   "2021": [...ALWAYS_ACCEPTED_AXES, "tier"],
   "2026": [...ALWAYS_ACCEPTED_AXES, "tier", "severity", "nonBenefitItem", "nhisCoinsuranceRate",
-    "perVisitCoverageLimit", "priorAnnualDeductible", "priorAnnualPaid"],
+    "perVisitCoverageLimit", "priorAnnualDeductible", "priorAnnualPaid", "injectionPurpose"],
 };
 
 /**

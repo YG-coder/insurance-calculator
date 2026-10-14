@@ -127,7 +127,7 @@ console.log("\n[G-34A] 1. 다른 진입점의 축은 네 세대 전 경로에서
 {
   for (const [gen, name, base] of OK_PATHS) for (const key of [...OTHER_ENTRY, ...CONTAINER]) {
     const r = f(gen, { ...base, [key]: NORMAL[key] });
-    check(`${name} · ${key} → 거부`, isRejected(r, gen, A) && note0(r).startsWith(`${gen}세대: `),
+    check(`${name} · ${key} → 거부`, isRejected(r, gen, A) && (note0(r).startsWith(`${gen}세대: `) || (gen === "2026" && key === "injectionPurpose" && note0(r).includes("5세대 단건 계산에 쓰이지 않는 입력"))),
       `${statusOf(r)} ${note0(r).slice(0, 30)}`);
   }
 }
@@ -289,10 +289,10 @@ console.log("\n[G-34A] 7. 분류표 — 모집단 16경로군 × 35축 = 560자�
     "2021|benefit|inpatient": ["amount", "coverage", "visit"],
     "2021|non_benefit|outpatient": ["amount", "coverage", "visit"],
     "2021|non_benefit|inpatient": ["amount", "coverage", "visit"],
-    "2026|benefit|outpatient": ["amount", "coverage", "visit", "tier", "nhisCoinsuranceRate", "priorAnnualPaid", "priorAnnualDeductible", "perVisitCoverageLimit", "severity", "nonBenefitItem"],
-    "2026|benefit|inpatient": ["amount", "coverage", "visit", "nhisCoinsuranceRate", "priorAnnualPaid", "priorAnnualDeductible", "perVisitCoverageLimit", "severity", "nonBenefitItem"],
-    "2026|non_benefit|outpatient": ["amount", "coverage", "visit", "nhisCoinsuranceRate", "priorAnnualPaid", "priorAnnualDeductible", "perVisitCoverageLimit", "severity", "nonBenefitItem"],
-    "2026|non_benefit|inpatient": ["amount", "coverage", "visit", "tier", "nhisCoinsuranceRate", "priorAnnualPaid", "priorAnnualDeductible", "perVisitCoverageLimit", "severity", "nonBenefitItem"],
+    "2026|benefit|outpatient": ["amount", "coverage", "visit", "tier", "nhisCoinsuranceRate", "priorAnnualPaid", "priorAnnualDeductible", "perVisitCoverageLimit", "severity", "nonBenefitItem", "injectionPurpose"],
+    "2026|benefit|inpatient": ["amount", "coverage", "visit", "nhisCoinsuranceRate", "priorAnnualPaid", "priorAnnualDeductible", "perVisitCoverageLimit", "severity", "nonBenefitItem", "injectionPurpose"],
+    "2026|non_benefit|outpatient": ["amount", "coverage", "visit", "nhisCoinsuranceRate", "priorAnnualPaid", "priorAnnualDeductible", "perVisitCoverageLimit", "severity", "nonBenefitItem", "injectionPurpose"],
+    "2026|non_benefit|inpatient": ["amount", "coverage", "visit", "tier", "nhisCoinsuranceRate", "priorAnnualPaid", "priorAnnualDeductible", "perVisitCoverageLimit", "severity", "nonBenefitItem", "injectionPurpose"],
   };
   for (const g of ["2009|benefit|outpatient", "2009|benefit|inpatient", "2009|non_benefit|outpatient", "2009|non_benefit|inpatient"])
     CONSUMED[g.replace("2009", "2017")] = CONSUMED[g];
@@ -317,11 +317,11 @@ console.log("\n[G-34A] 7. 분류표 — 모집단 16경로군 × 35축 = 560자�
   for (const grp of GROUPS) for (const ax of ALL_AXES) count[catOf(grp, ax)]++;
   const total = Object.values(count).reduce((a, b) => a + b, 0);
   check(`분류 합계가 모집단과 같다 (${total})`, total === GROUPS.length * ALL_AXES.length, String(total));
-  check(`cat1 실제 소비 ${count[1]}`, count[1] === 87, String(count[1]));
+  check(`cat1 실제 소비 ${count[1]}`, count[1] === 91, String(count[1]));
   check(`cat2 의미상 허용 ${count[2]}`, count[2] === 8, String(count[2]));
   check(`cat3 공통 통로 ${count[3]} — 근거가 있는 자리는 아직 없다`, count[3] === 0, String(count[3]));
   check(`cat4 선행 차단 미도달 ${count[4]}`, count[4] === 0, String(count[4]));
-  check(`cat5 확정 stray ${count[5]}`, count[5] === 465, String(count[5]));
+  check(`cat5 확정 stray ${count[5]}`, count[5] === 461, String(count[5]));
   check(`cat6 판단 보류 ${count[6]} — G-34C에서 0이 됐다`, count[6] === 0, String(count[6]));
 
   // 표와 구현이 어긋나면 여기서 잡힌다 — cat5만 거부되고 나머지는 통과해야 한다.

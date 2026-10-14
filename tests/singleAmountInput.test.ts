@@ -296,7 +296,7 @@ console.log("\n[전환] 급여·비급여·입원·통원과 선택 게이트");
     check(`5세대 ${what}: 종전 안내 유지`, all.includes(needle) && !screenOf(h).calculated, all.slice(0, 60));
   }
   for (const item of ["musculoskeletal_esw", "injection", "mri", "room_charge"]) {
-    const h = setup(HealthCalc5th as unknown as Comp, names5, { nonBenefitItem: item });
+    const h = setup(HealthCalc5th as unknown as Comp, names5, { nonBenefitItem: item, severity: "critical" });
     check(`5세대 별도 보장종목(${item}) 차단 유지`,
       !screenOf(h).calculated && warnText(h).length > 0);
   }

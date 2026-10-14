@@ -307,8 +307,8 @@ console.log("\n[소스] 형식 우선 검증 · 전달 조건 · 금지 사항")
   check("화면에서 상한(20만·500만)을 깎지 않는다",
     !/Math\.min\(200000/.test(body) && !/Math\.min\(5000000/.test(body));
   check("활성 조건이 엔진 소비 조건과 같다",
-    /const usesOutpatientLimit =\s*\n\s*coverage === "non_benefit" && nonBenefitItem === "general" && visit === "outpatient";/.test(code)
-    && /const usesPriorDeductible =\s*\n\s*coverage === "non_benefit" && nonBenefitItem === "general"\s*\n\s*&& severity === "critical" && visit === "inpatient" && nbInpatientTier === "hospital";/.test(code));
+    /const usesOutpatientLimit =\s*\n\s*coverage === "non_benefit" && isGeneralPath && visit === "outpatient";/.test(code)
+    && /const usesPriorDeductible =\s*\n\s*coverage === "non_benefit" && isGeneralPath\s*\n\s*&& severity === "critical" && visit === "inpatient" && nbInpatientTier === "hospital";/.test(code));
   // ⚠ **미전달은 여기서 확인한다.** 결과 비교로는 증명되지 않는다.
   check("전달은 null을 배제한 파생만 쓴다 — 비활성이면 undefined",
     /priorAnnualDeductible: limits\.deductible,/.test(code)
@@ -324,7 +324,7 @@ console.log("\n[소스] 형식 우선 검증 · 전달 조건 · 금지 사항")
   check("종전 단언은 그대로 남아 있다(이번 범위 밖임을 명시)",
     /nonBenefitItem: nonBenefitItem as Gen2026NonBenefitItem,/.test(code));
   check("게이트가 기존 선택 게이트와 함께 걸린다",
-    /needsItem \|\| needsSeverity \|\| needsTier \|\| limits === null/.test(code));
+    /needsItem \|\| needsSeverity \|\| needsTier \|\| needsPurpose \|\| limits === null/.test(code));
   // ⚠ G-11B가 급여 분기에 **본인부담률 전용** 게이트(`nhisRateNum === null`)를 넣었다.
   //   여기서 확인할 것은 **두 금액의 게이트(`limits`)가 급여 분기에 붙지 않았다**는 사실이다.
   check("급여 분기에는 두 금액의 게이트를 걸지 않는다(급여가 쓰지 않는 값이다)",
@@ -333,8 +333,8 @@ console.log("\n[소스] 형식 우선 검증 · 전달 조건 · 금지 사항")
     && !/nhisRateNum === null \|\| limits === null/.test(code)
     && !/limits === null \|\| nhisRateNum === null/.test(code)
     // 비급여 분기의 게이트 줄에는 `limits`가 있고 `nhisRateNum`이 없다.
-    && /: needsItem \|\| needsSeverity \|\| needsTier \|\| limits === null\s+\? null/.test(code)
-    && !/needsTier \|\| limits === null \|\| nhisRateNum/.test(code));
+    && /: needsItem \|\| needsSeverity \|\| needsTier \|\| needsPurpose \|\| limits === null\s+\? null/.test(code)
+    && !/needsTier \|\| needsPurpose \|\| limits === null \|\| nhisRateNum/.test(code));
   check("두 칸 모두 RawAmountInput이고 AmountInput은 남아 있지 않다",
     /<RawAmountInput\n\s*id="med5-outpatient-limit"/.test(code)
     && /<RawAmountInput\n\s*id="med5-prior-annual-deductible"/.test(code)

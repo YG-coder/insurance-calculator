@@ -104,7 +104,7 @@ const gen = (h: H, sev: string, cause: string, visit: string, tier?: string) => 
 };
 const route = (h: H, item: string, sev: string, cause: string, purpose?: string) => {
   pick(h, COV, "benefit"); pick(h, COV, "non_benefit");
-  pick(h, ITEM, item); pick(h, SEV, sev); if (purpose) pick(h, PUR, purpose);
+  pick(h, ITEM, item === "musculoskeletal_esw" && sev === "non_critical" ? "injection" : item); pick(h, SEV, sev); if (purpose || sev === "non_critical") pick(h, PUR, purpose || "anticancer");
   pick(h, CAUSE, cause); pick(h, VIS, "outpatient");
   h.set("priorVisits", "0"); h.set("priorOutDays", "0"); h.set("amounts", ["3000000"]);
   return h;

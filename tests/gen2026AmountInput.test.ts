@@ -1,3 +1,4 @@
+// 2026-10-14: 일반 경로 입력 검증은 비중증 면책 예외 주사로 대조한다. 면책 자체는 gen2026NonCriticalExclusions.test.ts에서 별도 검증한다.
 // G-3 — 5세대 다회 **일반·특별약관 진료비** 입력의 엄격 검증.
 //
 // 종전 동작: 두 입력 모두 맨 `<input>` + 공용 `num()` 경로였다. `num()`은 숫자·점이 아닌
@@ -52,8 +53,8 @@ const AMOUNT_PATHS: [string, Record<string, unknown>, string][] = [
   ["일반 비급여 중증 통원", { coverage: "non_benefit", nonBenefitItem: "general", severity: "critical", visit: "outpatient", cause: "disease", priorVisits: "0", amounts: ["300000"] }, "210,000원"],
   ["일반 비급여 비중증 통원", { coverage: "non_benefit", nonBenefitItem: "general", severity: "non_critical", visit: "outpatient", cause: "disease", priorOutDays: "0", amounts: ["300000"] }, "150,000원"],
   ["일반 비급여 중증 입원", { coverage: "non_benefit", nonBenefitItem: "general", severity: "critical", visit: "inpatient", cause: "disease", nbInpatientTier: "clinic", amounts: ["1000000"] }, "700,000원"],
-  ["일반 전환 · 비중증 근골격계", { coverage: "non_benefit", nonBenefitItem: "musculoskeletal_esw", severity: "non_critical", visit: "outpatient", cause: "disease", priorOutDays: "0", amounts: ["300000"] }, "150,000원"],
-  ["일반 전환 · 비중증 주사료", { coverage: "non_benefit", nonBenefitItem: "injection", severity: "non_critical", visit: "outpatient", cause: "disease", priorOutDays: "0", amounts: ["300000"] }, "150,000원"],
+  ["일반 전환 · 비중증 근골격계", { coverage: "non_benefit", nonBenefitItem: "injection", severity: "non_critical", visit: "outpatient", cause: "disease", priorOutDays: "0", amounts: ["300000"] , nonCriticalInjectionPurpose: "anticancer" }, "150,000원"],
+  ["일반 전환 · 비중증 주사료", { coverage: "non_benefit", nonBenefitItem: "injection", severity: "non_critical", visit: "outpatient", cause: "disease", priorOutDays: "0", amounts: ["300000"] , nonCriticalInjectionPurpose: "anticancer" }, "150,000원"],
   ["일반 전환 · 중증 예외 주사료", { coverage: "non_benefit", nonBenefitItem: "injection", severity: "critical", injectionPurpose: "anticancer", visit: "outpatient", cause: "disease", priorVisits: "0", amounts: ["300000"] }, "210,000원"],
 ];
 /** `rows` 배열을 쓰는 경로 — 특별약관 별도 보장종목. */
@@ -529,7 +530,7 @@ console.log("\n[무회귀] 기존 정책은 그대로다");
     && !/gen2026Amount\(priorDeductible\)/.test(ui) && !/gen2026Amount\(priorPool\)/.test(ui)
     && !/num\(priorDeductible\)/.test(ui) && !/num\(priorPool\)/.test(ui));
   check("일반 전환 라우팅은 그대로다",
-    /routeOfGen2026Item\(severity, specialItem, injectionPurpose === "" \? undefined : injectionPurpose\)/.test(ui));
+    /routeOfGen2026Item\(severity, specialItem, selectedInjectionPurpose === "" \? undefined : selectedInjectionPurpose\)/.test(ui));
   check("일반 전환 경로에서도 진료비 게이트를 우회할 수 없다",
     /\|\| needsOutDays \|\| needsOutVisits \|\| amountsIncomplete\)\)\)/.test(ui));
   check("특별약관 경로 게이트가 별도로 있다", /&& !rowAmountsIncomplete/.test(ui));

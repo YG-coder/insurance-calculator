@@ -62,6 +62,7 @@ export interface ClaimInput {
   // 타입 수준 강제는 Gen2026NonBenefitInput / Gen2026MultiNonBenefitInput이 담당하고,
   // 이 경로로 들어온 값은 calc2026이 런타임에서 검사해 미지정이면 PENDING_UNVERIFIED로 막는다.
   nonBenefitItem?: Gen2026NonBenefitItem;
+  injectionPurpose?: Gen2026InjectionPurpose;
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -96,6 +97,7 @@ export interface Gen2026BenefitInput extends Gen2026CommonInput {
 export interface Gen2026NonBenefitInput extends Gen2026CommonInput {
   coverage: "non_benefit";
   severity?: Severity;                    // 미지정 시 런타임에서 PENDING_UNVERIFIED
+  injectionPurpose?: Gen2026InjectionPurpose; // 비중증 주사료의 면책 예외 판정
   nonBenefitItem: Gen2026NonBenefitItem;  // 필수
   // ⚠ 국민건강보험이 정한 **급여** 항목의 본인부담률이라 비급여에는 대응 축이 없다(G-31).
   //   종전에는 선언조차 없어 리터럴만 막혔고, 변수 경유는 통과해 조용히 폐기됐다.
@@ -107,8 +109,8 @@ export interface Gen2026NonBenefitInput extends Gen2026CommonInput {
 
 export type Gen2026ClaimInput = Gen2026BenefitInput | Gen2026NonBenefitInput;
 
-// OK = 계산 완료 / PENDING_UNVERIFIED = 미확정 상수 또는 필수 입력 누락으로 계산 불가(HOLD)
-export type CalcStatus = "OK" | "PENDING_UNVERIFIED";
+// OK = 계산 완료 / PENDING_UNVERIFIED = 미확정·입력 보류 / EXCLUDED = 약관상 면책(금액 결과 없음)
+export type CalcStatus = "OK" | "PENDING_UNVERIFIED" | "EXCLUDED";
 export type CapCode =
   | "GEN2009_INPATIENT_OWN_PAY_ANNUAL"
   | "GEN2009_PER_VISIT_COVERAGE_LIMIT"
@@ -439,6 +441,7 @@ export interface Gen2026MultiNonBenefitInput extends Gen2026MultiCommonInput {
   nhisCoinsuranceRate?: never;
   /** 제5조① — (1)상해비급여 / (2)질병비급여 각 축의 기존 지급보험금. 급여에는 없다. */
   priorAnnualInsurancePaid?: number;
+  injectionPurpose?: Gen2026InjectionPurpose; // 비중증 주사료의 면책 예외 판정
   nonBenefitItem: Gen2026NonBenefitItem; // 필수
   // 특별약관1 제5조⑤ 500만원 상한의 연 누적 **공제금액**(중증·입원·상급종합/종합 전용).
   priorAnnualDeductible?: number;
@@ -690,7 +693,7 @@ export interface Gen2026CriticalExceptionalInjectionInput extends Gen2026RoutedG
   priorAnnualOutpatientDays?: never;
 }
 
-/** 특약2 (1)①·(2)①이 배제하는 것은 MRI뿐이다(인쇄 p.287·p.290). */
+/** 종전 일반 전환 입력의 호환 통로. 제4조 면책에 따라 EXCLUDED만 반환한다. */
 export interface Gen2026NonCriticalMskInput extends Gen2026RoutedGeneralBase {
   severity: "non_critical";
   item: "musculoskeletal_esw";
@@ -704,7 +707,7 @@ export interface Gen2026NonCriticalMskInput extends Gen2026RoutedGeneralBase {
 export interface Gen2026NonCriticalInjectionInput extends Gen2026RoutedGeneralBase {
   severity: "non_critical";
   item: "injection";
-  injectionPurpose?: never;
+  injectionPurpose?: Gen2026InjectionPurpose; // 미지정은 보류, 일반 주사는 EXCLUDED
   /** 비중증 통원은 연 100**일**(특약2 제3조 (1)①·(2)① 표). */
   priorAnnualOutpatientDays?: number;
   priorAnnualOutpatientVisits?: never;
@@ -849,7 +852,14 @@ export interface Gen2026RoomChargeResult extends Omit<MultiClaimResult, "lines">
   lines: Gen2026RoomChargeLineResult[];
 }
 
+export interface Gen2026ExcludedResult extends Omit<MultiClaimResult, "status" | "lines"> {
+  status: "EXCLUDED";
+  route: "excluded";
+  lines: never[];
+}
+
 export type Gen2026ItemClaimResult =
+  | Gen2026ExcludedResult
   | Gen2026SpecialItemResult
   | Gen2026RoutedGeneralResult
   | Gen2026RoomChargeResult

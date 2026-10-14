@@ -1,3 +1,4 @@
+// 2026-10-14: 일반 경로 입력 검증은 비중증 면책 예외 주사로 대조한다. 면책 자체는 gen2026NonCriticalExclusions.test.ts에서 별도 검증한다.
 // G-27 — 5세대 다회 진입점 `calculateMany2026`의 진료비(`amounts`) 입력 계약.
 //   G-26이 **네 번째 진료비 자리**로 확정하고 의도적으로 남겨 둔 항목을 닫는다.
 //
@@ -268,8 +269,8 @@ console.log("\n[G-27] 15. 범위 밖 — G-26의 세 경로와 다른 세대는 
     injectionPurpose: "general", lines: a.map((v) => ({ amount: v, visit: "outpatient" })),
     priorAnnualCoveredCount: 0 } as never));
   const RG = (a: unknown) => wrap(() => calculateGen2026Item({
-    route: "general", coverage: "non_benefit", severity: "non_critical", item: "musculoskeletal_esw",
-    cause: "disease", visit: "outpatient", amounts: a, priorAnnualOutpatientDays: 0 } as never));
+    route: "general", coverage: "non_benefit", severity: "non_critical", item: "injection",
+    cause: "disease", visit: "outpatient", amounts: a, priorAnnualOutpatientDays: 0 , injectionPurpose: "anticancer" } as never));
   for (const [l, f] of [["상급병실료", RC], ["별도 보장종목", SI]] as [string, (a: unknown[]) => Caught][]) {
     check(`${l}: 정상 계산 그대로`, statusOf(f([300_000])) === "OK");
     check(`${l}: 무효 원소는 종전대로 rejected(총액 0)`,

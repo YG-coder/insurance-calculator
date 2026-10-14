@@ -1,3 +1,4 @@
+// 2026-10-14: 일반 경로 입력 검증은 비중증 면책 예외 주사로 대조한다. 면책 자체는 gen2026NonCriticalExclusions.test.ts에서 별도 검증한다.
 // G-14D — 공용 `itemGuards.rejected()`의 '받은 값' 표시를 안전하게 낮춘다.
 //
 // 종전 동작(현행 소스 직접 호출로 실측, 2026-09-05):
@@ -139,9 +140,9 @@ console.log("\n[G-14D] 4. 별도 보장종목 진입점 — 축마다 예외가 
   };
   const genBase = {
     route: "general", coverage: "non_benefit", severity: "non_critical",
-    item: "musculoskeletal_esw", cause: "disease", visit: "inpatient", tier: "clinic",
+    item: "injection", cause: "disease", visit: "inpatient", tier: "clinic",
     amounts: [300_000], priorAnnualInsurancePaid: 0,
-  };
+   injectionPurpose: "anticancer" };
   const axes: [string, (v: unknown) => unknown][] = [
     ["route", (v) => ({ ...mriBase, route: v })],
     ["coverage", (v) => ({ ...mriBase, coverage: v })],

@@ -172,7 +172,7 @@ console.log("\n[가드] 소스에 종별 조건이 실제로 연결돼 있다");
   //   `needsTier`가 게이트에서 빠지지 않았는지를 계속 확인한다.
   check("단건: needsTier가 계산 게이트에 연결",
     /const needsTier =[\s\S]{0,220}nbInpatientTier === null;/.test(ui[0])
-    && /needsItem \|\| needsSeverity \|\| needsTier \|\| limits === null\s+\? null/.test(ui[0]));
+    && /needsItem \|\| needsSeverity \|\| needsTier \|\| needsPurpose \|\| limits === null\s+\? null/.test(ui[0]));
   check("다회: needsTier가 일반 비급여 게이트에 연결",
     /nonBenefitItem === "general" && severity !== "" && cause !== "" && !needsTier/.test(ui[1]));
   check("다회: 일반 전환 게이트도 종별 미선택을 배제",
@@ -187,13 +187,13 @@ console.log("\n[가드] 소스에 종별 조건이 실제로 연결돼 있다");
       if (!m) throw new Error(`${name} 정의를 찾지 못했다`);
       return m[1].replace(/\/\/[^\n]*/g, " ").replace(/\s+/g, " ").trim();
     };
-    const KEYS = ["coverage", "nonBenefitItem", "severity", "visit", "nbInpatientTier"] as const;
+    const KEYS = ["coverage", "nonBenefitItem", "severity", "visit", "nbInpatientTier", "isGeneralPath"] as const;
     type State = Record<(typeof KEYS)[number], unknown>;
     const evalGate = (expr: string, st: State): boolean =>
       (Function(...KEYS, `return (${expr});`) as (...a: unknown[]) => boolean)(...KEYS.map((k) => st[k]));
     const needsSeverityExpr = grab("needsSeverity");
     const needsTierExpr = grab("needsTier");
-    const base: State = { coverage: "non_benefit", nonBenefitItem: "general", severity: null, visit: "inpatient", nbInpatientTier: null };
+    const base: State = { coverage: "non_benefit", nonBenefitItem: "general", severity: null, visit: "inpatient", nbInpatientTier: null, isGeneralPath: true };
     check("단건: 질환 구분 미선택이면 종별 안내가 뜨지 않음",
       evalGate(needsSeverityExpr, base) === true && evalGate(needsTierExpr, base) === false,
       `${needsSeverityExpr} / ${needsTierExpr}`);
@@ -208,7 +208,7 @@ console.log("\n[가드] 소스에 종별 조건이 실제로 연결돼 있다");
     check("단건: 급여에는 종별 안내가 뜨지 않음",
       evalGate(needsTierExpr, { ...picked, coverage: "benefit" }) === false);
     check("단건: 별도 보장종목에는 종별 안내가 뜨지 않음",
-      evalGate(needsTierExpr, { ...picked, nonBenefitItem: "mri" }) === false);
+      evalGate(needsTierExpr, { ...picked, nonBenefitItem: "mri", isGeneralPath: false }) === false);
   }
   check("다회: needsTier도 질환 구분 선택 후에만",
     /const needsTier = showGeneralForm && severity !== "" && visit === "inpatient" && nbInpatientTier === "";/.test(ui[1]));

@@ -1,3 +1,4 @@
+// 2026-10-14: 일반 경로 입력 검증은 비중증 면책 예외 주사로 대조한다. 면책 자체는 gen2026NonCriticalExclusions.test.ts에서 별도 검증한다.
 // G-29 — 별도 보장종목 형제 두 축(`priorAnnualCoveredCount`·`priorAnnualInpatientDeductible`)의
 //   단일 읽기. G-23(지급보험금)·G-26(진료비)·G-28(승인 구간 축)이 닫은 것과 같은 종류의
 //   마지막 이중 읽기다.
@@ -84,8 +85,8 @@ const CMRI = (e: Any = {}, lines: unknown[] = [inp(3_000_000)]) => ({
 const NMRI = (e: Any = {}) => ({ route: "special_item", coverage: "non_benefit",
   severity: "non_critical", item: "mri", lines: [inp(300_000)], ...e });
 const GEN = (e: Any = {}) => ({ route: "general", coverage: "non_benefit", severity: "non_critical",
-  item: "musculoskeletal_esw", cause: "disease", visit: "outpatient", amounts: [300_000],
-  priorAnnualOutpatientDays: 0, ...e });
+  item: "injection", cause: "disease", visit: "outpatient", amounts: [300_000],
+  priorAnnualOutpatientDays: 0, ...e , injectionPurpose: "anticancer" });
 const GANTI = (e: Any = {}) => ({ route: "general", coverage: "non_benefit", severity: "critical",
   item: "injection", injectionPurpose: "anticancer", cause: "disease", visit: "outpatient",
   amounts: [300_000], priorAnnualOutpatientVisits: 0, ...e });
@@ -106,7 +107,7 @@ const MIS_PUR = (e: Any = {}) => ({ route: "general", coverage: "non_benefit", s
   item: "injection", cause: "disease", visit: "outpatient", amounts: [300_000],
   priorAnnualOutpatientVisits: 0, ...e });
 const MIS_REV = (e: Any = {}) => ({ route: "special_item", coverage: "non_benefit",
-  severity: "non_critical", item: "musculoskeletal_esw", lines: [out(300_000)], ...e });
+  severity: "non_critical", item: "injection", lines: [out(300_000)], ...e , injectionPurpose: "anticancer" });
 
 const gi = (i: unknown) => calculateGen2026Item(i as never);
 const mc = (i: unknown) => calculateMany2026(i as never);
@@ -384,9 +385,9 @@ console.log("\n[G-29] 8. 구조 검사 — 본체 재읽기·축 교차·관용 
     && at("const expectedRoute = routeOfGen2026Item(") < at("const pool: unknown ="));
   check("경로 대조가 리터럴 네 축 검증보다는 뒤다",
     at("const expectedRoute = routeOfGen2026Item(") > at('rejected("치료유형(item)"')
-    && at("const expectedRoute = routeOfGen2026Item(") > at('rejected("약제 용도(injectionPurpose)는 중증 비급여 주사료에서만 사용합니다 —'));
+    && at("const expectedRoute = routeOfGen2026Item(") > at('rejected("약제 용도(injectionPurpose)는 비급여 주사료에서만 사용합니다 —'));
   check("진입점에 옛 경로 대조가 남아 있지 않다",
-    (code.match(/routeOfGen2026Item\(/g) ?? []).length === 2, // 선언 + validateItemInput의 호출
+    (code.match(/routeOfGen2026Item\(/g) ?? []).length === 1, // 공통 모듈의 판정 함수를 validateItemInput에서 한 번 호출
     String((code.match(/routeOfGen2026Item\(/g) ?? []).length));
   check("G-28 stray 검사는 그대로 경로 확정 뒤다",
     at("const strayActs") > at("export function calculateGen2026Item("));
@@ -437,7 +438,7 @@ console.log("\n[G-29] 9. 안내 우선순위 — 경로 대조가 먼저, 그 �
   for (const [l, over, want] of [
     ["route 무효", { route: "x" }, "경로(route)"], ["coverage 무효", { coverage: "benefit" }, "급여 구분(coverage)"],
     ["severity 무효", { severity: "x" }, "질환 구분(severity)"], ["item 무효", { item: "x" }, "치료유형(item)"],
-    ["purpose 무효", { injectionPurpose: "zzz" }, "약제 용도(injectionPurpose)는 중증 비급여 주사료에서만"],
+    ["purpose 무효", { injectionPurpose: "zzz" }, "약제 용도(injectionPurpose)는 비급여 주사료에서만"],
   ] as [string, Any, string][]) {
     check(`${l}이 경로 대조보다 앞선다`,
       note0(wrap(() => gi(MIS_MSK({ ...over, [C]: 5 })))).startsWith(want),

@@ -1,3 +1,4 @@
+// 2026-10-14: 일반 경로 입력 검증은 비중증 면책 예외 주사로 대조한다. 면책 자체는 gen2026NonCriticalExclusions.test.ts에서 별도 검증한다.
 // 5세대 별도 보장종목 — 특별약관1 (3)3대비급여 / 특별약관2 (3)비급여 자기공명영상진단.
 //
 // 근거: 별표15 2026.5.6 공포·시행본(admRulSeq 2200000108697, 별표 식별번호 3216359)
@@ -85,8 +86,8 @@ const ROUTES: [Severity, Gen2026SpecialItem, Gen2026InjectionPurpose | undefined
   ["critical", "injection", "antibiotic", "general"],
   ["critical", "injection", "orphan_drug", "general"],
   ["critical", "injection", undefined, "missing_purpose"],
-  ["non_critical", "musculoskeletal_esw", undefined, "general"],
-  ["non_critical", "injection", undefined, "general"],
+  ["non_critical", "musculoskeletal_esw", undefined, "excluded"],
+  ["non_critical", "injection", undefined, "missing_purpose"],
   ["non_critical", "mri", undefined, "special_item"],
 ];
 for (const [sev, item, purpose, want] of ROUTES) {
@@ -249,8 +250,9 @@ console.log("\n[일반 경로 전환] 기존 결과와 동일 + 안내 한 줄")
   //   축은 severity가 정하므로 shared에 넣지 않고 분기마다 자기 축만 싣는다.
   const shared = { cause: "disease" as Cause, visit: "outpatient" as Visit, amounts: [1_000_000, 2_000_000], annualCoverageLimit: 10_000_000, outpatientCoverageLimit: 200_000, priorAnnualInsurancePaid: 0 };
   const baseline = calculateMany2026({ ...shared, coverage: "non_benefit", severity: "non_critical", nonBenefitItem: "general", priorAnnualOutpatientDays: 0 });
-  for (const item of ["musculoskeletal_esw", "injection"] as const) {
-    const routed = calculateRoutedGeneral2026({ route: "general", coverage: "non_benefit", severity: "non_critical", item, ...shared, priorAnnualOutpatientDays: 0 });
+  for (const purpose of ["anticancer", "antibiotic", "orphan_drug"] as const) {
+    const item = "injection";
+    const routed = calculateRoutedGeneral2026({ route: "general", coverage: "non_benefit", severity: "non_critical", item, injectionPurpose: purpose, ...shared, priorAnnualOutpatientDays: 0 });
     check(`비중증 ${item}: 행 결과가 일반 경로와 동일`, JSON.stringify(routed.lines) === JSON.stringify(baseline.lines));
     check(`비중증 ${item}: 합계 동일`, routed.totalOwnPay === baseline.totalOwnPay && routed.totalInsurancePay === baseline.totalInsurancePay && JSON.stringify(routed.appliedCaps) === JSON.stringify(baseline.appliedCaps));
     check(`비중증 ${item}: notes는 안내 한 줄만 추가`, routed.notes.length === baseline.notes.length + 1 && JSON.stringify(routed.notes.slice(1)) === JSON.stringify(baseline.notes));
@@ -264,7 +266,7 @@ console.log("\n[일반 경로 전환] 기존 결과와 동일 + 안내 한 줄")
   check("예외 주사 안내가 약제명을 밝힘", exceptional[0].notes[0].includes("항암제") && exceptional[1].notes[0].includes("항생제") && exceptional[2].notes[0].includes("희귀의약품"));
   check("전환 결과의 route", exceptional[0].route === "general");
   // 차단된 결과에는 "계산했다"는 안내를 붙이지 않는다.
-  const blockedRouted = calculateRoutedGeneral2026({ route: "general", coverage: "non_benefit", severity: "non_critical", item: "injection", cause: "disease", visit: "outpatient", amounts: [] });
+  const blockedRouted = calculateRoutedGeneral2026({ route: "general", coverage: "non_benefit", severity: "non_critical", item: "injection", cause: "disease", visit: "outpatient", amounts: [] , injectionPurpose: "anticancer" });
   check("차단 결과에는 전환 안내를 붙이지 않음", blockedRouted.status !== "OK" ? blockedRouted.notes.every((n) => !n.includes("계산했습니다")) : true);
 }
 
@@ -293,12 +295,12 @@ console.log("\n[런타임 검증] 타입을 우회한 값은 전부 차단한다
     ["행의 visit 누락", { ...base, lines: [{ amount: 1_000_000 }] }],
     ["행의 tier가 알 수 없는 값", { ...base, lines: [{ amount: 1_000_000, visit: "inpatient", tier: "bogus" }] }],
     ["승인 회차가 10회 단위가 아님", { ...base, item: "musculoskeletal_esw", lines: [out(1_000_000)], approvedThroughVisit: 15 }],
-    ["일반 경로에 cause 누락", { route: "general", coverage: "non_benefit", severity: "non_critical", item: "injection", visit: "outpatient", amounts: [1_000_000] }],
-    ["일반 경로에 알 수 없는 cause", { route: "general", coverage: "non_benefit", severity: "non_critical", item: "injection", cause: "bogus", visit: "outpatient", amounts: [1_000_000] }],
-    ["일반 경로에 알 수 없는 visit", { route: "general", coverage: "non_benefit", severity: "non_critical", item: "injection", cause: "disease", visit: "bogus", amounts: [1_000_000] }],
-    ["일반 경로에 알 수 없는 tier", { route: "general", coverage: "non_benefit", severity: "non_critical", item: "injection", cause: "disease", visit: "inpatient", tier: "bogus", amounts: [1_000_000] }],
-    ["일반 경로 amounts가 배열이 아님", { route: "general", coverage: "non_benefit", severity: "non_critical", item: "injection", cause: "disease", visit: "outpatient", amounts: 1_000_000 }],
-    ["일반 경로 amounts에 숫자가 아닌 값", { route: "general", coverage: "non_benefit", severity: "non_critical", item: "injection", cause: "disease", visit: "outpatient", amounts: [1_000_000, "x"] }],
+    ["일반 경로에 cause 누락", { route: "general", coverage: "non_benefit", severity: "non_critical", item: "injection", visit: "outpatient", amounts: [1_000_000] , injectionPurpose: "anticancer" }],
+    ["일반 경로에 알 수 없는 cause", { route: "general", coverage: "non_benefit", severity: "non_critical", item: "injection", cause: "bogus", visit: "outpatient", amounts: [1_000_000] , injectionPurpose: "anticancer" }],
+    ["일반 경로에 알 수 없는 visit", { route: "general", coverage: "non_benefit", severity: "non_critical", item: "injection", cause: "disease", visit: "bogus", amounts: [1_000_000] , injectionPurpose: "anticancer" }],
+    ["일반 경로에 알 수 없는 tier", { route: "general", coverage: "non_benefit", severity: "non_critical", item: "injection", cause: "disease", visit: "inpatient", tier: "bogus", amounts: [1_000_000] , injectionPurpose: "anticancer" }],
+    ["일반 경로 amounts가 배열이 아님", { route: "general", coverage: "non_benefit", severity: "non_critical", item: "injection", cause: "disease", visit: "outpatient", amounts: 1_000_000 , injectionPurpose: "anticancer" }],
+    ["일반 경로 amounts에 숫자가 아닌 값", { route: "general", coverage: "non_benefit", severity: "non_critical", item: "injection", cause: "disease", visit: "outpatient", amounts: [1_000_000, "x"] , injectionPurpose: "anticancer" }],
   ];
   for (const [name, bad] of BAD) {
     const r = calculateGen2026Item(bad as unknown as Gen2026ItemClaimInput);
@@ -353,7 +355,7 @@ console.log("\n[결과 계약] route로 좁혀 특별 필드를 읽는다");
     check("route 좁힘", false, "special_item이어야 한다");
   }
   // ⚠ 비중증 입원은 의료기관 종별이 1회당 300만원 한도 적용 여부를 가른다(특별약관2 제3조 (1)①·(2)①).
-  const g = calculateGen2026Item({ route: "general", coverage: "non_benefit", severity: "non_critical", item: "injection", cause: "injury", visit: "inpatient", tier: "clinic", amounts: [1_000_000] });
+  const g = calculateGen2026Item({ route: "general", coverage: "non_benefit", severity: "non_critical", item: "injection", cause: "injury", visit: "inpatient", tier: "clinic", amounts: [1_000_000] , injectionPurpose: "anticancer" });
   check("일반 전환 결과의 route", g.route === "general" && g.status === "OK");
 }
 

@@ -1,3 +1,4 @@
+// 2026-10-14: 일반 경로 입력 검증은 비중증 면책 예외 주사로 대조한다. 면책 자체는 gen2026NonCriticalExclusions.test.ts에서 별도 검증한다.
 // G-34B — 묶음·항목·상급병실료 진입점의 **교차 입력 소유권**과 확정 stray 봉인.
 //   G-34A가 제네릭 라우터를 닫았다. 여기서는 나머지 다섯 공개 진입점을 같은 방법으로 닫는다.
 //
@@ -114,7 +115,7 @@ const BASE: Record<string, [(i: Any) => unknown, Any]> = {
   // ⚠ G-34C: 일반 복귀 **통원** 경로의 기준 입력에서 `tier`를 뺐다 — 5세대 비급여의 종별은
   //   입원만 가르므로 통원에 실으면 이제 거부된다(종전에는 읽고 무시됐다). 이 경로군이 보려는
   //   소유권 판정은 그대로다.
-  "일반복귀|비중증|근골격계": [(i) => calculateGen2026Item(i as never), { route: "general", coverage: "non_benefit", cause: "disease", severity: "non_critical", item: "musculoskeletal_esw", visit: "outpatient", amounts: [3_000_000], priorAnnualOutpatientDays: 0 }],
+  "일반복귀|비중증|근골격계": [(i) => calculateGen2026Item(i as never), { route: "general", coverage: "non_benefit", cause: "disease", severity: "non_critical", item: "injection", visit: "outpatient", amounts: [3_000_000], priorAnnualOutpatientDays: 0 , injectionPurpose: "anticancer" }],
   "상급병실료|중증": [(i) => calculateRoomCharge2026(i as never), { route: "room_charge", coverage: "non_benefit", cause: "disease", severity: "critical", stays: [{ roomChargeTotal: 400_000, inpatientDays: 2 }] }],
 };
 

@@ -1,3 +1,4 @@
+import { routeOfGen2026Item, excludedSingle2026 } from "./itemRouting2026";
 // 5세대 실손 엔진 (Engine Core). v0.4 게이팅 기준.
 //   - 값이 박힌 계산은 금융위 원문 직독 A 확정 항목만.
 //   - 급여 통원 최소공제는 금융위 2026-05-06 원문으로 확인됐다.
@@ -193,8 +194,9 @@ const GEN2026_FOREIGN_KEYS = [
   "priorAnnualTreatmentActCount",
 ] as const;
 
-function rejectForeignAxes(input: Gen2026ClaimInput, amount: number): CalcResult | null {
+function rejectForeignAxes(input: Gen2026ClaimInput, amount: number, usesInjectionPurpose = false): CalcResult | null {
   for (const key of GEN2026_FOREIGN_KEYS) {
+    if (usesInjectionPurpose && key === "injectionPurpose") continue;
     const got: unknown = (input as unknown as Record<string, unknown>)[key];
     if (got === undefined) continue;
     return pending(amount, [
@@ -401,9 +403,23 @@ export function calc2026(input: Gen2026ClaimInput): CalcResult {
       "비급여: 치료유형(nonBenefitItem) 미지정 → 계산 불가. 5세대 비급여는 보장종목이 나뉘어 있어 치료유형 없이는 어떤 산식을 적용할지 정할 수 없습니다.",
     ]);
   }
+  let exceptionalInjection = false;
+  let itemSeverity: unknown;
   if (item !== "general") {
-    return pending(amount, [
-      // 조사는 라벨의 받침에 따라 달라진다("차액은" / "주사료는"). 하드코딩하지 않는다.
+    if (item === "musculoskeletal_esw" || item === "injection") {
+      itemSeverity = input.severity;
+      if (itemSeverity === "non_critical") {
+        const purpose = item === "injection" ? (input as { injectionPurpose?: import("./types").Gen2026InjectionPurpose }).injectionPurpose : undefined;
+        if (purpose !== undefined && !["general", "anticancer", "antibiotic", "orphan_drug"].includes(purpose)) {
+          return pending(amount, ["약제 용도(injectionPurpose)를 올바르게 선택해 주세요."]);
+        }
+        const route = routeOfGen2026Item(itemSeverity, item, purpose);
+        if (route === "excluded") return excludedSingle2026(amount, item);
+        if (route === "missing_purpose") return pending(amount, ["비중증 비급여 주사료의 약제 용도를 선택해 주세요. 선택 전에는 면책 예외 여부를 판정하지 않습니다(특별약관2 제4조 p.299·302)."]);
+        exceptionalInjection = route === "general";
+      }
+    }
+    if (!exceptionalInjection) return pending(amount, [
       `${topic(GEN2026_NON_BENEFIT_ITEM_LABEL[item])} 현재 계산 대상이 아닙니다.`,
       BLOCKED_ITEM_REASON[item],
     ]);
@@ -427,7 +443,7 @@ export function calc2026(input: Gen2026ClaimInput): CalcResult {
   //   ⚠ 안내에 받은 값 자체를 넣지 않고 `typeof`만 넣는다(이 파일의 G-15 계약).
   //   ⚠ 자리는 종전 게이트 그대로다 — 치료유형 안내가 먼저이고, 아래 종별 preflight와
   //     G-30·G-31 stray 검사는 이 뒤에 온다.
-  const rawSeverity: unknown = (input as { severity?: unknown }).severity;
+  const rawSeverity: unknown = exceptionalInjection ? itemSeverity : (input as { severity?: unknown }).severity;
   if (rawSeverity === undefined) {
     return pending(amount, ["비급여: 중증/비중증(severity) 미지정 → 계산 불가"]);
   }
@@ -535,7 +551,7 @@ export function calc2026(input: Gen2026ClaimInput): CalcResult {
   // 다른 세대·다른 진입점의 축은 이 분기의 기존 preflight·stray **전부 뒤**에서 본다.
   //   ⚠ 입원의 종별 미지정은 여기서도 앞선다 — 형제 stray 셋과 같은 계약이다.
   if (!tierPendingAhead) {
-    const foreignNonBenefit = rejectForeignAxes(input, amount);
+    const foreignNonBenefit = rejectForeignAxes(input, amount, exceptionalInjection);
     if (foreignNonBenefit) return foreignNonBenefit;
   }
   const priorDeductible = Math.max(0, (rawDeductible as number | undefined) ?? 0);

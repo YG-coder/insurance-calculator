@@ -42,6 +42,12 @@ const names = stateNamesFrom(code);
 type Comp = () => unknown;
 const setup = () => { const h = mount(HealthCalcMulti2026 as unknown as Comp, names); h.set("submitted", true); return h; };
 type H = ReturnType<typeof setup>;
+// 판정 선택 변경 후에는 재계산을 눌러 금액·입력 검증을 대조한다. 초기화 전이는 gen2026UiState에서 별도 검증.
+const submit = (h: H) => {
+  const button = h.render().nodes.find(n => n.tag === "button" && n.text === "여러 건 계산하기");
+  if (!button) throw new Error("계산 버튼이 없습니다");
+  (button.props.onClick as () => void)();
+};
 const findIn = (el: unknown, t: string): { props: Record<string, unknown> } | null => {
   if (el === null || el === undefined || typeof el !== "object") return null;
   if (Array.isArray(el)) { for (const c of el) { const r = findIn(c, t); if (r !== null) return r; } return null; }
@@ -68,6 +74,7 @@ const pick = (h: H, p: string, v: string) => {
   if (s === null) throw new Error("선택창을 찾지 못했습니다: " + p);
   if (s.props.disabled === true) throw new Error("선택창이 비활성입니다: " + p);
   (s.props.onChange as (e: unknown) => void)({ target: { value: v } });
+  submit(h);
 };
 const rowLabels = (h: H, prefix: string) =>
   h.render().nodes.filter((n: RenderedNode) => n.tag === "label" && n.text.startsWith(prefix));
@@ -75,6 +82,7 @@ const setRow = (h: H, prefix: string, i: number, v: string) => {
   const ls = rowLabels(h, prefix); const s = ls[i] === undefined ? null : findIn(ls[i].props.children, "select");
   if (s === null) throw new Error(`${i + 1}번째 행 ${prefix} 선택창이 없습니다`);
   (s.props.onChange as (e: unknown) => void)({ target: { value: v } });
+  submit(h);
 };
 const addRow = (h: H) => {
   const n = h.render().nodes.find((x: RenderedNode) => x.tag === "button" && x.text.includes("행 추가"));

@@ -19,6 +19,9 @@ export const GEN2026_NONCRITICAL_INJECTION_PURPOSE_LABEL: Record<Gen2026Injectio
   general: "일반 주사", anticancer: "항암제", antibiotic: "항생제", orphan_drug: "희귀의약품",
 };
 
+export const GEN2026_NONCRITICAL_INJECTION_EXCEPTION_NOTE =
+  "비중증 주사료의 약제 용도가 특별약관2 제4조(p.299·302)의 면책 예외에 해당하여 일반 비급여 산식을 적용했습니다. 다른 보장 조건과 면책은 별도로 확인해야 합니다.";
+
 export function nonCriticalExclusionNotes(item: "musculoskeletal_esw" | "injection"): string[] {
   return [
     "보상하지 않는 항목 — 특별약관2 제4조 (p.299·302).",

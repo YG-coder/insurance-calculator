@@ -431,6 +431,10 @@ console.log("\n[전환] 급여로 바꾸면 화면·검증·계산이 모두 amo
     check(`${what}: 전환 전에는 숨은 amounts 무효값이 계산을 막지 않는다`, before.calculated);
 
     pick(h, "급여 구분", "benefit");
+    // 2026-10-14 화면 전이 계약: 판정 선택을 바꾸면 결과와 경고를 숨기고 재계산을 기다린다.
+    const changed = screenOf(h);
+    check(`${what} → 급여: 재계산 전 경고와 결과가 없다`, !changed.calculated && changed.warns.length === 0);
+    (h.render().nodes.find(n => n.tag === "button" && n.text === "여러 건 계산하기")!.props.onClick as () => void)();
     const after = screenOf(h);
     check(`${what} → 급여: 화면 입력이 amounts 행으로 바뀐다`,
       ids(h).some((id) => id.startsWith("gen2026-amount-")) && !ids(h).some((id) => id.startsWith("gen2026-row-amount-")));
@@ -453,6 +457,8 @@ console.log("\n[전환] 급여로 바꾸면 화면·검증·계산이 모두 amo
 
     // 되돌아오면 이전 경로가 복원되고, 급여에서 고친 amounts가 그 경로를 막지 않는다.
     pick(h, "급여 구분", "non_benefit");
+    check(`${what} → 비급여 복귀: 재계산 전 결과가 없다`, !screenOf(h).calculated);
+    (h.render().nodes.find(n => n.tag === "button" && n.text === "여러 건 계산하기")!.props.onClick as () => void)();
     const backScr = screenOf(h);
     check(`${what} → 비급여 복귀: 원래 입력 폼이 돌아온다`,
       back === "" ? !ids(h).some((id) => id.startsWith("gen2026-amount-") || id.startsWith("gen2026-row-amount-"))

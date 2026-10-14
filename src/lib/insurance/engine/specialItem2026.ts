@@ -64,7 +64,7 @@ export const GEN2026_MSK_APPROVED_THROUGH_VALUES: readonly Gen2026MskApprovedThr
  */
 export { routeOfGen2026Item } from "./itemRouting2026";
 export type { Gen2026ItemRoute } from "./itemRouting2026";
-import { routeOfGen2026Item, excludedMany2026 } from "./itemRouting2026";
+import { routeOfGen2026Item, excludedMany2026, GEN2026_NONCRITICAL_INJECTION_EXCEPTION_NOTE } from "./itemRouting2026";
 import type { Gen2026ExcludedResult } from "./types";
 
 interface ItemSpec {
@@ -836,9 +836,9 @@ function calculateSpecialItem2026(
 // ─────────────────────────────────────────────────────────────────────
 function routeNote(input: Gen2026RoutedGeneralInput): string {
   if (input.severity === "critical") {
-    return `${GEN2026_INJECTION_PURPOSE_LABEL[input.injectionPurpose]}를 위해 사용된 비급여 주사료는 약관상 3대비급여가 아니라 상해비급여·질병비급여에서 보상합니다(특별약관1 제3조(3)제2항). 일반 비급여 산식으로 계산했습니다.`;
+    return `${GEN2026_INJECTION_PURPOSE_LABEL[input.injectionPurpose]} 용도의 비급여 주사료는 특별약관1 제3조(3)제2항에 따라 상해비급여·질병비급여에서 보상합니다. 일반 비급여 산식으로 계산했습니다.`;
   }
-  return "비중증 주사료의 약제 용도가 특별약관2 제4조(p.299·302)의 면책 예외에 해당하여 일반 비급여 산식을 적용했습니다. 다른 보장 조건과 면책은 별도로 확인해야 합니다.";
+  return GEN2026_NONCRITICAL_INJECTION_EXCEPTION_NOTE;
 }
 
 /** ⚠ export하지 않는다. 위와 같은 이유다. */

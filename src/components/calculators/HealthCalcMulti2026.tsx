@@ -456,6 +456,13 @@ export default function HealthCalcMulti2026() {
   const [priorPool, setPriorPool] = useState("0");
   const [submitted, setSubmitted] = useState(false);
 
+  // 판정 선택이 바뀌면 제출 상태를 함께 초기화한다. 결과와 계산 경고는 재계산 전까지 숨긴다.
+  const resetCalculation = () => setSubmitted(false);
+  const changeSelection = <T,>(setter: (value: T) => void, value: T) => {
+    setter(value);
+    resetCalculation();
+  };
+
   // ⚠ 치료유형은 비급여에서만 고른다. 급여로 바꾸면 선택창은 사라지지만 `nonBenefitItem`
   //   상태는 남는다. 여기에 급여 조건을 걸지 않으면 **급여인데 특별약관·상급병실료 입력 폼이
   //   렌더되는데 급여 계산은 `amounts`를 쓴다** — 화면에 보이는 금액을 고쳐도 계산에 쓰이지
@@ -853,8 +860,10 @@ export default function HealthCalcMulti2026() {
   const special = itemResult !== null && itemResult.route === "special_item" ? itemResult : null;
   const room = roomResult !== null && roomResult.route === "room_charge" ? roomResult : null;
 
-  const setRow = (i: number, patch: Partial<SpecialRow>) =>
+  const setRow = (i: number, patch: Partial<SpecialRow>) => {
     setRows((old) => old.map((r, j) => j === i ? { ...r, ...patch } : r));
+    if (patch.visit !== undefined || patch.tier !== undefined) resetCalculation();
+  };
   const setRcRow = (i: number, patch: Partial<RoomChargeRow>) =>
     setRcRows((old) => old.map((r, j) => j === i ? { ...r, ...patch } : r));
 
@@ -871,16 +880,16 @@ export default function HealthCalcMulti2026() {
     <p className="mt-2 text-sm text-slate-600">일반 비급여의 연간 보험가입금액은 약관상 <b>상해비급여·질병비급여 각각에 대해 따로</b> 정해집니다. 입력한 모든 행과 기존 지급보험금이 <b>같은 원인 보장축</b>의 것이어야 하며, 다른 원인의 청구는 따로 계산해 주세요. 반면 <b>별도 보장종목</b>(3대비급여·비중증 MRI)의 한도는 상해와 질병을 <b>합산</b>하므로 원인을 나누지 않습니다. 누적 공제금액(500만 원 상한)은 이 축 구분과 별개이므로 아래 입력칸의 안내를 따로 확인해 주세요.</p>
 
     <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-      {coverage === "benefit" && <label className="text-sm font-semibold">원인<select className="input-base mt-1" value={benefitCause} onChange={(e) => setBenefitCause(e.target.value as Cause)}><option value="disease">질병</option><option value="injury">상해</option></select></label>}
-      {(showGeneralForm || showRoomChargeCause) && <label className="text-sm font-semibold">원인<select className="input-base mt-1" value={cause} onChange={(e) => setCause(e.target.value as Cause | "")}><option value="">선택해 주세요</option><option value="disease">질병</option><option value="injury">상해</option></select></label>}
-      <label className="text-sm font-semibold">급여 구분<select className="input-base mt-1" value={coverage} onChange={(e) => setCoverage(e.target.value as Coverage)}><option value="benefit">급여</option><option value="non_benefit">비급여</option></select></label>
-      {!showSpecialForm && !isRoomCharge && <label className="text-sm font-semibold">치료 형태<select className="input-base mt-1" value={visit} onChange={(e) => setVisit(e.target.value as Visit)}><option value="outpatient">통원</option><option value="inpatient">입원</option></select></label>}
-      {coverage === "non_benefit" && <label className="text-sm font-semibold">치료유형<select className="input-base mt-1" value={nonBenefitItem} onChange={(e) => setNonBenefitItem(e.target.value as Gen2026NonBenefitItem | "")}><option value="">선택해 주세요</option>{NON_BENEFIT_ITEMS.map((it) => <option key={it} value={it}>{GEN2026_NON_BENEFIT_ITEM_LABEL[it]}</option>)}</select></label>}
-      {coverage === "non_benefit" && nonBenefitItem !== "" && <label className="text-sm font-semibold">질환 구분<select className="input-base mt-1" value={severity} onChange={(e) => setSeverity(e.target.value as Severity | "")}><option value="">선택해 주세요</option><option value="critical">중증</option><option value="non_critical">비중증</option></select></label>}
-      {coverage === "non_benefit" && nonBenefitItem === "injection" && severity !== "" && <label className="text-sm font-semibold">약제 용도<select className="input-base mt-1" value={selectedInjectionPurpose} onChange={(e) => (severity === "non_critical" ? setNonCriticalInjectionPurpose : setInjectionPurpose)(e.target.value as Gen2026InjectionPurpose | "")}><option value="">선택해 주세요</option>{INJECTION_PURPOSES.map((p) => <option key={p} value={p}>{severity === "non_critical" ? GEN2026_NONCRITICAL_INJECTION_PURPOSE_LABEL[p] : GEN2026_INJECTION_PURPOSE_LABEL[p]}</option>)}</select></label>}
-      {coverage === "benefit" && visit === "outpatient" && <label className="text-sm font-semibold">의료기관<select className="input-base mt-1" value={benefitTier} onChange={(e) => setBenefitTier(e.target.value as Tier)}><option value="clinic">병·의원급</option><option value="hospital">상급종합·종합병원</option></select></label>}
-      {showGeneralForm && severity !== "" && visit === "inpatient" && <label className="text-sm font-semibold">입원 의료기관<select className="input-base mt-1" value={nbInpatientTier} onChange={(e) => setNbInpatientTier(e.target.value as Tier | "")}><option value="">선택해 주세요</option><option value="clinic">병·의원급</option><option value="hospital">상급종합·종합병원</option></select></label>}
-      {showSpecialForm && specialItem === "musculoskeletal_esw" && <label className="text-sm font-semibold">보상 승인 회차<select className="input-base mt-1" value={approvedThrough} onChange={(e) => setApprovedThrough(Number(e.target.value) as Gen2026MskApprovedThrough)}>{GEN2026_MSK_APPROVED_THROUGH_VALUES.map((v) => <option key={v} value={v}>{v}회까지</option>)}</select></label>}
+      {coverage === "benefit" && <label className="text-sm font-semibold">원인<select className="input-base mt-1" value={benefitCause} onChange={(e) => changeSelection(setBenefitCause, e.target.value as Cause)}><option value="disease">질병</option><option value="injury">상해</option></select></label>}
+      {(showGeneralForm || showRoomChargeCause) && <label className="text-sm font-semibold">원인<select className="input-base mt-1" value={cause} onChange={(e) => changeSelection(setCause, e.target.value as Cause | "")}><option value="">선택해 주세요</option><option value="disease">질병</option><option value="injury">상해</option></select></label>}
+      <label className="text-sm font-semibold">급여 구분<select className="input-base mt-1" value={coverage} onChange={(e) => changeSelection(setCoverage, e.target.value as Coverage)}><option value="benefit">급여</option><option value="non_benefit">비급여</option></select></label>
+      {!showSpecialForm && !isRoomCharge && <label className="text-sm font-semibold">치료 형태<select className="input-base mt-1" value={visit} onChange={(e) => changeSelection(setVisit, e.target.value as Visit)}><option value="outpatient">통원</option><option value="inpatient">입원</option></select></label>}
+      {coverage === "non_benefit" && <label className="text-sm font-semibold">치료유형<select className="input-base mt-1" value={nonBenefitItem} onChange={(e) => changeSelection(setNonBenefitItem, e.target.value as Gen2026NonBenefitItem | "")}><option value="">선택해 주세요</option>{NON_BENEFIT_ITEMS.map((it) => <option key={it} value={it}>{GEN2026_NON_BENEFIT_ITEM_LABEL[it]}</option>)}</select></label>}
+      {coverage === "non_benefit" && nonBenefitItem !== "" && <label className="text-sm font-semibold">질환 구분<select className="input-base mt-1" value={severity} onChange={(e) => changeSelection(setSeverity, e.target.value as Severity | "")}><option value="">선택해 주세요</option><option value="critical">중증</option><option value="non_critical">비중증</option></select></label>}
+      {coverage === "non_benefit" && nonBenefitItem === "injection" && severity !== "" && <label className="text-sm font-semibold">약제 용도<select className="input-base mt-1" value={selectedInjectionPurpose} onChange={(e) => changeSelection(severity === "non_critical" ? setNonCriticalInjectionPurpose : setInjectionPurpose, e.target.value as Gen2026InjectionPurpose | "")}><option value="">선택해 주세요</option>{INJECTION_PURPOSES.map((p) => <option key={p} value={p}>{severity === "non_critical" ? GEN2026_NONCRITICAL_INJECTION_PURPOSE_LABEL[p] : GEN2026_INJECTION_PURPOSE_LABEL[p]}</option>)}</select></label>}
+      {coverage === "benefit" && visit === "outpatient" && <label className="text-sm font-semibold">의료기관<select className="input-base mt-1" value={benefitTier} onChange={(e) => changeSelection(setBenefitTier, e.target.value as Tier)}><option value="clinic">병·의원급</option><option value="hospital">상급종합·종합병원</option></select></label>}
+      {showGeneralForm && severity !== "" && visit === "inpatient" && <label className="text-sm font-semibold">입원 의료기관<select className="input-base mt-1" value={nbInpatientTier} onChange={(e) => changeSelection(setNbInpatientTier, e.target.value as Tier | "")}><option value="">선택해 주세요</option><option value="clinic">병·의원급</option><option value="hospital">상급종합·종합병원</option></select></label>}
+      {showSpecialForm && specialItem === "musculoskeletal_esw" && <label className="text-sm font-semibold">보상 승인 회차<select className="input-base mt-1" value={approvedThrough} onChange={(e) => changeSelection(setApprovedThrough, Number(e.target.value) as Gen2026MskApprovedThrough)}>{GEN2026_MSK_APPROVED_THROUGH_VALUES.map((v) => <option key={v} value={v}>{v}회까지</option>)}</select></label>}
     </div>
 
     {/* ⚠ `type="number"`가 아니라 원문 보존 입력이다. `type="number"`는 `1e3`·`-1`·`100.1`을

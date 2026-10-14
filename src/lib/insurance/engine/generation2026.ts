@@ -1,4 +1,4 @@
-import { routeOfGen2026Item, excludedSingle2026 } from "./itemRouting2026";
+import { routeOfGen2026Item, excludedSingle2026, GEN2026_NONCRITICAL_INJECTION_EXCEPTION_NOTE } from "./itemRouting2026";
 // 5세대 실손 엔진 (Engine Core). v0.4 게이팅 기준.
 //   - 값이 박힌 계산은 금융위 원문 직독 A 확정 항목만.
 //   - 급여 통원 최소공제는 금융위 2026-05-06 원문으로 확인됐다.
@@ -555,6 +555,7 @@ export function calc2026(input: Gen2026ClaimInput): CalcResult {
     if (foreignNonBenefit) return foreignNonBenefit;
   }
   const priorDeductible = Math.max(0, (rawDeductible as number | undefined) ?? 0);
+  if (exceptionalInjection) notes.push(GEN2026_NONCRITICAL_INJECTION_EXCEPTION_NOTE);
 
   if (severity === "critical") {
     const c = GEN2026.nonBenefit.critical;
@@ -578,7 +579,7 @@ export function calc2026(input: Gen2026ClaimInput): CalcResult {
       if (tierOf() === "hospital") {
         const remaining = Math.max(c.annualDeductibleCap - priorDeductible, 0);
         if (deductRaw > remaining) { deductRaw = remaining; appliedCaps.push("GEN2026_CRITICAL_INPATIENT_DEDUCTIBLE_ANNUAL"); }
-        notes.push("공제금액 상한 500만원은 계약일 또는 매년 계약해당일부터 1년간 누적 기준입니다(priorAnnualDeductible 반영). 누적 대상은 약관상 공제금액이며, 보험가입금액 한도로 추가 부담한 금액은 포함되지 않습니다.");
+        notes.push(`공제금액 상한 500만원은 계약일 또는 매년 계약해당일부터 1년간 누적 기준입니다. 이번 계산에는 기존 누적 공제금액 ${priorDeductible.toLocaleString("ko-KR")}원을 반영했습니다. 누적 대상은 약관상 공제금액이며, 보험가입금액 한도로 추가 부담한 금액은 포함되지 않습니다.`);
       }
       const s = settle(amount, deductRaw);
       return ok(amount, s.ownPay, s.insurancePay, rate, 0, notes, appliedCaps, deductibleOf(amount, deductRaw));

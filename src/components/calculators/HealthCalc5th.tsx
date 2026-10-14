@@ -294,10 +294,10 @@ export default function HealthCalc5th() {
         <div>
           <label className="label-base">진료 구분</label>
           <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={() => setCoverage("benefit")} className={btn(coverage === "benefit")}>
+            <button type="button" onClick={() => setCoverage("benefit")} aria-pressed={coverage === "benefit"} className={btn(coverage === "benefit")}>
               급여
             </button>
-            <button type="button" onClick={() => setCoverage("non_benefit")} className={btn(coverage === "non_benefit")}>
+            <button type="button" onClick={() => setCoverage("non_benefit")} aria-pressed={coverage === "non_benefit"} className={btn(coverage === "non_benefit")}>
               비급여
             </button>
           </div>
@@ -306,10 +306,10 @@ export default function HealthCalc5th() {
         <div className="sm:col-span-2">
           <label className="label-base">치료 형태</label>
           <div className="grid grid-cols-2 gap-2 max-w-md">
-            <button type="button" onClick={() => setVisit("outpatient")} className={btn(visit === "outpatient")}>
+            <button type="button" onClick={() => setVisit("outpatient")} aria-pressed={visit === "outpatient"} className={btn(visit === "outpatient")}>
               통원
             </button>
-            <button type="button" onClick={() => setVisit("inpatient")} className={btn(visit === "inpatient")}>
+            <button type="button" onClick={() => setVisit("inpatient")} aria-pressed={visit === "inpatient"} className={btn(visit === "inpatient")}>
               입원
             </button>
           </div>
@@ -325,7 +325,7 @@ export default function HealthCalc5th() {
                   key={it}
                   type="button"
                   onClick={() => setNonBenefitItem(it)}
-                  className={btn(nonBenefitItem === it)}
+                  aria-pressed={nonBenefitItem === it} className={btn(nonBenefitItem === it)}
                 >
                   {GEN2026_NON_BENEFIT_ITEM_LABEL[it]}
                 </button>
@@ -351,10 +351,10 @@ export default function HealthCalc5th() {
           <div className="sm:col-span-2">
             <label className="label-base">질환 구분</label>
             <div className="grid grid-cols-2 gap-2 max-w-md">
-              <button type="button" onClick={() => setSeverity("critical")} className={btn(severity === "critical")}>
+              <button type="button" onClick={() => setSeverity("critical")} aria-pressed={severity === "critical"} className={btn(severity === "critical")}>
                 중증
               </button>
-              <button type="button" onClick={() => setSeverity("non_critical")} className={btn(severity === "non_critical")}>
+              <button type="button" onClick={() => setSeverity("non_critical")} aria-pressed={severity === "non_critical"} className={btn(severity === "non_critical")}>
                 비중증
               </button>
             </div>
@@ -371,10 +371,10 @@ export default function HealthCalc5th() {
             <div className="sm:col-span-2">
               <label className="label-base">방문 의료기관</label>
               <div className="grid grid-cols-2 gap-2 max-w-md">
-                <button type="button" onClick={() => setBenefitTier("clinic")} className={btn(benefitTier === "clinic")}>
+                <button type="button" onClick={() => setBenefitTier("clinic")} aria-pressed={benefitTier === "clinic"} className={btn(benefitTier === "clinic")}>
                   병·의원급
                 </button>
-                <button type="button" onClick={() => setBenefitTier("hospital")} className={btn(benefitTier === "hospital")}>
+                <button type="button" onClick={() => setBenefitTier("hospital")} aria-pressed={benefitTier === "hospital"} className={btn(benefitTier === "hospital")}>
                   상급종합·종합병원
                 </button>
               </div>
@@ -443,10 +443,10 @@ export default function HealthCalc5th() {
             <div className="sm:col-span-2">
               <label className="label-base">입원 의료기관</label>
               <div className="grid grid-cols-2 gap-2 max-w-md">
-                <button type="button" onClick={() => setNbInpatientTier("clinic")} className={btn(nbInpatientTier === "clinic")}>
+                <button type="button" onClick={() => setNbInpatientTier("clinic")} aria-pressed={nbInpatientTier === "clinic"} className={btn(nbInpatientTier === "clinic")}>
                   병·의원급
                 </button>
-                <button type="button" onClick={() => setNbInpatientTier("hospital")} className={btn(nbInpatientTier === "hospital")}>
+                <button type="button" onClick={() => setNbInpatientTier("hospital")} aria-pressed={nbInpatientTier === "hospital"} className={btn(nbInpatientTier === "hospital")}>
                   상급종합·종합병원
                 </button>
               </div>
@@ -479,6 +479,9 @@ export default function HealthCalc5th() {
                   공제금액 상한 500만 원은 <b>계약일 또는 매년 계약해당일부터 1년</b> 단위로 누적됩니다
                   (표준약관 특별약관1 제5조 제5항). 누적되는 것은 약관상 <b>공제금액</b>이며, 보험가입금액
                   한도로 추가 부담한 금액은 포함되지 않습니다.
+                  <br />기본값은 <b>0원</b>입니다. 수정하지 않거나 빈칸으로 두면 기존 누적 공제금액을{" "}
+                  <b>0원으로 가정</b>해 계산합니다. 이전에 공제된 금액이 있으면 보험사에서 확인한
+                  누적 금액을 입력해 주세요.
                 </p>
               </div>
             ) : (

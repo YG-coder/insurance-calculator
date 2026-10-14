@@ -1,3 +1,4 @@
+import { confirmNoPrior2026 } from "./_priorInputs";
 // 2026-10-14: 일반 경로 입력 검증은 비중증 면책 예외 주사로 대조한다. 면책 자체는 gen2026NonCriticalExclusions.test.ts에서 별도 검증한다.
 // G-3 — 5세대 다회 **일반·특별약관 진료비** 입력의 엄격 검증.
 //
@@ -71,7 +72,7 @@ const ROOM = { coverage: "non_benefit", nonBenefitItem: "room_charge", severity:
 const withCommas = (v: string) => v.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
 const setup = (over: Record<string, unknown> = {}) => {
-  const h = mount(HealthCalcMulti2026 as unknown as () => unknown, names);
+  const h = mount(HealthCalcMulti2026 as unknown as () => unknown, names); confirmNoPrior2026(h);
   h.set("submitted", true);
   for (const [k, v] of Object.entries(over)) h.set(k, v);
   return h;

@@ -1,3 +1,4 @@
+import { confirmNoPrior2026 } from "./_priorInputs";
 // G-14A — 500만원 공제금액 상한의 **적용 범위**를 화면에서 단정하지 않게 한다.
 //
 // 배경(2026-09-05 별표15 2026.5.6 공포·시행본 특별약관1 제5조⑤ 직독, 인쇄 p.280):
@@ -39,7 +40,7 @@ const ui = readFileSync(UI_PATH, "utf8");
 const names = stateNamesFrom(ui);
 
 type Comp = () => unknown;
-const setup = () => { const h = mount(HealthCalcMulti2026 as unknown as Comp, names); h.set("submitted", true); return h; };
+const setup = () => { const h = mount(HealthCalcMulti2026 as unknown as Comp, names); confirmNoPrior2026(h); h.set("submitted", true); return h; };
 type H = ReturnType<typeof setup>;
 // 판정 선택 변경 후에는 재계산을 눌러 금액·입력 검증을 대조한다. 초기화 전이는 gen2026UiState에서 별도 검증.
 const submit = (h: H) => {
@@ -210,8 +211,8 @@ console.log("\n[G-14A 공제금액 적용 범위] 계산 무회귀 — 값·전�
 console.log("\n[G-14A 공제금액 적용 범위] 상태·전달 구조 불변 [소스]");
 {
   check("두 상태가 여전히 따로 있고 합쳐지지 않음",
-    /const \[priorDeductible, setPriorDeductible\] = useState\("0"\);/.test(ui)
-    && /const \[priorPool, setPriorPool\] = useState\("0"\);/.test(ui));
+    /const \[priorDeductible, setPriorDeductible\] = useState\(""\);/.test(ui)
+    && /const \[priorPool, setPriorPool\] = useState\(""\);/.test(ui));
   check("축별 Record로 새로 나누지 않음",
     !/setPriorDeductibleByAxis/.test(ui) && !/priorDeductibleByAxis/.test(ui)
     && !/priorPoolByAxis/.test(ui));
@@ -225,8 +226,8 @@ console.log("\n[G-14A 공제금액 적용 범위] 상태·전달 구조 불변 [
     /const usesPriorDeductible = showGeneralForm && generalAxis !== null\s*\n\s*&& severity === "critical" && visit === "inpatient" && nbInpatientTier === "hospital";/.test(ui)
     && /const usesPriorPool = showSpecialForm && severity === "critical" && specialItem === "mri"\s*\n\s*&& rows\.some\(\(r\) => r\.visit === "inpatient" && r\.tier === "hospital"\);/.test(ui));
   check("파서·빈 값 처리가 종전 그대로",
-    /priorDeductible === "" \? 0 : gen2026Money\(priorDeductible\)/.test(ui)
-    && /priorPool === "" \? 0 : gen2026Money\(priorPool\)/.test(ui));
+    /gen2026Money\(priorDeductible\)/.test(ui)
+    && /gen2026Money\(priorPool\)/.test(ui));
 }
 
 console.log("\n[G-14A 공제금액 적용 범위] 규칙 등록부 연계");

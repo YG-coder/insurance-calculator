@@ -229,8 +229,8 @@ console.log("\n[G-19] 5. 소스 계약");
   check("4세대에 관용 정규화가 되살아나지 않았다", !/nonNegInt/.test(g21));
   // 2·3세대의 금액 축 nonNegInt는 이번 범위가 아니다(그대로 남아 있어야 한다).
   const g09 = readFileSync("src/lib/insurance/engine/multiClaim.ts", "utf8");
-  check("2·3세대 금액 축의 nonNegInt는 이번에 건드리지 않았다",
-    /const nonNegInt = \(v: number \| undefined\) =>/.test(g09) && /nonNegInt\(input\.priorAnnualPaid\)/.test(g09));
+  check("2·3세대 금액 축은 nonNegInt로 기존 계산을 유지한다",
+    /const nonNegInt = \(v: number \| undefined\) =>/.test(g09) && /nonNegInt\(priorAnnualPaid\)/.test(g09));
 }
 
 console.log(`\n[G-19 다회 엔진 안내의 안전 표시] ✅ ${pass} / ❌ ${fail}`);

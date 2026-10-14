@@ -4,6 +4,7 @@ import { useState } from "react";
 import NoticeBox from "@/components/NoticeBox";
 import RawAmountInput from "@/components/RawAmountInput";
 import ResultCard from "@/components/ResultCard";
+import { objectParticle } from "@/lib/insurance/common/korean";
 import { excludedMany2026, GEN2026_NONCRITICAL_INJECTION_PURPOSE_LABEL } from "@/lib/insurance/engine/itemRouting2026";
 import { calculateMany2026 } from "@/lib/insurance/engine/multiClaim2026";
 import {
@@ -291,8 +292,8 @@ const gen2026Amount = (v: string): number | null => {
  * ⚠ 진료비 파서 `gen2026Amount`·상급병실료 `roomChargeAmount`와 형식 규칙이 겹쳐도
  *   재사용하지 않는다. 라벨·안내·무효 시 차단 범위가 다르다.
  * ⚠ **`priorDeductible`·`priorPool`(공제금액 두 입력)도 이 파서를 쓴다(G-10 항목 A).**
- *   형식 규칙은 같지만 **빈 값의 뜻은 다르다** — 두 필드 모두 초기값이 `"0"`이고 빈 값은
- *   `0`이다(가입금액 두 종류의 `undefined`와 다르다). 500만 원을 넘는 유효한 값도
+ *   누적금액은 모두 빈 값으로 시작하고, 활성 경로에서 미입력은 계산을 보류한다.
+ *   이력이 없으면 명시적 `0`을 입력한다(선택 가입금액의 `undefined`와 다르다). 500만 원을 넘는 유효한 값도
  *   자르거나 거부하지 않는다 — 상한 처리는 엔진 산식에 있고 그대로 둔다.
  *
  * 유효: 쉼표 없는 0 이상의 안전 정수(`0`, `00`, `300000`, `1000000000000000`) 또는
@@ -405,11 +406,11 @@ export default function HealthCalcMulti2026() {
   //   다른 한도로 넘어간다 — 일반(연 5천만 축)에 넣은 900만원이 중증 근골격계(연 350만 축)에
   //   그대로 적용돼 보험금이 0원이 되는 것을 프로덕션에서 재현했다. 축 구성은 별표15
   //   2026.5.6 판본 직독 결과다(설계 문서 §5의 G-8 절 참조).
-  //   ⚠ 초기값은 그대로다 — 지급보험금 "0", 가입금액 빈 문자열.
+  //   누적금액은 빈 값으로 시작한다. 사용 이력이 없으면 사용자가 0을 직접 입력한다.
   const [priorInsuranceByAxis, setPriorInsuranceByAxis] = useState<Record<Gen2026PaidAxis, string>>(
-    () => Object.fromEntries(GEN2026_PAID_AXES.map((k) => [k, "0"])) as Record<Gen2026PaidAxis, string>,
+    () => Object.fromEntries(GEN2026_PAID_AXES.map((k) => [k, ""])) as Record<Gen2026PaidAxis, string>,
   );
-  const [priorDeductible, setPriorDeductible] = useState("0");
+  const [priorDeductible, setPriorDeductible] = useState("");
   //   연간·통원 가입금액은 일반 4축에만 있다(별도 보장종목의 가입금액은 <표1>의 항목별
   //   연간 보장한도로 정해져 계약자가 고르지 않는다 — 제5조①단서·③).
   //   ⚠ 세 입력은 같은 일반 축 키를 쓰지만 **값은 각각 별도 상태**다.
@@ -453,7 +454,7 @@ export default function HealthCalcMulti2026() {
   // ⚠ 기본값 없음. 승인 구간은 '치료횟수' 축이고 '보상한 횟수'로 대신 셀 수 없다.
   //   미입력을 0으로 추정하면 승인 경계를 넘겼는지 모르는 채 보험금을 계산하게 된다.
   const [priorActs, setPriorActs] = useState("");
-  const [priorPool, setPriorPool] = useState("0");
+  const [priorPool, setPriorPool] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
   // 판정 선택이 바뀌면 제출 상태를 함께 초기화한다. 결과와 계산 경고는 재계산 전까지 숨긴다.
@@ -571,8 +572,8 @@ export default function HealthCalcMulti2026() {
   const paidAxis: Gen2026PaidAxis | null = showSpecialForm ? itemAxis
     : (showRoomChargeForm || showGeneralForm) ? generalAxis
     : null;
-  //   활성 축이 없으면 화면도 엔진도 값을 보지 않는다. 기본값 "0"·""은 축이 정해진 뒤에만 쓰인다.
-  const priorInsurance = paidAxis === null ? "0" : priorInsuranceByAxis[paidAxis];
+  //   활성 축이 없으면 화면도 엔진도 값을 보지 않는다.
+  const priorInsurance = paidAxis === null ? "" : priorInsuranceByAxis[paidAxis];
   const annualLimit = generalAxis === null ? "" : annualLimitByAxis[generalAxis];
   const outpatientLimit = generalAxis === null ? "" : outpatientLimitByAxis[generalAxis];
   const setPriorInsurance = (v: string) => {
@@ -597,11 +598,9 @@ export default function HealthCalcMulti2026() {
   //     간섭을 막는 것은 축이 null이라는 사실이 아니라 아래 `usesAnnualLimit`·
   //     `usesOutpatientLimit`의 **활성 조건**이다 — 급여에서는 둘 다 거짓이라 검증도
   //     전달도 하지 않는다. 상태가 남아 있다는 사실과 그 값이 쓰인다는 것은 다르다.
-  //   ⚠ 빈 문자열의 뜻이 **필드마다 다르다.** 지급보험금은 0(종전 `num("")`과 같다),
-  //     가입금액 두 종류는 undefined(미적용). 한쪽 규칙을 다른 쪽에 옮기지 않는다.
-  //   ⚠ 명시적 0·00은 유효값이고 숫자 0을 그대로 전달한다. 엔진의 종전 처리를 바꾸지 않고,
-  //     이번에는 0에 대한 새 안내도 붙이지 않는다.
-  const priorInsuranceNum = priorInsurance === "" ? 0 : gen2026Money(priorInsurance);
+  // 누적 지급액은 활성 축에서 필수다. 빈 값을 0으로 추정하지 않는다.
+  // 계약 가입금액은 선택 입력이며, 미입력 시 한도를 적용하지 않는 기존 정책을 유지한다.
+  const priorInsuranceNum = paidAxis === null ? undefined : gen2026Money(priorInsurance);
   //   연간 가입금액은 일반 (1)(2)와 상급병실료만 쓴다 — 별도 보장종목에는 없다(제5조①단서·③).
   const usesAnnualLimit = (showGeneralForm || showRoomChargeForm) && generalAxis !== null;
   const annualLimitNum = !usesAnnualLimit || annualLimit === "" ? undefined : gen2026Money(annualLimit);
@@ -644,16 +643,14 @@ export default function HealthCalcMulti2026() {
   /**
    * ⚠ **활성일 때만** 검증한다. 조건이 거짓이면 `undefined`다 — 숨은 원문은 상태에 남지만
    *   파서에 닿지 않고 엔진에도 가지 않는다. 조건이 돌아오면 무효값 안내도 다시 나타난다.
-   * ⚠ 빈 값은 **0**이다. 초기값이 `"0"`이고 종전 `num("")`도 0이었던 기존 계약을 그대로
-   *   유지한 것이며, 빈 값을 0으로 보는 것이 안전하다고 확정한 것이 아니다.
-   *   (두 필드가 요구하는 과거 누적액의 정확한 범위는 별도 조사 항목이다.)
+   * 활성 누적금액은 필수다. 이력이 없으면 명시적으로 0을 입력해야 한다.
    * ⚠ 500만원을 넘는 **유효한** 값은 파서가 자르지도 거부하지도 않는다. 상한 처리는
    *   엔진에 있고(`Math.max(cap - prior, 0)`), 이번에 그 동작을 바꾸지 않는다.
    */
   const priorDeductibleNum = !usesPriorDeductible ? undefined
-    : priorDeductible === "" ? 0 : gen2026Money(priorDeductible);
+    : gen2026Money(priorDeductible);
   const priorPoolNum = !usesPriorPool ? undefined
-    : priorPool === "" ? 0 : gen2026Money(priorPool);
+    : gen2026Money(priorPool);
   const priorDeductibleInvalid = priorDeductibleNum === null;
   const priorPoolInvalid = priorPoolNum === null;
   // ⚠ `money`와 같은 방식이다 — null을 **배제**해야만 객체가 만들어지고, 그 과정에서
@@ -980,14 +977,14 @@ export default function HealthCalcMulti2026() {
 
     {/* ── 누적 입력 ── */}
     {showGeneralForm && generalAxis !== null && <div className="mt-5 grid gap-3 sm:grid-cols-2"><label className="text-sm font-semibold">계약해당일 기준 1년간 기존 지급보험금 ({generalAxisLabel(generalAxis)} 보장축)<div className="mt-1"><RawAmountInput id="gen2026-prior-insurance" value={priorInsurance}
-        onChange={setPriorInsurance} ariaLabel={`계약해당일 기준 1년간 기존 지급보험금 (${generalAxisLabel(generalAxis)} 보장축)`} /></div><span className="mt-2 block text-xs font-normal text-slate-500">이 축에 이미 지급된 보험금입니다. <b>같은 {generalAxisLabel(generalAxis)} 보장축의 일반 입원·통원과 상급병실료 차액 지급액을 모두 포함</b>해 주세요 — 셋 다 (1)(2) 보장종목의 같은 연간 보험가입금액을 씁니다. 다른 질환 구분·원인의 지급액과 3대비급여·비급여 MRI의 지급액은 이 축에 누적되지 않습니다.</span></label>{/* ⚠ 안내는 **계산기가 이 값을 어떻게 쓰는지**까지만 말한다. 합산 범위는 HOLD이므로
+        onChange={setPriorInsurance} placeholder="이력이 없으면 0 입력" ariaLabel={`계약해당일 기준 1년간 기존 지급보험금 (${generalAxisLabel(generalAxis)} 보장축)`} /></div><span className="mt-2 block text-xs font-normal text-slate-500">이 축에 이미 지급된 보험금입니다. <b>같은 {generalAxisLabel(generalAxis)} 보장축의 일반 입원·통원과 상급병실료 차액 지급액을 모두 포함</b>해 주세요 — 셋 다 (1)(2) 보장종목의 같은 연간 보험가입금액을 씁니다. 다른 질환 구분·원인의 지급액과 3대비급여·비급여 MRI의 지급액은 이 축에 누적되지 않습니다.</span></label>{/* ⚠ 안내는 **계산기가 이 값을 어떻게 쓰는지**까지만 말한다. 합산 범위는 HOLD이므로
              "같은 축의 것만" 이라고도 "다 합쳐서" 라고도 지시하지 않는다. 두 칸에 같은 안내를
              붙여, 라벨이 같은 두 입력이 서로 다른 규칙을 따르는 것처럼 보이지 않게 한다. */}
       {usesPriorDeductible && <label className="text-sm font-semibold">계약해당일 기준 1년간 이미 누적된 공제금액<div className="mt-1"><RawAmountInput id="gen2026-prior-deductible" value={priorDeductible}
-        onChange={setPriorDeductible} ariaLabel="계약해당일 기준 1년간 이미 누적된 공제금액" /></div><span className="mt-2 block text-xs font-normal text-slate-500">보험사에서 확인한 <b>계약일 또는 계약해당일 기준 연간 누적 공제금액</b>을 입력해 주세요. 계산기는 입력한 값을 <b>현재 계산 경로</b>에 적용합니다. 상해·질병 및 다른 보장종목 청구와의 <b>합산 범위</b>는 가입한 상품의 약관과 보험사 안내를 확인하세요.</span></label>}<p className="text-xs text-slate-500 sm:col-span-2">연간 한도와 공제금액 상한은 약관상 <b>계약일 또는 매년 계약해당일부터 1년</b> 단위로 누적됩니다(표준약관 특별약관1·2 제5조 제2항). 역년 기준이 아닙니다. 500만 원 상한에 누적되는 것은 약관상 <b>공제금액</b>이며, 보험가입금액 한도로 추가 부담한 금액은 포함되지 않습니다.</p></div>}
+        onChange={setPriorDeductible} placeholder="이력이 없으면 0 입력" ariaLabel="계약해당일 기준 1년간 이미 누적된 공제금액" /></div><span className="mt-2 block text-xs font-normal text-slate-500">보험사에서 확인한 <b>계약일 또는 계약해당일 기준 연간 누적 공제금액</b>을 입력해 주세요. 계산기는 입력한 값을 <b>현재 계산 경로</b>에 적용합니다. 상해·질병 및 다른 보장종목 청구와의 <b>합산 범위</b>는 가입한 상품의 약관과 보험사 안내를 확인하세요.</span></label>}<p className="text-xs text-slate-500 sm:col-span-2">연간 한도와 공제금액 상한은 약관상 <b>계약일 또는 매년 계약해당일부터 1년</b> 단위로 누적됩니다(표준약관 특별약관1·2 제5조 제2항). 역년 기준이 아닙니다. 500만 원 상한에 누적되는 것은 약관상 <b>공제금액</b>이며, 보험가입금액 한도로 추가 부담한 금액은 포함되지 않습니다.</p></div>}
     {showRoomChargeForm && <div className="mt-5 grid gap-3 sm:grid-cols-2">
-      <label className="text-sm font-semibold">계약해당일 기준 1년간 기존 지급보험금 ({generalAxis === null ? "" : generalAxisLabel(generalAxis)} 보장축, 선택)<div className="mt-1"><RawAmountInput id="gen2026-prior-insurance" value={priorInsurance}
-        onChange={setPriorInsurance} ariaLabel={`계약해당일 기준 1년간 기존 지급보험금 (${generalAxis === null ? "" : generalAxisLabel(generalAxis)} 보장축)`} /></div></label>
+      <label className="text-sm font-semibold">계약해당일 기준 1년간 기존 지급보험금 ({generalAxis === null ? "" : generalAxisLabel(generalAxis)} 보장축)<div className="mt-1"><RawAmountInput id="gen2026-prior-insurance" value={priorInsurance}
+        onChange={setPriorInsurance} placeholder="이력이 없으면 0 입력" ariaLabel={`계약해당일 기준 1년간 기존 지급보험금 (${generalAxis === null ? "" : generalAxisLabel(generalAxis)} 보장축)`} /></div></label>
       <label className="text-sm font-semibold">연간 보험가입금액 ({generalAxis === null ? "" : generalAxisLabel(generalAxis)} 보장축, 선택)<div className="mt-1"><RawAmountInput id="gen2026-annual-limit" value={annualLimit}
         onChange={setAnnualLimit} placeholder={severity === "critical" ? "예: 50000000 — 모르면 비워두세요" : "예: 10000000 — 모르면 비워두세요"}
         ariaLabel={`연간 보험가입금액 (${generalAxis === null ? "" : generalAxisLabel(generalAxis)} 보장축)`} /></div></label>
@@ -995,7 +992,7 @@ export default function HealthCalcMulti2026() {
     </div>}
     {showSpecialForm && <div className="mt-5 grid gap-3 sm:grid-cols-2">
       <label className="text-sm font-semibold">계약해당일 기준 1년간 이 보장종목의 기존 지급보험금 ({itemAxis === null ? "" : GEN2026_ITEM_AXIS_LABEL[itemAxis]})<div className="mt-1"><RawAmountInput id="gen2026-prior-insurance" value={priorInsurance}
-        onChange={setPriorInsurance} ariaLabel={`계약해당일 기준 1년간 이 보장종목의 기존 지급보험금 (${itemAxis === null ? "" : GEN2026_ITEM_AXIS_LABEL[itemAxis]})`} /></div><span className="mt-2 block text-xs font-normal text-slate-500">이 보장종목의 연간 보장한도에 이미 지급된 보험금만 넣어 주세요. 약관은 <b>각 비급여의료비별 보장한도</b>로 정하고(제5조①단서·③) <b>상해·질병을 합산</b>하므로(&lt;표1&gt;), 원인을 나누지 않고 이 항목 하나로 누적합니다. 일반 (1)(2)의 입원·통원·상급병실료 지급액은 여기에 넣지 않습니다.</span></label>
+        onChange={setPriorInsurance} placeholder="이력이 없으면 0 입력" ariaLabel={`계약해당일 기준 1년간 이 보장종목의 기존 지급보험금 (${itemAxis === null ? "" : GEN2026_ITEM_AXIS_LABEL[itemAxis]})`} /></div><span className="mt-2 block text-xs font-normal text-slate-500">이 보장종목의 연간 보장한도에 이미 지급된 보험금만 넣어 주세요. 약관은 <b>각 비급여의료비별 보장한도</b>로 정하고(제5조①단서·③) <b>상해·질병을 합산</b>하므로(&lt;표1&gt;), 원인을 나누지 않고 이 항목 하나로 누적합니다. 일반 (1)(2)의 입원·통원·상급병실료 지급액은 여기에 넣지 않습니다.</span></label>
       {/* ⚠ 노출·검증·전달이 모두 같은 `countedItem` 판정을 쓴다. 종전에는 `specialItem`만 보아
              항암제 등 일반 (1)(2) 경로로 넘어가는 주사료에도 칸이 남았고, 상태가 하나뿐이라
              근골격계에 넣은 횟수가 주사료로 그대로 넘어갔다.
@@ -1011,7 +1008,7 @@ export default function HealthCalcMulti2026() {
       {/* ⚠ `needsRowTier`가 아니라 `usesPriorPool`을 쓴다. 종별 선택창과 미선택 차단은
              `needsRowTier` 그대로이고, 이 입력만 실제 소진 대상 행이 있을 때 노출한다. */}
       {usesPriorPool && <label className="text-sm font-semibold">계약해당일 기준 1년간 이미 누적된 공제금액 (500만 원 상한)<div className="mt-1"><RawAmountInput id="gen2026-prior-pool" value={priorPool}
-        onChange={setPriorPool} ariaLabel="계약해당일 기준 1년간 이미 누적된 공제금액 (500만 원 상한)" /></div><span className="mt-2 block text-xs font-normal text-slate-500">보험사에서 확인한 <b>계약일 또는 계약해당일 기준 연간 누적 공제금액</b>을 입력해 주세요. 계산기는 입력한 값을 <b>현재 계산 경로</b>에 적용합니다. 상해·질병 및 다른 보장종목 청구와의 <b>합산 범위</b>는 가입한 상품의 약관과 보험사 안내를 확인하세요.</span></label>}
+        onChange={setPriorPool} placeholder="이력이 없으면 0 입력" ariaLabel="계약해당일 기준 1년간 이미 누적된 공제금액 (500만 원 상한)" /></div><span className="mt-2 block text-xs font-normal text-slate-500">보험사에서 확인한 <b>계약일 또는 계약해당일 기준 연간 누적 공제금액</b>을 입력해 주세요. 계산기는 입력한 값을 <b>현재 계산 경로</b>에 적용합니다. 상해·질병 및 다른 보장종목 청구와의 <b>합산 범위</b>는 가입한 상품의 약관과 보험사 안내를 확인하세요.</span></label>}
       <p className="text-xs text-slate-500 sm:col-span-2">보험계약이 종료된 뒤에도 <b>계속 중인 치료</b>는 연간 보장한도(금액)에서 <b>지급한 금액</b>을, 연간 보장한도(횟수)에서 <b>보상한 횟수</b>를 뺀 잔여분을 한도로 보상합니다(특별약관1 제3조(3)제7항·제5조 제4항 — 이월 계산 전용이며, 보험기간 중 연간 한도의 소진 기준을 정하는 조항이 아닙니다). 일반 비급여의 통원 가입금액(20만 원)과 연간 보험가입금액은 이 보장종목에 적용되지 않습니다.</p>
     </div>}
 
@@ -1026,7 +1023,7 @@ export default function HealthCalcMulti2026() {
     {submitted && needsPurpose && <div className="mt-5"><NoticeBox variant="warning">비급여 주사료는 <b>약제 용도</b>에 따라 보상하는 보장종목이 달라집니다(특별약관1 제3조(3)제2항·특별약관2 제4조 p.299·302). 약제 용도를 선택해 주세요. 선택 전에는 계산하지 않습니다.</NoticeBox></div>}
     {submitted && rcIncomplete && <div className="mt-5"><NoticeBox variant="warning">각 입원의 <b>차액 총액</b>과 <b>총 입원일수</b>를 올바르게 입력해 주세요. 차액 총액은 <b>0 이상의 숫자</b>, 총 입원일수는 <b>1 이상의 정수</b>여야 합니다. 음수·문자가 섞인 값은 계산기가 임의로 고치지 않고, 약관에 일수 산정 방법이 정해져 있지 않아 일수도 추정하지 않습니다. 올바르게 입력하기 전에는 계산하지 않습니다.</NoticeBox></div>}
     {submitted && amountsIncomplete && <div className="mt-5"><NoticeBox variant="warning">{badAmountRows.join("·")}번째 행의 <b>진료비</b>를 올바르게 입력해 주세요. <b>0 이상의 정수</b>만 받습니다 — <b>300000</b> 또는 <b>300,000</b> 형식입니다. 진료비가 실제로 0원이면 <b>0</b>을 입력하세요. 빈 값이나 잘못된 입력(음수·소수·문자·지수 표기·잘못된 쉼표)을 계산기가 <b>임의로 다른 금액으로 바꾸지 않으며</b>, 빈 값을 0원으로 보지도 않습니다. <b>모든 행에 올바른 진료비를 입력해야 계산할 수 있습니다.</b> 유효한 행만 모아 부분합을 내지도 않습니다.</NoticeBox></div>}
-    {submitted && rowAmountsIncomplete && <div className="mt-5"><NoticeBox variant="warning">{badRowAmounts.join("·")}번째 행의 <b>{specialItem === "injection" ? "1회 주사료 합산액" : "행위 진료비"}</b>을(를) 올바르게 입력해 주세요. <b>0 이상의 정수</b>만 받습니다 — <b>300000</b> 또는 <b>300,000</b> 형식입니다. 실제로 0원이면 <b>0</b>을 입력하세요. 빈 값이나 잘못된 입력(음수·소수·문자·지수 표기·잘못된 쉼표)을 계산기가 <b>임의로 다른 금액으로 바꾸지 않으며</b>, 빈 값을 0원으로 보지도 않습니다. <b>모든 행에 올바른 진료비를 입력해야 계산할 수 있습니다.</b> 유효한 행만 모아 부분합을 내지도 않습니다.</NoticeBox></div>}
+    {submitted && rowAmountsIncomplete && <div className="mt-5"><NoticeBox variant="warning">{badRowAmounts.join("·")}번째 행의 <b>{objectParticle(specialItem === "injection" ? "1회 주사료 합산액" : "행위 진료비")}</b> 올바르게 입력해 주세요. <b>0 이상의 정수</b>만 받습니다 — <b>300000</b> 또는 <b>300,000</b> 형식입니다. 실제로 0원이면 <b>0</b>을 입력하세요. 빈 값이나 잘못된 입력(음수·소수·문자·지수 표기·잘못된 쉼표)을 계산기가 <b>임의로 다른 금액으로 바꾸지 않으며</b>, 빈 값을 0원으로 보지도 않습니다. <b>모든 행에 올바른 진료비를 입력해야 계산할 수 있습니다.</b> 유효한 행만 모아 부분합을 내지도 않습니다.</NoticeBox></div>}
     {submitted && needsTier && <div className="mt-5"><NoticeBox variant="warning">비급여 <b>입원</b>은 <b>의료기관 종별</b>에 따라 보험금이 달라집니다. 중증은 공제금액 상한 500만 원이 상급종합·종합병원 입원에만 적용되고(특별약관1 제5조 제5항), 비중증은 1회당 300만 원 한도가 병·의원급에만 적용됩니다(특별약관2 제3조 (1)제1항·(2)제1항). <b>입원 의료기관</b>을 선택해 주세요. 선택 전에는 계산하지 않습니다.</NoticeBox></div>}
     {submitted && needsPriorCount && countedItem !== null && <div className="mt-5"><NoticeBox variant="warning">계약해당일 기준 1년간 <b>{GEN2026_SPECIAL_ITEM_LABEL[countedItem]}</b>로 <b>이미 보상한 횟수</b>를 입력해 주세요. 보상받은 적이 없으면 <b>0</b>을 입력하세요. 이 보장종목은 연 {GEN2026_COUNTED_ITEM_ANNUAL_VISITS[countedItem]}회가 한도라 이 값이 있어야 계산할 수 있고, 계산기가 0으로 추정하지 않습니다. 0 이상의 정수만 받으며 음수·소수·지수 표기·쉼표·문자는 계산하지 않습니다. 한도를 넘긴 과거 값도 그대로 받습니다.</NoticeBox></div>}
     {submitted && needsPriorActs && <div className="mt-5"><NoticeBox variant="warning">근골격계 이학요법·체외충격파는 최초 10회 이후 증상의 개선·병변호전이 확인된 경우에 한하여 10회 단위로 보상합니다(특별약관1 제3조(3)제1항 &lt;표1&gt; 주)). 승인 회차는 약관상 <b>&lsquo;각 치료횟수&rsquo;</b>로 세므로, 계약해당일 기준 1년간 <b>이미 받은 치료행위 수</b>를 입력해 주세요. 받은 치료가 없으면 <b>0</b>을 입력하시면 됩니다. <b>보상한 횟수</b>는 보험금이 지급된 횟수라 대신 쓰지 않으며, 입력 전에는 계산하지 않습니다.</NoticeBox></div>}
@@ -1036,7 +1033,7 @@ export default function HealthCalcMulti2026() {
     {/* ⚠ 여러 입력이 동시에 무효이면 각각 안내한다. 활성 경로가 실제로 쓰는 입력만 판정하므로,
            숨은 축이나 이 경로가 쓰지 않는 입력 때문에 안내가 뜨지 않는다. */}
     {submitted && priorInsuranceInvalid && <div className="mt-5"><NoticeBox variant="warning">
-      <b>기존 지급보험금</b>{paidAxis === null ? null : <>({showSpecialForm ? (itemAxis === null ? "" : GEN2026_ITEM_AXIS_LABEL[itemAxis]) : (generalAxis === null ? "" : `${generalAxisLabel(generalAxis)} 보장축`)})</>}을 올바르게 입력해 주세요. <b>0 이상의 정수</b>만 받습니다 — <b>3000000</b> 또는 <b>3,000,000</b> 형식입니다. 이 축에 이미 지급된 보험금이 없으면 <b>0</b>을 입력하세요. 공백만 입력한 값은 빈 값으로 보지 않습니다. 음수·소수·문자·지수 표기·잘못된 쉼표는 계산기가 임의로 고치지 않습니다.
+      <b>기존 지급보험금을</b>{paidAxis === null ? null : <>({showSpecialForm ? (itemAxis === null ? "" : GEN2026_ITEM_AXIS_LABEL[itemAxis]) : (generalAxis === null ? "" : `${generalAxisLabel(generalAxis)} 보장축`)})</>} 올바르게 입력해 주세요. <b>0 이상의 정수</b>만 받습니다 — <b>3000000</b> 또는 <b>3,000,000</b> 형식입니다. 이 축에 이미 지급된 보험금이 없으면 <b>0</b>을 입력하세요. 빈 값은 0으로 추정하지 않고 계산을 보류합니다. 공백만 입력한 값은 빈 값으로 보지 않습니다. 음수·소수·문자·지수 표기·잘못된 쉼표는 계산기가 임의로 고치지 않습니다.
     </NoticeBox></div>}
     {submitted && annualLimitInvalid && <div className="mt-5"><NoticeBox variant="warning">
       <b>연간 보험가입금액</b>({generalAxis === null ? "" : `${generalAxisLabel(generalAxis)} 보장축`})을 올바르게 입력해 주세요. <b>0 이상의 정수</b>만 받습니다 — <b>50000000</b> 또는 <b>50,000,000</b> 형식입니다. <ZeroLimitPolicy strong /> 공백만 입력한 값은 빈 값으로 보지 않습니다. 음수·소수·문자·지수 표기·잘못된 쉼표는 계산기가 임의로 고치지 않습니다.
@@ -1045,12 +1042,12 @@ export default function HealthCalcMulti2026() {
       <b>통원 가입금액</b>({generalAxis === null ? "" : `${generalAxisLabel(generalAxis)} 보장축`})을 올바르게 입력해 주세요. <b>0 이상의 정수</b>만 받습니다 — <b>200000</b> 또는 <b>200,000</b> 형식입니다. <ZeroLimitPolicy strong /> 공백만 입력한 값은 빈 값으로 보지 않습니다. 음수·소수·문자·지수 표기·잘못된 쉼표는 계산기가 임의로 고치지 않습니다.
     </NoticeBox></div>}
     {submitted && priorDeductibleInvalid && <div className="mt-5"><NoticeBox variant="warning">
-      <b>이미 누적된 공제금액</b>(중증 비급여 입원, 500만 원 상한)을 올바르게 입력해 주세요. <b>0 이상의 정수</b>만 받습니다 — <b>3000000</b> 또는 <b>3,000,000</b> 형식입니다. 이미 누적된 공제금액이 없으면 <b>0</b>을 입력하세요(완전히 비운 값도 0으로 봅니다). 공백만 입력한 값은 빈 값으로 보지 않습니다. 음수·소수·문자·지수 표기·잘못된 쉼표는 계산기가 임의로 고치지 않습니다. 500만 원을 넘는 값도 그대로 받습니다 — 상한 처리는 약관 산식이 합니다.
+      <b>이미 누적된 공제금액</b>(중증 비급여 입원, 500만 원 상한)을 올바르게 입력해 주세요. <b>0 이상의 정수</b>만 받습니다 — <b>3000000</b> 또는 <b>3,000,000</b> 형식입니다. 이미 누적된 공제금액이 없으면 <b>0</b>을 입력하세요 — 빈 값은 0으로 추정하지 않고 계산을 보류합니다. 공백만 입력한 값은 빈 값으로 보지 않습니다. 음수·소수·문자·지수 표기·잘못된 쉼표는 계산기가 임의로 고치지 않습니다. 500만 원을 넘는 값도 그대로 받습니다 — 상한 처리는 약관 산식이 합니다.
     </NoticeBox></div>}
     {submitted && priorPoolInvalid && <div className="mt-5"><NoticeBox variant="warning">
-      <b>이미 누적된 공제금액</b>(중증 비급여 MRI·MRA, 500만 원 상한)을 올바르게 입력해 주세요. <b>0 이상의 정수</b>만 받습니다 — <b>3000000</b> 또는 <b>3,000,000</b> 형식입니다. 이미 누적된 공제금액이 없으면 <b>0</b>을 입력하세요(완전히 비운 값도 0으로 봅니다). 공백만 입력한 값은 빈 값으로 보지 않습니다. 음수·소수·문자·지수 표기·잘못된 쉼표는 계산기가 임의로 고치지 않습니다. 500만 원을 넘는 값도 그대로 받습니다 — 상한 처리는 약관 산식이 합니다.
+      <b>이미 누적된 공제금액</b>(중증 비급여 MRI·MRA, 500만 원 상한)을 올바르게 입력해 주세요. <b>0 이상의 정수</b>만 받습니다 — <b>3000000</b> 또는 <b>3,000,000</b> 형식입니다. 이미 누적된 공제금액이 없으면 <b>0</b>을 입력하세요 — 빈 값은 0으로 추정하지 않고 계산을 보류합니다. 공백만 입력한 값은 빈 값으로 보지 않습니다. 음수·소수·문자·지수 표기·잘못된 쉼표는 계산기가 임의로 고치지 않습니다. 500만 원을 넘는 값도 그대로 받습니다 — 상한 처리는 약관 산식이 합니다.
     </NoticeBox></div>}
-    {submitted && rowsIncomplete && <div className="mt-5"><NoticeBox variant="warning">각 행의 <b>치료 형태</b>{needsRowTier ? <>와 입원 행의 <b>의료기관 종별</b></> : null}를 선택해 주세요.{needsRowTier ? " 중증 비급여 MRI 입원은 의료기관 종별에 따라 공제금액 상한 500만 원 적용 여부가 달라지므로 기본값으로 계산하지 않습니다." : ""}</NoticeBox></div>}
+    {submitted && rowsIncomplete && <div className="mt-5"><NoticeBox variant="warning">각 행의 <b>{objectParticle(needsRowTier ? "치료 형태와 입원 행의 의료기관 종별" : "치료 형태")}</b> 선택해 주세요.{needsRowTier ? " 중증 비급여 MRI 입원은 의료기관 종별에 따라 공제금액 상한 500만 원 적용 여부가 달라지므로 기본값으로 계산하지 않습니다." : ""}</NoticeBox></div>}
     {submitted && result?.status === "EXCLUDED" && <div className="mt-5" role="status" aria-live="polite"><NoticeBox variant="info">{result.notes.join(" ")}</NoticeBox></div>}
     {submitted && result && result.status === "PENDING_UNVERIFIED" && <div className="mt-5"><NoticeBox variant="warning">{result.notes.join(" ")}</NoticeBox></div>}
 

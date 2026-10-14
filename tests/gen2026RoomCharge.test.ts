@@ -1,3 +1,4 @@
+import { confirmNoPrior2026 } from "./_priorInputs";
 // 5세대 상급병실료 차액.
 //
 // 근거: 별표15 2026.5.6 공포·시행본(admRulSeq 2200000108697, 별표 식별번호 3216359)
@@ -313,7 +314,7 @@ console.log("\n[가드] 소스·문구");
   const names = stateNamesFrom(uiSrc);
 
   /** 항상 새 화면에서 시작한다 — 남은 상태에 기대지 않기 위해서다. */
-  const fresh = () => mount(HealthCalcMulti2026 as unknown as () => unknown, names);
+  const fresh = () => { const h = mount(HealthCalcMulti2026 as unknown as () => unknown, names); confirmNoPrior2026(h); return h; };
   const warnings = (scr: ReturnType<ReturnType<typeof fresh>["render"]>) =>
     scr.nodes.filter((n) => n.tag === "#NoticeBox" && n.props.variant === "warning").map((n) => n.text);
   const rcWarned = (scr: ReturnType<ReturnType<typeof fresh>["render"]>) =>

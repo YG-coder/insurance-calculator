@@ -186,7 +186,7 @@ export default function HealthCalcStandardized() {
   //   ⚠ 숨겨진 원문 상태는 지우지 않는다. 행 구성을 되돌리면 그대로 복원된다.
   //   ⚠ 빈 문자열만 미입력이다. 공백만 있는 입력은 무효다.
   const perVisitNum = !hasOutpatient || perVisitLimit === "" ? undefined : stdMoney(perVisitLimit);
-  const priorPaidNum = !hasInpatient || priorPaid === "" ? undefined : stdMoney(priorPaid);
+  const priorPaidNum = !hasInpatient ? undefined : stdMoney(priorPaid);
   const perVisitInvalid = perVisitNum === null;
   const priorPaidInvalid = priorPaidNum === null;
   const gated = needsVisits || needsPrescriptions || needsAmounts || perVisitInvalid || priorPaidInvalid;
@@ -463,17 +463,17 @@ export default function HealthCalcStandardized() {
         {hasInpatient && (
           <div className="sm:col-span-2 max-w-md">
             <label className="label-base" htmlFor="std-prior-paid">
-              계약해당일 기준 1년간 이미 부담한 입원 자기부담금 (선택)
+              계약해당일 기준 1년간 이미 부담한 입원 자기부담금
             </label>
             <RawAmountInput
               id="std-prior-paid"
               value={priorPaid}
               onChange={setPriorPaid}
-              placeholder="없으면 비워두세요"
+              placeholder="이력이 없으면 0 입력"
             />
             <p className="mt-2 text-xs text-slate-500">
               입원 자기부담은 계약일 또는 매년 계약해당일부터 1년간 200만 원이 상한이며, 초과분은 보험이
-              부담합니다. 통원 자기부담은 이 상한에 누적되지 않습니다.
+              부담합니다. 통원 자기부담은 이 상한에 누적되지 않습니다. 이력이 없으면 0을 직접 입력하세요. 빈 값은 0으로 추정하지 않고 계산을 보류합니다.
             </p>
           </div>
         )}
@@ -528,7 +528,7 @@ export default function HealthCalcStandardized() {
             <NoticeBox variant="warning">
               계약해당일 기준 1년간 <b>이미 부담한 입원 자기부담금</b>을 올바르게 입력해 주세요.{" "}
               <b>0 이상의 정수</b>만 받습니다 — <b>300000</b> 또는 <b>300,000</b> 형식입니다. 이미 부담한
-              금액이 없으면 <b>비워 두거나 0</b>을 입력하세요. 공백만 입력한 값은 빈 값으로 보지 않습니다.
+              금액이 없으면 <b>0</b>을 입력하세요. 빈 값은 0으로 추정하지 않고 계산을 보류합니다. 공백만 입력한 값은 빈 값으로 보지 않습니다.
               음수·소수·문자·지수 표기·잘못된 쉼표는 계산기가 임의로 고치지 않습니다. 이 값은 연간 200만 원
               자기부담 상한에서 <b>이미 소진한 금액</b>이라, 다른 숫자로 바뀌면 남은 상한이 실제와 달라집니다.
             </NoticeBox>

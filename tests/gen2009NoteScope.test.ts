@@ -46,7 +46,7 @@ const engBody = stripComments(eng);
 
 // ── 화면 구동 (전부 실제 핸들러) ─────────────────────────────────────
 type Comp = () => unknown;
-const setup = () => { const h = mount(HealthCalcStandardized as unknown as Comp, names); h.set("submitted", true); return h; };
+const setup = () => { const h = mount(HealthCalcStandardized as unknown as Comp, names); h.set("priorPaid", "0"); h.set("submitted", true); return h; };
 type H = ReturnType<typeof setup>;
 const findIn = (el: unknown, t: string): { props: Record<string, unknown> } | null => {
   if (el === null || el === undefined || typeof el !== "object") return null;
@@ -283,7 +283,7 @@ console.log("\n[소스] 안내 조건만 바꾸고 계산·전달은 그대로")
     !/notes\.filter\(/.test(body) && !/\.includes\("통원/.test(body) && !/\.includes\("입원/.test(body));
   check("화면: 금액 입력의 노출·검증·전달은 그대로다",
     /const perVisitNum = !hasOutpatient \|\| perVisitLimit === "" \? undefined : stdMoney\(perVisitLimit\);/.test(code)
-    && /const priorPaidNum = !hasInpatient \|\| priorPaid === "" \? undefined : stdMoney\(priorPaid\);/.test(code)
+    && /const priorPaidNum = !hasInpatient \? undefined : stdMoney\(priorPaid\);/.test(code)
     && /priorAnnualPaid: money\.priorPaid,/.test(code)
     && /perVisitCoverageLimit: money\.perVisit,/.test(code));
   check("화면: 0 안내와 빈 값 계약은 그대로다",
@@ -293,7 +293,7 @@ console.log("\n[소스] 안내 조건만 바꾸고 계산·전달은 그대로")
     && !/perVisitLimitByFacility/.test(code) && !/prescriptionLimit/.test(code));
   const std = readFileSync("src/lib/insurance/engine/generationStandardized.ts", "utf8");
   check("단건 엔진과 산식은 그대로다",
-    /const prior = Math\.max\(0, input\.priorAnnualPaid \?\? 0\);/.test(std)
+    /const prior = Math\.max\(0, priorAnnualPaid \?\? 0\);/.test(std)
     && /if \(value === undefined \|\| !Number\.isFinite\(value\) \|\| value <= 0\) return undefined;/.test(std)
     && /const visitLimit = perVisitLimit\(input\.perVisitCoverageLimit\);/.test(std));
   check("다른 세대 엔진을 건드리지 않았다",

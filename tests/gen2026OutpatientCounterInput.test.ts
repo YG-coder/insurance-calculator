@@ -1,3 +1,4 @@
+import { confirmNoPrior2026 } from "./_priorInputs";
 // 안전성 커밋 — 5세대 통원 카운터 입력의 엄격 검증.
 //
 // ⚠ 이것은 **새 규제 숫자가 아니라 입력 검증 강화**다. 연 100회·100일 한도와
@@ -303,7 +304,7 @@ console.log("\n[화면] 상태 전이");
   const VISITS_LABEL = "계약해당일 기준 1년간 이미 사용한 통원 횟수";
   const DAYS_LABEL = "계약해당일 기준 1년간 이미 사용한 통원일수";
   const setup = (over: Record<string, unknown> = {}) => {
-    const h = mount(HealthCalcMulti2026 as unknown as () => unknown, names);
+    const h = mount(HealthCalcMulti2026 as unknown as () => unknown, names); confirmNoPrior2026(h);
     const base: Record<string, unknown> = {
       coverage: "non_benefit", nonBenefitItem: "general", severity: "critical",
       visit: "outpatient", cause: "disease", amounts: ["500000"],

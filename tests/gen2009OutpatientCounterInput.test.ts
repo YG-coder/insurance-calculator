@@ -226,7 +226,7 @@ console.log("\n[구조] 검증 위치와 절삭 금지");
     !/nonNegInt\(input\.priorAnnualOutpatientVisits\)/.test(eng)
     && !/nonNegInt\(input\.priorAnnualPrescriptions\)/.test(eng));
   check("금액 축의 nonNegInt는 그대로 남아 있다",
-    /nonNegInt\(input\.priorAnnualPaid\)/.test(eng));
+    /nonNegInt\(priorAnnualPaid\)/.test(eng));
   check("차단 결과가 진료비 합계를 유지한다",
     /totalAmount: lines\.reduce\(\(sum, l\) => sum \+ normalizeAmount\(l\.amount\), 0\),\s*\n\s*totalOwnPay: null, totalInsurancePay: null, appliedCaps: \[\], notes,/.test(eng));
   check("4·5세대 파서·상수를 재사용하지 않는다",
@@ -286,7 +286,7 @@ console.log("\n[화면] 상태 전이");
   const RX_LABEL = "계약해당일 기준 1년간 이미 사용한 처방전 건수";
   const row = (visit: string, facility: string) => ({ id: 1, amount: "300000", visit, facility });
   const setup = (over: Record<string, unknown> = {}) => {
-    const h = mount(HealthCalcStandardized as unknown as () => unknown, names);
+    const h = mount(HealthCalcStandardized as unknown as () => unknown, names); h.set("priorPaid", "0");
     for (const [k, v] of Object.entries({ plan: "standard", submitted: true, ...over })) h.set(k, v);
     return h.render();
   };

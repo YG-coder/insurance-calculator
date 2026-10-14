@@ -41,3 +41,8 @@ export function particle(word: string, withFinal: string, withoutFinal: string):
 export function topic(word: string): string {
   return word + particle(word, "은", "는");
 }
+
+/** 목적격 조사. "항암제" → "항암제를", "희귀의약품" → "희귀의약품을" */
+export function objectParticle(word: string): string {
+  return word + particle(word, "을", "를");
+}

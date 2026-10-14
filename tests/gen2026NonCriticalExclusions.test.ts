@@ -1,3 +1,4 @@
+import { confirmNoPrior2026 } from "./_priorInputs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -78,6 +79,7 @@ assert.equal(routeOfGen2026Item("non_critical", "mri"), "special_item");
 
 for (const [Component, name] of [[Single, "HealthCalc5th"], [Many, "HealthCalcMulti2026"]] as const) {
   const h = mount(Component, stateNamesFrom(readFileSync(`src/components/calculators/${name}.tsx`, "utf8")));
+  if (Component === Many) confirmNoPrior2026(h);
   h.set("coverage", "non_benefit"); h.set("severity", "non_critical"); h.set("nonBenefitItem", "musculoskeletal_esw"); h.set("submitted", true);
   let screen = h.render(); assert.equal(screen.resultItems(), null); assert.match(screen.text, /보상하지 않는 항목/);
   h.set("nonBenefitItem", "injection"); screen = h.render(); assert(screen.has("약제 용도")); assert.equal(screen.resultItems(), null); assert.match(screen.text, /선택/);

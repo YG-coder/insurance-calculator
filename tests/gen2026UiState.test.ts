@@ -1,3 +1,4 @@
+import { confirmNoPrior2026 } from "./_priorInputs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import Single from "../src/components/calculators/HealthCalc5th";
@@ -7,6 +8,7 @@ import { mount, stateNamesFrom, type Harness, type Screen } from "./_uiRender";
 
 const setup = (Component: () => unknown, name: string, inputs: Record<string, unknown> = {}) => {
   const h = mount(Component, stateNamesFrom(readFileSync(`src/components/calculators/${name}.tsx`, "utf8")));
+  if (Component === Many) confirmNoPrior2026(h);
   for (const [key, value] of Object.entries(inputs)) h.set(key, value);
   return h;
 };

@@ -1,3 +1,4 @@
+import { confirmNoPrior2026 } from "./_priorInputs";
 // G-10 항목 B — 중증 MRI **누적 공제금액 입력의 노출·전달 조건**을 소비 조건에 맞춘다.
 //
 // 종전 동작: `needsRowTier`(중증 + MRI)만 보고 **행 구성과 무관하게** 입력을 띄우고
@@ -45,7 +46,7 @@ const stripComments = (src: string) =>
   src.split("\n").filter((l) => !/^\s*(\/\/|\*|\/\*|\{\/\*)/.test(l)).join("\n");
 
 type Comp = () => unknown;
-const setup = () => { const h = mount(HealthCalcMulti2026 as unknown as Comp, names); h.set("submitted", true); return h; };
+const setup = () => { const h = mount(HealthCalcMulti2026 as unknown as Comp, names); confirmNoPrior2026(h); h.set("submitted", true); return h; };
 type H = ReturnType<typeof setup>;
 // 판정 선택 변경 후에는 재계산을 눌러 금액·입력 검증을 대조한다. 초기화 전이는 gen2026UiState에서 별도 검증.
 const submit = (h: H) => {
@@ -332,7 +333,7 @@ console.log("\n[소스] 전용 조건을 따로 두고 기존 계약을 건드�
   //   들어갔을 뿐 사라지지 않았다 — `!usesPriorPool`이면 `undefined`다.
   check("전달이 전용 조건을 쓴다 — 비대상에서는 undefined가 넘어간다",
     /priorAnnualInpatientDeductible: deductibles\.pool,/.test(code)
-    && /const priorPoolNum = !usesPriorPool \? undefined\s*\n\s*: priorPool === "" \? 0 : gen2026Money\(priorPool\);/.test(code)
+    && /const priorPoolNum = !usesPriorPool \? undefined\s*\n\s*: gen2026Money\(priorPool\);/.test(code)
     && !/priorAnnualInpatientDeductible: num\(priorPool\),/.test(code)
     && !/priorAnnualInpatientDeductible: gen2026Money\(priorPool\),/.test(code));
   // ── 기존 계약 무변경 ──
@@ -343,15 +344,15 @@ console.log("\n[소스] 전용 조건을 따로 두고 기존 계약을 건드�
   check("rowsIncomplete는 그대로다",
     /const rowsIncomplete = showSpecialForm && rows\.some\(\(r\) => r\.visit === "" \|\| \(needsRowTier && r\.visit === "inpatient" && r\.tier === ""\)\);/.test(code));
   check("미선택 안내도 needsRowTier를 그대로 쓴다",
-    /\{submitted && rowsIncomplete && <div className="mt-5"><NoticeBox variant="warning">각 행의 <b>치료 형태<\/b>\{needsRowTier \?/.test(code));
+    /objectParticle\(needsRowTier \? "치료 형태와 입원 행의 의료기관 종별" : "치료 형태"\)/.test(code));
   // ⚠ **낡은 계약을 교체했다.** 두 검사는 "항목 A는 아직 안 했다"를 고정하고 있었다.
   //   항목 A가 파서·위젯을 바꿨으므로, 항목 B가 만든 **노출·전달 조건 자체**가
   //   그대로인지만 남긴다.
   check("초기값은 그대로이고 pool 노출 조건은 항목 A가 건드리지 않았다",
-    /const \[priorPool, setPriorPool\] = useState\("0"\);/.test(code)
+    /const \[priorPool, setPriorPool\] = useState\(""\);/.test(code)
     && /\{usesPriorPool && <label/.test(code));
   check("priorDeductible의 노출·전달 조건은 소비 조건과 같다",
-    /const \[priorDeductible, setPriorDeductible\] = useState\("0"\);/.test(code)
+    /const \[priorDeductible, setPriorDeductible\] = useState\(""\);/.test(code)
     && /const usesPriorDeductible = showGeneralForm && generalAxis !== null\s*\n\s*&& severity === "critical" && visit === "inpatient" && nbInpatientTier === "hospital";/.test(code)
     && /\{usesPriorDeductible && <label/.test(code)
     && (code.match(/priorAnnualDeductible: deductibles\.general,/g) ?? []).length === 2);
@@ -361,7 +362,7 @@ console.log("\n[소스] 전용 조건을 따로 두고 기존 계약을 건드�
   check("계산 결과를 과거 누적액에 되쓰지 않는다",
     !/setPriorPool\([^)]*result/.test(code) && !/setPriorDeductible\([^)]*result/.test(code));
   check("G-9의 세 금액 계약은 그대로다",
-    /const priorInsuranceNum = priorInsurance === "" \? 0 : gen2026Money\(priorInsurance\);/.test(code)
+    /const priorInsuranceNum = paidAxis === null \? undefined : gen2026Money\(priorInsurance\);/.test(code)
     && /const money = priorInsuranceNum === null \|\| annualLimitNum === null \|\| outpatientLimitNum === null/.test(code));
   check("G-8의 축 키는 그대로다",
     /const paidAxis: Gen2026PaidAxis \| null = showSpecialForm \? itemAxis/.test(code));

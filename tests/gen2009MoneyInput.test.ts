@@ -1,3 +1,4 @@
+// 2026-10-14 정책 갱신: 누적금액 기본값은 빈칸이며 미입력은 보류한다. 아래 과거 계약 중 빈칸→0 기대값을 교체했다.
 // G-7 — 2·3세대 다회의 **진료비가 아닌 금액 입력 두 곳**을 엄격하게 검증하고,
 //   행 구성에 쓰이지 않는 값은 엔진에 넘기지 않는다.
 //   ① 회(건)당 보험가입금액(통원 행이 있을 때)  ② 기존 입원 자기부담금(입원 행이 있을 때)
@@ -48,7 +49,7 @@ const stripComments = (src: string) =>
 
 type Comp = () => unknown;
 const setup = () => {
-  const h = mount(HealthCalcStandardized as unknown as Comp, names);
+  const h = mount(HealthCalcStandardized as unknown as Comp, names); h.set("priorPaid", "0");
   h.set("submitted", true);
   h.set("plan", "standard");
   h.set("generation", "2017");
@@ -265,9 +266,10 @@ console.log("\n[기존 정책] 빈 값·명시적 0·00은 종전 계산을 그�
 }
 {
   const h = make("입원만", "10000000");   // 상한 200만
-  check("② 빈 값 → 상한 전액 남음", screenOf(h).own === "2,000,000원", String(screenOf(h).own));
+  typeInto(h, PAID, "");
+  check("② 빈 값 → 계산 보류", !screenOf(h).calculated, String(screenOf(h).own));
   typeInto(h, PAID, "0");
-  check("② 명시적 0 → 빈 값과 결과 동일", screenOf(h).own === "2,000,000원", String(screenOf(h).own));
+  check("② 명시적 0 → 상한 전액 남음", screenOf(h).own === "2,000,000원", String(screenOf(h).own));
   typeInto(h, PAID, "00");
   check("② 00도 같다", screenOf(h).own === "2,000,000원");
   typeInto(h, PAID, "500,000");
@@ -391,7 +393,7 @@ console.log("\n[소스] 파서·게이트·전달 형태");
   check("trim으로 정리해 통과시키지 않는다", !/\.trim\(\)/.test(code));
   check("활성 입력만 검증·전달한다",
     /const perVisitNum = !hasOutpatient \|\| perVisitLimit === "" \? undefined : stdMoney\(perVisitLimit\);/.test(code)
-    && /const priorPaidNum = !hasInpatient \|\| priorPaid === "" \? undefined : stdMoney\(priorPaid\);/.test(code));
+    && /const priorPaidNum = !hasInpatient \? undefined : stdMoney\(priorPaid\);/.test(code));
   check("게이트에 두 축이 합류한다",
     /const gated = needsVisits \|\| needsPrescriptions \|\| needsAmounts \|\| perVisitInvalid \|\| priorPaidInvalid;/.test(code));
   check("null을 배제해야 엔진 인자가 만들어진다(타입 단언 없음)",
@@ -414,7 +416,7 @@ console.log("\n[소스] 파서·게이트·전달 형태");
   // ⚠ **낡은 계약을 교체했다.** G-12가 `multiClaim.ts`의 **안내 생성 조건**에 통원 행 여부를
   //   더했다. 계산·상한·한도 산식은 그대로이므로 그 셋은 계속 고정하고, 안내 조건만 새 형태로 본다.
   check("엔진 계산은 그대로다(200만 상한·회당 한도)",
-    /const prior = Math\.max\(0, input\.priorAnnualPaid \?\? 0\);/.test(eng)
+    /const prior = Math\.max\(0, priorAnnualPaid \?\? 0\);/.test(eng)
     && /if \(value === undefined \|\| !Number\.isFinite\(value\) \|\| value <= 0\) return undefined;/.test(eng));
   check("엔진 미적용 안내는 통원 행이 있을 때만 붙는다(G-12)",
     /if \(hasOutpatient && input\.perVisitCoverageLimit === undefined\) \{/.test(multi)

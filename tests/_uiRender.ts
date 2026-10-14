@@ -11,6 +11,7 @@
  *   훅 순서는 Rules of Hooks가 보장하므로 선언 순서 = 슬롯 순서다.
  */
 import * as React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 
 const INTERNALS = (React as unknown as Record<string, { H: unknown }>)
   .__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE;
@@ -65,6 +66,8 @@ export interface Harness {
   /** 선언 순서로 얻은 상태 이름 목록. */
   names: string[];
   render(): Screen;
+  /** 하위 컴포넌트까지 그린 HTML. 화면에 보이는 문구 검증용. */
+  renderMarkup(): string;
   set(name: string, value: unknown): void;
   get(name: string): unknown;
 }
@@ -91,18 +94,22 @@ export function mount(Component: () => unknown, stateNames: string[]): Harness {
     if (i < 0) throw new Error(`상태 이름을 찾을 수 없습니다: ${name}`);
     return i;
   };
+  const renderTree = () => {
+    cursor = 0;
+    const prev = INTERNALS.H;
+    INTERNALS.H = dispatcher;
+    let tree: unknown;
+    try { tree = Component(); } finally { INTERNALS.H = prev; }
+    if (cursor === 0) throw new Error("훅 디스패처가 연결되지 않았습니다(React 내부 구조 변경?)");
+    if (cursor !== stateNames.length) {
+      throw new Error(`useState 호출 수(${cursor})와 상태 이름 수(${stateNames.length})가 다릅니다`);
+    }
+    return tree;
+  };
   const harness: Harness = {
     names: stateNames,
     render(): Screen {
-      cursor = 0;
-      const prev = INTERNALS.H;
-      INTERNALS.H = dispatcher;
-      let tree: unknown;
-      try { tree = Component(); } finally { INTERNALS.H = prev; }
-      if (cursor === 0) throw new Error("훅 디스패처가 연결되지 않았습니다(React 내부 구조 변경?)");
-      if (cursor !== stateNames.length) {
-        throw new Error(`useState 호출 수(${cursor})와 상태 이름 수(${stateNames.length})가 다릅니다`);
-      }
+      const tree = renderTree();
       const nodes: RenderedNode[] = [];
       walk(tree, nodes);
       const labels = nodes.filter((n) => n.tag === "label").map((n) => n.text);
@@ -118,6 +125,7 @@ export function mount(Component: () => unknown, stateNames: string[]): Harness {
       };
       return screen;
     },
+    renderMarkup() { return renderToStaticMarkup(renderTree() as React.ReactNode); },
     set(name, value) {
       // 첫 렌더 전에 쓰면 앞쪽 슬롯이 빈 구멍(undefined)으로 남아
       //   `severity !== ""`처럼 초기값에 기대는 조건이 조용히 뒤집힌다.

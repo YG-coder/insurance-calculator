@@ -282,7 +282,8 @@ export function calculateMany(
   }
 
   // 이어지는 상태
-  let inpatientOwnPaySoFar = nonNegInt(input.priorAnnualPaid);
+  const priorAnnualPaid = input.priorAnnualPaid;
+  let inpatientOwnPaySoFar = nonNegInt(priorAnnualPaid);
   // ⚠ 두 카운터는 정규화하지 않는다. 위에서 미입력·잘못된 값을 이미 차단했고, 쓰이지 않는
   //   축은 실려 오는 것 자체가 차단된다. 여기서 ?? 0은 "쓰이지 않는 축"의 자리값이다.
   let outpatientVisits = (visitsRaw as number | undefined) ?? 0;
@@ -332,6 +333,9 @@ export function calculateMany(
   const appliedCaps = [...new Set(results.flatMap((r) => r.appliedCaps))];
 
   const notes: string[] = [];
+  if (lines.some(line => line.visit === "inpatient") && priorAnnualPaid === undefined) {
+    notes.push("기존 입원 자기부담금 누적액을 0원으로 가정한 계산입니다. 기존 누적액이 있으면 결과가 달라집니다.");
+  }
   const excluded = results.filter((r) => !r.covered).length;
   if (excluded > 0) {
     notes.push(`${excluded}건이 연간 횟수 한도를 넘겨 보상 대상에서 제외되었습니다.`);

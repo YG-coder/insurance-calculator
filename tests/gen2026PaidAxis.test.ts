@@ -1,3 +1,4 @@
+import { confirmNoPrior2026 } from "./_priorInputs";
 // G-8 항목 X — 5세대 다회의 **누적 금액 입력을 보장축별로 분리**한다.
 //
 // 종전 동작: "기존 지급보험금"·"연간 보험가입금액"·"통원 가입금액"이 각각 **하나의 상태**였다.
@@ -47,7 +48,7 @@ const stripComments = (src: string) =>
 
 type Comp = () => unknown;
 const setup = () => {
-  const h = mount(HealthCalcMulti2026 as unknown as Comp, names);
+  const h = mount(HealthCalcMulti2026 as unknown as Comp, names); confirmNoPrior2026(h);
   h.set("submitted", true);
   return h;
 };
@@ -532,7 +533,7 @@ console.log("\n[소스] 축 키는 기존 라우팅 결과에서만 만든다");
     && /const \[annualLimitByAxis, setAnnualLimitByAxis\] = useState<Record<Gen2026GeneralAxis, string>>/.test(code)
     && /const \[outpatientLimitByAxis, setOutpatientLimitByAxis\] = useState<Record<Gen2026GeneralAxis, string>>/.test(code));
   check("초기값 그대로(지급보험금 \"0\" · 가입금액 \"\")",
-    /GEN2026_PAID_AXES\.map\(\(k\) => \[k, "0"\]\)/.test(code)
+    /GEN2026_PAID_AXES\.map\(\(k\) => \[k, ""\]\)/.test(code)
     && (code.match(/GEN2026_GENERAL_AXES\.map\(\(k\) => \[k, ""\]\)/g) ?? []).length === 2);
   check("일반 축은 질환 구분·원인이 모두 정해져야 만들어진다",
     /const generalAxis: Gen2026GeneralAxis \| null =\s*\n?\s*severity !== "" && cause !== "" \? `general_\$\{severity\}_\$\{cause\}` : null;/.test(code));
@@ -543,7 +544,7 @@ console.log("\n[소스] 축 키는 기존 라우팅 결과에서만 만든다");
   check("활성 축은 폼 표시 조건과 같은 순서로 고른다",
     /const paidAxis: Gen2026PaidAxis \| null = showSpecialForm \? itemAxis\s*\n?\s*: \(showRoomChargeForm \|\| showGeneralForm\) \? generalAxis\s*\n?\s*: null;/.test(code));
   check("축이 없으면 읽지도 고치지도 않는다",
-    /const priorInsurance = paidAxis === null \? "0" : priorInsuranceByAxis\[paidAxis\];/.test(code)
+    /const priorInsurance = paidAxis === null \? "" : priorInsuranceByAxis\[paidAxis\];/.test(code)
     && /if \(paidAxis === null\) return;/.test(code)
     && (code.match(/if \(generalAxis === null\) return;/g) ?? []).length === 2);
   check("\"undefined\" 키를 만들지 않는다",
@@ -557,14 +558,14 @@ console.log("\n[소스] 축 키는 기존 라우팅 결과에서만 만든다");
     (code.match(/priorAnnualInsurancePaid: money\.prior,/g) ?? []).length === 7
     && (code.match(/annualCoverageLimit: money\.annual,/g) ?? []).length === 3
     && (code.match(/outpatientCoverageLimit: money\.out,/g) ?? []).length === 2
-    && /const priorInsuranceNum = priorInsurance === "" \? 0 : gen2026Money\(priorInsurance\);/.test(code)
-    && /const priorInsurance = paidAxis === null \? "0" : priorInsuranceByAxis\[paidAxis\];/.test(code));
+    && /const priorInsuranceNum = paidAxis === null \? undefined : gen2026Money\(priorInsurance\);/.test(code)
+    && /const priorInsurance = paidAxis === null \? "" : priorInsuranceByAxis\[paidAxis\];/.test(code));
   // ⚠ **낡은 계약을 교체했다.** G-10 항목 A가 두 공제금액의 파서·전달 형태를 바꿨다.
   //   축 분리(G-8) 관점에서 중요한 것은 **두 상태가 축별로 쪼개지지도, 서로 합쳐지지도
   //   않았다**는 사실이므로 그것만 남긴다. 파서·형식은 다른 파일이 본다.
   check("공제금액 두 상태는 축별로 쪼개지지 않았다",
-    /const \[priorDeductible, setPriorDeductible\] = useState\("0"\);/.test(code)
-    && /const \[priorPool, setPriorPool\] = useState\("0"\);/.test(code)
+    /const \[priorDeductible, setPriorDeductible\] = useState\(""\);/.test(code)
+    && /const \[priorPool, setPriorPool\] = useState\(""\);/.test(code)
     && !/priorDeductibleByAxis/.test(code) && !/priorPoolByAxis/.test(code)
     && (code.match(/priorAnnualDeductible: deductibles\.general,/g) ?? []).length === 2
     && (code.match(/priorAnnualInpatientDeductible: deductibles\.pool,/g) ?? []).length === 1);

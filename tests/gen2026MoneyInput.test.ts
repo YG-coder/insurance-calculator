@@ -1,3 +1,5 @@
+// 2026-10-14 정책 갱신: 누적금액 기본값은 빈칸이며 미입력은 보류한다. 아래 과거 계약 중 빈칸→0 기대값을 교체했다.
+import { confirmNoPrior2026 } from "./_priorInputs";
 // G-9 — 5세대 다회의 **누적 금액 세 축**을 엄격하게 검증한다.
 //   ① 기존 지급보험금(`priorInsuranceByAxis`, 8축)
 //   ② 연간 보험가입금액(`annualLimitByAxis`, 일반 4축)
@@ -44,7 +46,7 @@ const stripComments = (src: string) =>
   src.split("\n").filter((l) => !/^\s*(\/\/|\*|\/\*|\{\/\*)/.test(l)).join("\n");
 
 type Comp = () => unknown;
-const setup = () => { const h = mount(HealthCalcMulti2026 as unknown as Comp, names); h.set("submitted", true); return h; };
+const setup = () => { const h = mount(HealthCalcMulti2026 as unknown as Comp, names); confirmNoPrior2026(h); h.set("submitted", true); return h; };
 type H = ReturnType<typeof setup>;
 // 판정 선택 변경 후에는 재계산을 눌러 금액·입력 검증을 대조한다. 초기화 전이는 gen2026UiState에서 별도 검증.
 const submit = (h: H) => {
@@ -190,7 +192,7 @@ console.log("\n[기존 계약] 빈 값의 뜻이 필드마다 다르다");
   const base = scr(h).pay;
   check("① 지급보험금 명시적 0 → 계산", base === "4,200,000원", String(base));
   typeById(h, PRIOR_ID, "");
-  check("① 지급보험금 빈 값 → 0으로 계산(명시적 0과 같다)", scr(h).pay === base, String(scr(h).pay));
+  check("① 지급보험금 빈 값 → 계산 보류", !scr(h).calc && scr(h).wPrior, String(scr(h).pay));
   typeById(h, PRIOR_ID, "0");
   typeById(h, ANNUAL_ID, "10000000");
   check("② 연간 가입금액 적용", scr(h).pay === "4,200,000원", String(scr(h).pay));
@@ -356,7 +358,7 @@ console.log("\n[소스] 파서·게이트·전달 형태");
   check("상급병실료 일수 파서의 trim은 그대로다(범위 밖)",
     /const positiveDays = \(v: string\): number \| null => \{\s*\n\s*const t = v\.trim\(\);/.test(code));
   check("빈 값의 뜻이 필드마다 다르게 적혀 있다",
-    /const priorInsuranceNum = priorInsurance === "" \? 0 : gen2026Money\(priorInsurance\);/.test(code)
+    /const priorInsuranceNum = paidAxis === null \? undefined : gen2026Money\(priorInsurance\);/.test(code)
     && /const annualLimitNum = !usesAnnualLimit \|\| annualLimit === "" \? undefined : gen2026Money\(annualLimit\);/.test(code)
     && /\? undefined : gen2026Money\(outpatientLimit\);/.test(code));
   check("경로가 쓰는 금액만 검증한다",
@@ -388,12 +390,12 @@ console.log("\n[소스] 파서·게이트·전달 형태");
   //   공유한다는 사실과 초기값 계약**만 확인하고, 형식·경계·차단은
   //   `gen2026DeductibleInput.test.ts`가 본다.
   check("공제금액 두 입력도 gen2026Money를 쓴다",
-    /priorDeductible === "" \? 0 : gen2026Money\(priorDeductible\)/.test(code)
-    && /priorPool === "" \? 0 : gen2026Money\(priorPool\)/.test(code)
+    /gen2026Money\(priorDeductible\)/.test(code)
+    && /gen2026Money\(priorPool\)/.test(code)
     && !/num\(priorDeductible\)/.test(code) && !/num\(priorPool\)/.test(code));
   check("초기값 \"0\" 계약은 그대로다",
-    /const \[priorDeductible, setPriorDeductible\] = useState\("0"\);/.test(code)
-    && /const \[priorPool, setPriorPool\] = useState\("0"\);/.test(code));
+    /const \[priorDeductible, setPriorDeductible\] = useState\(""\);/.test(code)
+    && /const \[priorPool, setPriorPool\] = useState\(""\);/.test(code));
   check("공제금액 두 칸도 RawAmountInput이다",
     /<RawAmountInput id="gen2026-prior-deductible" value=\{priorDeductible\}/.test(code)
     && /<RawAmountInput id="gen2026-prior-pool" value=\{priorPool\}/.test(code)

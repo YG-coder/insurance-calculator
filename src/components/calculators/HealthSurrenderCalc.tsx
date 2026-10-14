@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { objectParticle } from "@/lib/insurance/common/korean";
 import ResultCard from "@/components/ResultCard";
 import AmountInput from "@/components/AmountInput";
 import NoticeBox from "@/components/NoticeBox";
@@ -137,11 +138,11 @@ export default function HealthSurrenderCalc() {
                 <div className="rounded-xl bg-brand-50 border border-brand-100 px-5 py-4 text-slate-700 leading-relaxed">
                   {result.reference ? (
                     <>입력하신 예상 기준, 지금까지 낸 보험료 중 약{" "}
-                      <b className="text-brand-700">{pct(result.refundRatePercent)}</b>를 돌려받고, 약{" "}
+                      <b className="text-brand-700">{objectParticle(pct(result.refundRatePercent))}</b> 돌려받고, 약{" "}
                       <b className="text-brand-700">{pct(100 - result.refundRatePercent)}</b>는 현재 환급금에 포함되지 않습니다.</>
                   ) : (
                     <>지금까지 낸 보험료 중{" "}
-                      <b className="text-brand-700">{pct(result.refundRatePercent)}</b>를 돌려받고,{" "}
+                      <b className="text-brand-700">{objectParticle(pct(result.refundRatePercent))}</b> 돌려받고,{" "}
                       <b className="text-brand-700">{pct(100 - result.refundRatePercent)}</b>는 현재 해지환급금에 포함되지 않습니다.</>
                   )}
                 </div>

@@ -1,3 +1,4 @@
+import { confirmNoPrior2026 } from "./_priorInputs";
 // 안전성 커밋 — 5세대 **다회** 건강보험 본인부담률 입력의 엄격 검증 (G-13C).
 //
 // ⚠ 대상은 `HealthCalcMulti2026.tsx`의 `nhisRate` 한 필드뿐이다. 엔진·규칙값·HOLD,
@@ -75,7 +76,7 @@ const pay = (h: H) => { const it = items(h); return it === null ? "결과 없음
 const text = (h: H) => (h.render() as any).text as string;
 const warned = (h: H) => text(h).includes("건강보험 본인부담률은 0~100 사이의 숫자로 입력해 주세요")
   && text(h).includes("100으로 깎지 않고");
-const base = (): H => { const h = mount(HealthCalcMulti2026, names); pick(h, "급여 구분", "benefit"); return h; };
+const base = (): H => { const h = mount(HealthCalcMulti2026, names); confirmNoPrior2026(h); pick(h, "급여 구분", "benefit"); return h; };
 
 // ── 근거 ──────────────────────────────────────────────────────────────
 console.log("\n[근거] 규칙값과 엔진을 건드리지 않았다");

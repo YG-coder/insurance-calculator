@@ -207,11 +207,18 @@ CI(GitHub Actions)는 Node.js 22에서 `npm ci` → `test:coverage` → `build` 
 2. `constants.ts`는 그 레지스트리에서 **값을 파생**합니다. 상수를 직접 쓰지 않습니다.
 3. `tests/regulatoryRules.test.ts`가 출처 없는 상수를 거부합니다.
 4. 근거가 확정되지 않은 경로는 값을 지어내지 않고 `status: "PENDING_UNVERIFIED"`를 반환합니다.
-5. 사실을 단정하는 UI 문구는 `tests/uiCopy.test.ts`가 **양방향으로** 가드합니다.
+5. 사실을 단정하는 UI 문구는 `tests/uiCopy.test.ts`가 **양방향으로** 가드합니다. 모든 계산기의
+   결과·보류·면책 상태를 하위 컴포넌트까지 렌더해 안내와 접근성 라벨의 내부 식별자 노출을
+   검사합니다. 동적 문구의 을/를 하드코딩도 금지하며 `common/korean.ts`의 `objectParticle`을 씁니다.
 6. 계산 결과의 금액은 `common/settle.ts`에서 종결되며 `본인부담금 + 보험적용금액 === 진료비`
    불변식이 전 경로 테스트로 고정되어 있습니다.
 
 현재 남은 HOLD 항목은 [`docs/insurance/audit-status.md`](./docs/insurance/audit-status.md) §3에 있습니다.
+
+누적금액 입력은 미입력과 명시적 0을 구분합니다. 2·3세대 입원의 기존 자기부담금과 5세대 다회의
+기존 지급보험금·누적 공제금액은 활성 경로에서 필수이며, 이력이 없으면 0을 직접 입력해야 합니다.
+다른 경로의 숨은 입력은 현재 계산을 막지 않습니다. 4세대 단건은 연간 한도를 계산에 반영하지
+않는 범위를 결과에 안내합니다.
 
 ## 구조
 

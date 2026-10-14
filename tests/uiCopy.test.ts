@@ -7,9 +7,12 @@
 //
 // 이 테스트가 실패하면 문구를 되돌리기 전에 먼저 약관 근거가 확보됐는지 확인할 것.
 import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import Footer from "../src/components/Footer";
+import { COPY_CASES, CALCULATOR_FILES, COVERED_COMPONENTS, renderCopyCase } from "./_uiCopyCases";
+import { hardcodedObjectParticles, identifierLeaks, visibleCopy } from "./_uiCopyGuard";
 import {
   GeneralAnnualLimitHelp, RoomChargeMoneyHelp, ZeroLimitPolicy,
 } from "../src/components/calculators/HealthCalcMulti2026";
@@ -570,6 +573,27 @@ check("README: 중증 합산에 같은 치료 목적 조건", readme.includes("�
 check("README: 중증 합산 예외 명시", readme.includes("치료 목적이 다르거나 다른 의료기관이면"));
 check("README: 비중증은 1일당 기준 명시", readme.includes("통원 1일당(외래 및 처방·조제비 합산)"));
 check("README: 연간 가입금액이 상해·질병 각 축임을 명시", readme.includes("상해비급여·질병비급여 각 축에 대해 따로"));
+
+// 결과 카드·경고·한도·면책·보류 상태를 하위 컴포넌트까지 렌더한다.
+check("문구 검사: 모든 계산기가 상태 조합 검사에 등록됨", JSON.stringify(CALCULATOR_FILES) === JSON.stringify(COVERED_COMPONENTS));
+const leaks = COPY_CASES.flatMap(testCase => identifierLeaks(renderCopyCase(testCase)).map(identifier => `${testCase.name}: ${identifier}`));
+check(`문구 검사: ${COPY_CASES.length}개 렌더 상태에 내부 식별자 없음`, leaks.length === 0, leaks.join(" | "));
+check("식별자 검사 자체 검증: 보간된 변수명·밑줄 식별자를 잡음",
+  identifierLeaks(renderToStaticMarkup(createElement("p", null, `누적 ${"priorAnnualDeductible"} / ${"annual_limit"}`))).length === 2);
+check("식별자 검사 자체 검증: 라벨·placeholder도 검사", identifierLeaks('<input id="internalId" aria-label="annual_limit" placeholder="priorPaid"/>').length === 2);
+check("식별자 검사 자체 검증: 구현 속성과 MRI/MRA는 제외", identifierLeaks('<p id="internalId" data-key="annual_limit">MRI/MRA</p>').length === 0);
+check("식별자 검사 자체 검증: 태그로 나뉜 식별자와 HTML 엔티티도 검사", identifierLeaks('<p>prior<b>Annual</b>Deductible annual&#95;limit</p>').length === 2);
+check("렌더 검사: 결과 카드와 안내 상자 본문 포함", visibleCopy(renderCopyCase(COPY_CASES.find(c => c.name === "HealthCalc5th/금액/non_benefit/outpatient/300000")!)).includes("150,000원"));
+const sourceFiles = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
+  const path = join(dir, entry.name);
+  return entry.isDirectory() ? sourceFiles(path) : /\.tsx?$/.test(path) && !path.endsWith(".d.ts") ? [path] : [];
+});
+const particleViolations = sourceFiles("src").flatMap(path => hardcodedObjectParticles(readFileSync(path, "utf8"), path).map(line => `${path}:${line}`));
+check("조사 검사: 동적 문구에 을/를 하드코딩 없음", particleViolations.length === 0, particleViolations.join(" | "));
+for (const source of ['const text = `${drug}를 선택`;', 'const text = drug + "을 선택";', 'const text = <p>{drug}를 선택</p>;', 'const text = <p><b>{drug}</b>을 선택</p>;']) {
+  check("조사 검사 자체 검증: " + source, hardcodedObjectParticles(source).length === 1);
+}
+check("조사 검사 자체 검증: 정적 명사·헬퍼·주석 허용", hardcodedObjectParticles('const text = <p>항생제를 {objectParticle(drug)} 선택</p>; // `${drug}를`').length === 0);
 
 console.log(`\n[uiCopy] 통과 ${pass} / 실패 ${fail}`);
 if (fail) process.exit(1);

@@ -1,6 +1,6 @@
 // 한국어 조사 유틸 가드.
 // 안내 문구가 라벨을 이어 붙이므로, 라벨이 바뀌면 조사도 따라가야 한다.
-import { particle, topic } from "../src/lib/insurance/common/korean";
+import { particle, topic, objectParticle } from "../src/lib/insurance/common/korean";
 import { GEN2026_NON_BENEFIT_ITEM_LABEL, calc2026 } from "../src/lib/insurance/engine/generation2026";
 
 let pass = 0, fail = 0;
@@ -48,6 +48,12 @@ check("기호로 끝나면 받침 없는 조사", topic("항목 %") === "항목 
 check('particle: 이/가', "차액" + particle("차액", "이", "가") === "차액이");
 check('particle: 을/를', "주사료" + particle("주사료", "을", "를") === "주사료를");
 check('particle: 판정 불가 시 두 번째 인자', particle("%", "이", "가") === "가");
+
+for (const [word, expected] of [["항암제", "항암제를"], ["항생제·항진균제", "항생제·항진균제를"],
+  ["희귀의약품", "희귀의약품을"], ["치료 형태", "치료 형태를"],
+  ["치료 형태와 입원 행의 의료기관 종별", "치료 형태와 입원 행의 의료기관 종별을"]]) {
+  check(`목적격 조사: ${expected}`, objectParticle(word) === expected, objectParticle(word));
+}
 
 // 실제 사용 지점 — 엔진 안내 문구가 라벨마다 올바른 조사를 쓰는지
 {

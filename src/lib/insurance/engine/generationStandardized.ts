@@ -123,7 +123,9 @@ export function calcStandardized(generation: StandardizedGeneration, input: Clai
     // ── 입원 ──
     const rate = constants.inpatientRate[plan];
     const capValue = constants.inpatientAnnualOwnPayCap;
-    const prior = Math.max(0, input.priorAnnualPaid ?? 0);
+    const priorAnnualPaid = input.priorAnnualPaid;
+    if (priorAnnualPaid === undefined) notes.push("기존 입원 자기부담금 누적액을 0원으로 가정한 계산입니다. 기존 누적액이 있으면 결과가 달라집니다.");
+    const prior = Math.max(0, priorAnnualPaid ?? 0);
     const remaining = Math.max(capValue - prior, 0);
 
     let ownPayRaw = amount * rate;

@@ -2745,3 +2745,29 @@ insurancePay > 0  · actIndex 있음 → N회째
 
 이 기록은 푸시 전 로컬 검증이다. 운영 배포 성공과 공개 화면 검증은 별도 항목에 남긴다.
 정확성 근거는 원문 대조와 독립 수기 기대값이며, 커버리지를 정확성의 근거로 사용하지 않는다.
+
+### 운영 배포 확인 — 2026-10-14 (AI 확인)
+
+수정 커밋은 `0df20f48419ac87dfab4af790a8df7416917b8fc`다. 푸시 전 보완을 기존 미푸시
+커밋에 합쳤으므로 로컬 보고의 `4ef728a`를 대체한다. 수정 코드의 로컬 검증과 운영 배포
+확인은 다음과 같이 구분한다.
+
+| 단계 | 확인 결과 | 확인 범위·증거 |
+| --- | --- | --- |
+| 로컬 검증 | 통과 | 테스트 83개 파일, 린트, 타입 검사, 기본 운영 빌드. 원문 대조·수기 기대값과 정상 결과→용도 미선택 전이 포함 |
+| 원격 반영 | 성공 | `origin/main`에 `0df20f4` 정상 푸시. 강제 푸시 없음 |
+| GitHub CI | 성공 | 동일 SHA의 [CI run 38507908694](https://github.com/YG-coder/insurance-calculator/actions/runs/38507908694), `verify` 완료·success |
+| Vercel 운영 배포 | 성공 | [배포 체크 BuFvwSBaDCdC8WTCG8BqoohVL2kt](https://vercel.com/yg-coders-projects/insurance-calculator/BuFvwSBaDCdC8WTCG8BqoohVL2kt), GitHub Production deployment 7056302759, 2026-10-14 12:46:13 KST success |
+| 운영 주소 응답·정정 안내 | 확인 | 2026-10-14 12:47:52 KST, [공개 5세대 계산기](https://xn--989a00a773aktdxo7a.kr/5th-generation-health-insurance-calculator) HTTP 200. 비중증 근골격계·일반 주사 면책 안내와 약제 용도 안내가 제공되고 종전 잘못된 안내 문구는 없음 |
+| 공개 화면 직접 조작 | 사용자 확인 대기 | 단건·다회의 면책, 용도 미선택(이전 금액 숨김 포함), 예외 약제 세 경로. 사용자가 수행하기로 한 브라우저 확인 결과를 받은 뒤 추가 기록 |
+
+운영 배포의 실제 산출물 주소는
+https://insurance-calculator-gdda1b7hd-yg-coders-projects.vercel.app 이다. 상태 확인은 AI가
+GitHub API와 운영 도메인의 응답을 대조하여 수행했다. 운영 응답·안내 확인은 브라우저의
+입력→결과 조작 검증을 대신하지 않는다. 로컬 브라우저 검증을 운영 검증으로 바꾸어
+기록하지 않았으며, 사용자 화면 확인이 남아 있어 전체 작업 완료로 판정하지 않는다.
+
+사용자가 운영 확인 중 404를 보고했다. 제공된 Chrome 주소와 화면을 대조한 결과, 질문의
+주소 끝에 문장 조각 `)에서`가 함께 붙어 잘못된 경로를 요청한 경우였다. AI가 같은 Chrome
+탭에서 사이트의 정상 5세대 링크로 이동했고, 올바른 주소와 계산기 화면이 열린 것을 직접
+확인했다. 이는 주소 전달 문제의 해결 기록이며 세 판정 경로의 운영 조작 확인은 별도로 남아 있다.

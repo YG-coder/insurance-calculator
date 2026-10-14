@@ -1,3 +1,6 @@
+import { enterHealthExpenses } from "./_uiExpenses";
+import { confirmNoPrior2021 } from "./_priorInputs";
+// 2026-10-14: 누적 지급보험금은 명시적으로 0을 입력한다. 기본값/빈칸 검사는 별도로 검증한다.
 // G-2 — 4세대 다회 **진료비** 입력의 엄격 검증.
 //
 // 종전 동작: 행 진료비가 맨 `<input>` + `digits()` 경로였다. `digits()`는 숫자가 아닌
@@ -40,7 +43,7 @@ const gen2021Amount = new Function(
 )() as (v: string) => number | null;
 
 const setup = (over: Record<string, unknown> = {}) => {
-  const h = mount(HealthCalcMulti2021 as unknown as () => unknown, names);
+  const h = mount(HealthCalcMulti2021 as unknown as () => unknown, names); enterHealthExpenses(h); confirmNoPrior2021(h);
   // ⚠ G-5에서 누적 금액이 **축별 Record**가 됐다. 기본값이 모든 축 "0"이라 주입하지 않는다.
   h.set("submitted", true);
   for (const [k, v] of Object.entries(over)) h.set(k, v);

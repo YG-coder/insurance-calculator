@@ -1,3 +1,4 @@
+import { enterHealthExpenses } from "./_uiExpenses";
 import { confirmNoPrior2026 } from "./_priorInputs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -7,7 +8,7 @@ import { calculateGen2026Item } from "../src/lib/insurance/engine/specialItem202
 import { mount, stateNamesFrom, type Harness, type Screen } from "./_uiRender";
 
 const setup = (Component: () => unknown, name: string, inputs: Record<string, unknown> = {}) => {
-  const h = mount(Component, stateNamesFrom(readFileSync(`src/components/calculators/${name}.tsx`, "utf8")));
+  const h = mount(Component, stateNamesFrom(readFileSync(`src/components/calculators/${name}.tsx`, "utf8"))); enterHealthExpenses(h);
   if (Component === Many) confirmNoPrior2026(h);
   for (const [key, value] of Object.entries(inputs)) h.set(key, value);
   return h;

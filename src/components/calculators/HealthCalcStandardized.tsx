@@ -139,13 +139,13 @@ const FACILITY_LABELS: Record<Facility, string> = {
 };
 
 let nextId = 1;
-const newRow = (): Row => ({ id: nextId++, amount: "300000", visit: "outpatient", facility: "clinic" });
+const newRow = (): Row => ({ id: nextId++, amount: "", visit: "outpatient", facility: "clinic" });
 
 export default function HealthCalcStandardized() {
   const [generation, setGeneration] = useState<StdGeneration>("2017");
   const [plan, setPlan] = useState<Plan | null>(null);
   const [rows, setRows] = useState<Row[]>([newRow()]);
-  const [quickAmount, setQuickAmount] = useState("300000");
+  const [quickAmount, setQuickAmount] = useState("");
   const [quickCount, setQuickCount] = useState("3");
   const [priorVisits, setPriorVisits] = useState("");
   const [priorPrescriptions, setPriorPrescriptions] = useState("");

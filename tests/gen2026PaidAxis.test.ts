@@ -1,3 +1,4 @@
+import { enterHealthExpenses } from "./_uiExpenses";
 import { confirmNoPrior2026 } from "./_priorInputs";
 // G-8 항목 X — 5세대 다회의 **누적 금액 입력을 보장축별로 분리**한다.
 //
@@ -48,7 +49,7 @@ const stripComments = (src: string) =>
 
 type Comp = () => unknown;
 const setup = () => {
-  const h = mount(HealthCalcMulti2026 as unknown as Comp, names); confirmNoPrior2026(h);
+  const h = mount(HealthCalcMulti2026 as unknown as Comp, names); enterHealthExpenses(h); confirmNoPrior2026(h);
   h.set("submitted", true);
   return h;
 };

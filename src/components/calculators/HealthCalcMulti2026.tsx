@@ -377,7 +377,7 @@ const GEN2026_GENERAL_AXIS_LABEL: Record<Gen2026GeneralAxis, string> = {
 const generalAxisLabel = (a: Gen2026GeneralAxis): string => GEN2026_GENERAL_AXIS_LABEL[a];
 
 export default function HealthCalcMulti2026() {
-  const [amounts, setAmounts] = useState(["300000", "300000"]);
+  const [amounts, setAmounts] = useState(["", ""]);
   // "" = 미선택. 일반 (1)(2)는 제5조①이 상해·질병 각 축으로 가입금액과 누적을 나누므로,
   //   원인을 고르지 않은 채 계산하면 사용자가 인식하지 못한 채 한쪽 축으로 계산된다.
   //   ⚠ 별도 보장종목은 상해·질병 합산이라 이 입력을 노출하지도, 요구하지도 않는다.

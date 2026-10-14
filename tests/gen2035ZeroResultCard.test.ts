@@ -1,4 +1,5 @@
-import { confirmNoPrior2026 } from "./_priorInputs";
+import { enterHealthExpenses } from "./_uiExpenses";
+import { confirmNoPrior2021, confirmNoPrior2026 } from "./_priorInputs";
 /**
  * G-35 — 정상 계산의 0원 결과를 감추지 않는다.
  *
@@ -60,6 +61,8 @@ const NAMES = Object.fromEntries(
 
 const setup = (key: keyof typeof PATHS, over: Record<string, unknown> = {}) => {
   const h = mount(COMP[key], NAMES[key]);
+  enterHealthExpenses(h);
+  if (NAMES[key].includes("priorPaidByAxis")) confirmNoPrior2021(h);
   if (NAMES[key].includes("priorInsuranceByAxis")) confirmNoPrior2026(h);
   if (NAMES[key].includes("priorPaid")) h.set("priorPaid", "0");
   h.set("submitted", true);

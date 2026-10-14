@@ -1,3 +1,6 @@
+import { enterHealthExpenses } from "./_uiExpenses";
+import { confirmNoPrior2021 } from "./_priorInputs";
+// 2026-10-14: 누적 지급보험금은 명시적으로 0을 입력한다. 기본값/빈칸 검사는 별도로 검증한다.
 // F-1 — 4세대 통원·특약 횟수 입력의 엄격 검증.
 //
 // ⚠ 새 규제 숫자를 만들지 않는다. 비급여 통원 100회와 특약 50회 한도는 그대로다.
@@ -358,7 +361,7 @@ console.log("\n[화면] 상태 전이");
   const MANUAL_LABEL = "계약해당일 기준 1년간 이미 받은 도수치료 등 치료 횟수";
   const INJ_LABEL = "계약해당일 기준 1년간 이미 받은 비급여 주사 횟수";
   const setup = (over: Record<string, unknown> = {}) => {
-    const h = mount(HealthCalcMulti2021 as unknown as () => unknown, names);
+    const h = mount(HealthCalcMulti2021 as unknown as () => unknown, names); enterHealthExpenses(h); confirmNoPrior2021(h);
     for (const [k, v] of Object.entries(over)) h.set(k, v);
     return h.render();
   };

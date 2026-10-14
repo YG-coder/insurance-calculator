@@ -1,3 +1,6 @@
+import { enterHealthExpenses } from "./_uiExpenses";
+import { confirmNoPrior2021 } from "./_priorInputs";
+// 2026-10-14: 누적 지급보험금은 명시적으로 0을 입력한다. 기본값/빈칸 검사는 별도로 검증한다.
 // G-6 — 4세대 다회의 **금액 입력 두 곳**을 엄격하게 검증한다.
 //   ① 증권상 연간 가입금액(일반 4축)  ② 누적기간 내 기존 지급보험금(일반 4축 + 특약 3축)
 //
@@ -41,7 +44,7 @@ const stripComments = (src: string) =>
 
 type Comp = () => unknown;
 const setup = (over: Record<string, unknown> = {}) => {
-  const h = mount(HealthCalcMulti2021 as unknown as Comp, names);
+  const h = mount(HealthCalcMulti2021 as unknown as Comp, names); enterHealthExpenses(h); confirmNoPrior2021(h);
   h.set("submitted", true);
   for (const [k, v] of Object.entries(over)) h.set(k, v);
   return h;
@@ -190,9 +193,9 @@ console.log("\n[빈 값] 종전 계약을 그대로 보존한다(새로 확정�
   typeInto(h, LIMIT, "100000");
   check("가입금액 100,000 → 한도 적용", screenOf(h).pay === "100,000원", String(screenOf(h).pay));
   typeInto(h, PAID, "");
-  check("지급보험금 빈 값 → 0원으로 계산(종전과 동일)", screenOf(h).pay === "100,000원", String(screenOf(h).pay));
+  check("지급보험금 빈 값 → 계산 보류", !screenOf(h).calculated, String(screenOf(h).pay));
   typeInto(h, PAID, "0");
-  check("지급보험금 빈 값과 명시적 0의 결과가 같다", screenOf(h).pay === "100,000원", String(screenOf(h).pay));
+  check("지급보험금 명시적 0이면 계산을 재개한다", screenOf(h).pay === "100,000원", String(screenOf(h).pay));
   typeInto(h, PAID, "50000");
   check("지급보험금이 잔여 한도를 줄인다", screenOf(h).pay === "50,000원", String(screenOf(h).pay));
   // ⚠ 공백만은 빈 값이 아니다 — 종전에는 둘의 결과가 같았다.
@@ -357,7 +360,7 @@ console.log("\n[소스] 파서·게이트·전달 형태");
   check("trim으로 정리해 통과시키지 않는다", !/trim\(\)/.test(src));
   check("빈 값만 기존 선택 입력이다",
     /const annualLimitNum = isRider \|\| annualLimit === "" \? undefined : gen2021Money\(annualLimit\);/.test(src)
-    && /const priorPaidNum = priorPaid === "" \? 0 : gen2021Money\(priorPaid\);/.test(src));
+    && /const priorPaidNum = gen2021Money\(priorPaid\);/.test(src));
   check("게이트에 두 축이 합류한다",
     /const gated = needsOutVisits \|\| needsRiderVisits \|\| needsAmounts \|\| limitInvalid \|\| paidInvalid;/.test(src));
   check("null을 배제해야 엔진 인자가 만들어진다(타입 단언 없음)",

@@ -1,3 +1,4 @@
+import { enterHealthExpenses } from "./_uiExpenses";
 // G-4 — 4·5세대 **단건** 진료비 입력의 엄격 검증.
 //
 // 종전 동작: 두 단건 모두 공용 `AmountInput` + `Number(amount.replace(/[^0-9]/g,"")) || 0`
@@ -62,7 +63,7 @@ const GOOD: [string, string, number][] = [
 
 type Comp = () => unknown;
 const setup = (C: Comp, names: string[], over: Record<string, unknown> = {}) => {
-  const h = mount(C, names);
+  const h = mount(C, names); enterHealthExpenses(h);
   h.set("submitted", true);
   for (const [k, v] of Object.entries(over)) h.set(k, v);
   return h;

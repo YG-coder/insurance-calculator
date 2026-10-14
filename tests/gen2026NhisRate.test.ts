@@ -1,3 +1,4 @@
+import { enterHealthExpenses } from "./_uiExpenses";
 // G-11B — 5세대 **단건**의 건강보험 본인부담률(%) 입력 계약과 라벨 연결.
 //
 // 대상은 `HealthCalc5th.tsx`의 `nhisRate` 한 필드와 그 라벨뿐이다.
@@ -57,7 +58,7 @@ const RATE = "med5-nhis-rate", HELP = "med5-nhis-rate-help";
 
 type Comp = () => unknown;
 const setup = (over: Record<string, unknown> = {}) => {
-  const h = mount(HealthCalc5th as unknown as Comp, names);
+  const h = mount(HealthCalc5th as unknown as Comp, names); enterHealthExpenses(h);
   h.set("submitted", true);
   for (const [k, v] of Object.entries(over)) h.set(k, v);
   return h;

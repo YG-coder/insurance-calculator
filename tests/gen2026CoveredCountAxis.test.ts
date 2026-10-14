@@ -1,3 +1,4 @@
+import { enterHealthExpenses } from "./_uiExpenses";
 import { confirmNoPrior2026 } from "./_priorInputs";
 // 안전성 커밋 — 5세대 다회 '이미 보상한 횟수'의 항목별 분리와 엄격 검증 (G-13A).
 //
@@ -92,7 +93,7 @@ const blockNotice = (h: H) => (h.render() as any).text.includes("계산기가 0�
 
 /** 중증 근골격계 · 통원 2행 · 승인 회차 기본값 · 치료행위 수 0. */
 const base = (): H => {
-  const h = mount(HealthCalcMulti2026, names); confirmNoPrior2026(h);
+  const h = mount(HealthCalcMulti2026, names); enterHealthExpenses(h); confirmNoPrior2026(h);
   pick(h, "치료유형", "musculoskeletal_esw");
   pick(h, "질환 구분", "critical");
   type(rawById(h, "gen2026-row-amount-0"), "300000");

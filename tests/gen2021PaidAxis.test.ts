@@ -1,3 +1,6 @@
+import { enterHealthExpenses } from "./_uiExpenses";
+import { confirmNoPrior2021 } from "./_priorInputs";
+// 2026-10-14: 누적 지급보험금은 명시적으로 0을 입력한다. 기본값/빈칸 검사는 별도로 검증한다.
 // G-5 — 4세대 다회의 **누적 금액 입력을 보장축별로 분리**한다.
 //
 // 종전 동작: "누적기간 내 기존 지급보험금"과 "증권상 연간 가입금액"이 각각 **하나의 상태**였다.
@@ -41,7 +44,7 @@ const RIDERS = ["manual_therapy", "injection", "mri"] as const;
 
 type Comp = () => unknown;
 const setup = (over: Record<string, unknown> = {}) => {
-  const h = mount(HealthCalcMulti2021 as unknown as Comp, names);
+  const h = mount(HealthCalcMulti2021 as unknown as Comp, names); enterHealthExpenses(h); confirmNoPrior2021(h);
   h.set("submitted", true);
   for (const [k, v] of Object.entries(over)) h.set(k, v);
   return h;
@@ -147,14 +150,14 @@ const goAxis = (h: ReturnType<typeof setup>, key: string) => go(h, ...SEL_OF[key
 // ── 축 구성 ──────────────────────────────────────────────────────────
 console.log("\n[축] 일반 4축 + 특약 3축, 두 입력은 서로 다른 상태다");
 {
-  const h = setup();
+  const h = mount(HealthCalcMulti2021 as unknown as Comp, names); enterHealthExpenses(h);
   const paid = h.get("priorPaidByAxis") as Record<string, string>;
   const limit = h.get("annualLimitByAxis") as Record<string, string>;
   check("지급보험금은 7축", Object.keys(paid).length === 7 && [...GENERAL, ...RIDERS].every((k) => k in paid),
     Object.keys(paid).join(","));
   check("가입금액은 일반 4축", Object.keys(limit).length === 4 && GENERAL.every((k) => k in limit),
     Object.keys(limit).join(","));
-  check("지급보험금 초기값은 모든 축 \"0\"", Object.values(paid).every((v) => v === "0"));
+  check("지급보험금 초기값은 모든 축 \"0\"", Object.values(paid).every((v) => v === ""));
   check("가입금액 초기값은 모든 축 빈 문자열", Object.values(limit).every((v) => v === ""));
   check("두 입력이 별도 상태다", paid !== (limit as unknown));
   check("축 키가 visit을 포함하지 않는다(입원·통원 합산)",
@@ -386,7 +389,7 @@ console.log("\n[무회귀] 파서·초기값·상한·기존 동작은 그대로
     !/priorAnnualRiderPaid: isRider \? money\.priorPaid : undefined,/.test(ui)
     && (ui.match(/priorAnnualRiderPaid: money\.priorPaid,/g) ?? []).length === 3
     && (ui.match(/priorAnnualInsurancePaid: money\.priorPaid,/g) ?? []).length === 3
-    && /const priorPaidNum = priorPaid === "" \? 0 : gen2021Money\(priorPaid\);/.test(ui));
+    && /const priorPaidNum = gen2021Money\(priorPaid\);/.test(ui));
   check("가입금액의 빈 값 미적용 정책 그대로",
     /const annualLimitNum = isRider \|\| annualLimit === "" \? undefined : gen2021Money\(annualLimit\);/.test(ui)
     && (ui.match(/annualCoverageLimit: money\.annualLimit,/g) ?? []).length === 3);

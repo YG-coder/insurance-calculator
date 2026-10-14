@@ -41,7 +41,7 @@ const gen2021SingleAmount = (v: string): number | null => {
 };
 
 export default function HealthCalc() {
-  const [amount, setAmount] = useState<string>("300000");
+  const [amount, setAmount] = useState<string>("");
   const [coverage, setCoverage] = useState<Coverage>("non_benefit");
   const [visit, setVisit] = useState<Visit>("outpatient");
   const [tier, setTier] = useState<Tier>("clinic");

@@ -1,3 +1,4 @@
+import { enterHealthExpenses } from "./_uiExpenses";
 // G-1 — 2·3세대 다회 **진료비** 입력의 엄격 검증.
 //
 // 종전 동작: 행 진료비와 빠른 채우기 금액이 공용 `AmountInput` → `onlyNum()` 경로였다.
@@ -50,7 +51,7 @@ const stripComments = (src: string) =>
   src.split("\n").filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join("\n");
 
 const setup = (over: Record<string, unknown> = {}) => {
-  const h = mount(HealthCalcStandardized as unknown as () => unknown, names);
+  const h = mount(HealthCalcStandardized as unknown as () => unknown, names); enterHealthExpenses(h);
   h.set("plan", "standard"); h.set("submitted", true); h.set("priorVisits", "0");
   for (const [k, v] of Object.entries(over)) h.set(k, v);
   return h;

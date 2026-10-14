@@ -1,3 +1,4 @@
+import { enterHealthExpenses } from "./_uiExpenses";
 // F-2 — 2·3세대 외래·처방전 횟수 입력의 엄격 검증.
 //
 // ⚠ 새 규제 숫자를 만들지 않는다. 외래 180회·처방전 180건 한도는 그대로다.
@@ -286,7 +287,7 @@ console.log("\n[화면] 상태 전이");
   const RX_LABEL = "계약해당일 기준 1년간 이미 사용한 처방전 건수";
   const row = (visit: string, facility: string) => ({ id: 1, amount: "300000", visit, facility });
   const setup = (over: Record<string, unknown> = {}) => {
-    const h = mount(HealthCalcStandardized as unknown as () => unknown, names); h.set("priorPaid", "0");
+    const h = mount(HealthCalcStandardized as unknown as () => unknown, names); enterHealthExpenses(h); h.set("priorPaid", "0");
     for (const [k, v] of Object.entries({ plan: "standard", submitted: true, ...over })) h.set(k, v);
     return h.render();
   };

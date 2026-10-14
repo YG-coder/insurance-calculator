@@ -1,3 +1,4 @@
+import { enterHealthExpenses } from "./_uiExpenses";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import Many from "../src/components/calculators/HealthCalcMulti2026";
@@ -25,7 +26,7 @@ const axes = [
   ["item_mri_non_critical", "mri", "non_critical", ""],
 ];
 for (const [axis, item, severity, cause] of axes) {
-  const h = fresh();
+  const h = fresh(); enterHealthExpenses(h);
   for (const [key, value] of Object.entries({ nonBenefitItem: item, severity, cause, injectionPurpose: "general",
     priorVisits: "0", priorOutDays: "0", priorActs: "0", priorCountByItem: { musculoskeletal_esw: "0", injection: "0" },
     rows: [{ amount: "300000", visit: "outpatient", tier: "" }], submitted: true })) h.set(key, value);
@@ -57,7 +58,7 @@ assert.equal(hospital.render().resultItems(), null, "MRI missing cumulative dedu
 hospital.set("priorPool", "0");
 assert(hospital.render().resultItems());
 
-const routed = fresh(); confirmNoPrior2026(routed);
+const routed = fresh(); confirmNoPrior2026(routed); enterHealthExpenses(routed);
 for (const [key, value] of Object.entries({ severity: "non_critical", nonBenefitItem: "injection", cause: "injury",
   nonCriticalInjectionPurpose: "orphan_drug", priorOutDays: "0", submitted: true })) routed.set(key, value);
 assert(routed.render().resultItems());
@@ -66,7 +67,7 @@ routed.set("priorInsuranceByAxis", { general_non_critical_injury: "0", general_n
 assert.equal(routed.render().resultItems(), null, "empty other axis must not inherit zero");
 routed.set("cause", "injury");
 assert(routed.render().resultItems(), "explicit entry survives axis switch");
-const benefit = fresh(); benefit.set("coverage", "benefit"); benefit.set("visit", "inpatient"); benefit.set("submitted", true);
+const benefit = fresh(); enterHealthExpenses(benefit); benefit.set("coverage", "benefit"); benefit.set("visit", "inpatient"); benefit.set("submitted", true);
 assert(benefit.render().resultItems(), "unused cumulative blanks must not block benefit");
 const room = fresh(); room.set("nonBenefitItem", "room_charge"); room.set("severity", "critical"); room.set("cause", "disease");
 room.set("rcRows", [{ amount: "600000", days: "3" }]); room.set("submitted", true);

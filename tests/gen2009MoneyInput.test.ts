@@ -1,3 +1,4 @@
+import { enterHealthExpenses } from "./_uiExpenses";
 // 2026-10-14 정책 갱신: 누적금액 기본값은 빈칸이며 미입력은 보류한다. 아래 과거 계약 중 빈칸→0 기대값을 교체했다.
 // G-7 — 2·3세대 다회의 **진료비가 아닌 금액 입력 두 곳**을 엄격하게 검증하고,
 //   행 구성에 쓰이지 않는 값은 엔진에 넘기지 않는다.
@@ -49,7 +50,7 @@ const stripComments = (src: string) =>
 
 type Comp = () => unknown;
 const setup = () => {
-  const h = mount(HealthCalcStandardized as unknown as Comp, names); h.set("priorPaid", "0");
+  const h = mount(HealthCalcStandardized as unknown as Comp, names); enterHealthExpenses(h); h.set("priorPaid", "0");
   h.set("submitted", true);
   h.set("plan", "standard");
   h.set("generation", "2017");

@@ -14,7 +14,8 @@ import Gap from "../src/components/calculators/CoverageGapCalc";
 import Premium from "../src/components/calculators/PremiumCalc";
 import Future from "../src/components/calculators/FuturePremiumCalc";
 import Guide from "../src/components/calculators/PolicyGenerationGuide";
-import { confirmNoPrior2026 } from "./_priorInputs";
+import { confirmNoPrior2021, confirmNoPrior2026 } from "./_priorInputs";
+import { enterHealthExpenses } from "./_uiExpenses";
 
 type State = Record<string, unknown>;
 export type CopyCase = { name: string; component: () => unknown; state: State };
@@ -32,8 +33,10 @@ export const COVERED_COMPONENTS = Object.keys(components).sort();
 export const CALCULATOR_FILES = readdirSync("src/components/calculators").filter(f => f.endsWith(".tsx")).map(f => f.replace(/\.tsx$/, "")).sort();
 export function renderCopyCase({ name, component, state }: CopyCase): string {
   const h = mount(component, stateNamesFrom(readFileSync(`src/components/calculators/${name.split("/")[0]}.tsx`, "utf8")));
+  if ([Health, Standardized, Single, Many, Many2021].some(candidate => candidate === component) && !/초기|미선택/.test(name)) enterHealthExpenses(h);
   // 결과 분기에서는 누적 입력을 명시한다. 초기·미선택·미입력은 빈칸 그대로 검사한다.
   if (component === Many && !/초기|미선택|누적 미입력/.test(name)) confirmNoPrior2026(h);
+  if (component === Many2021 && !/초기|미선택/.test(name)) confirmNoPrior2021(h);
   for (const [key, value] of Object.entries(state)) h.set(key, value);
   return h.renderMarkup();
 }

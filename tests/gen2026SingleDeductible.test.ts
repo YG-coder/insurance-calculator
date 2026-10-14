@@ -1,3 +1,4 @@
+import { enterHealthExpenses } from "./_uiExpenses";
 // G-11A — 5세대 **단건**의 두 금액 입력을 엄격하게 검증한다.
 //   ① `outpatientLimit`   / 통원 가입금액 (선택)
 //   ② `priorDeductible`   / 계약해당일 기준 1년간 이미 누적된 중증 비급여 입원 공제금액
@@ -51,7 +52,7 @@ const body = code.split("\n").filter((l) => !/^\s*(\/\/|\*|\/\*|\{\/\*)/.test(l)
 
 type Comp = () => unknown;
 const setup = (over: Record<string, unknown> = {}) => {
-  const h = mount(HealthCalc5th as unknown as Comp, names);
+  const h = mount(HealthCalc5th as unknown as Comp, names); enterHealthExpenses(h);
   h.set("submitted", true);
   for (const [k, v] of Object.entries(over)) h.set(k, v);
   return h;

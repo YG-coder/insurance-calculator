@@ -1,3 +1,4 @@
+import { enterHealthExpenses } from "./_uiExpenses";
 import { confirmNoPrior2026 } from "./_priorInputs";
 // 비중증 비급여 통원 — 연간 통원 100**일** 한도.
 //
@@ -481,7 +482,7 @@ console.log("\n[화면] 상태 전이");
 {
   const uiSrc = readFileSync("src/components/calculators/HealthCalcMulti2026.tsx", "utf8");
   const names = stateNamesFrom(uiSrc);
-  const fresh = () => { const h = mount(HealthCalcMulti2026 as unknown as () => unknown, names); confirmNoPrior2026(h); return h; };
+  const fresh = () => { const h = mount(HealthCalcMulti2026 as unknown as () => unknown, names); enterHealthExpenses(h); confirmNoPrior2026(h); return h; };
   const DAYS_LABEL = "계약해당일 기준 1년간 이미 사용한 통원일수";
   //   ⚠ has()는 앞부분 일치라 라벨 전문을 그대로 쓴다. 두 라벨은 '통원일수'/'통원 횟수'에서 갈린다.
   const VISITS_LABEL = "계약해당일 기준 1년간 이미 사용한 통원 횟수";

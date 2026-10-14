@@ -1,3 +1,4 @@
+import { enterHealthExpenses } from "./_uiExpenses";
 // G-12 — 2·3세대 다회의 **안내(notes) 범위**를 행 구성에 맞춘다.
 //
 // 대상은 두 곳뿐이다.
@@ -46,7 +47,7 @@ const engBody = stripComments(eng);
 
 // ── 화면 구동 (전부 실제 핸들러) ─────────────────────────────────────
 type Comp = () => unknown;
-const setup = () => { const h = mount(HealthCalcStandardized as unknown as Comp, names); h.set("priorPaid", "0"); h.set("submitted", true); return h; };
+const setup = () => { const h = mount(HealthCalcStandardized as unknown as Comp, names); enterHealthExpenses(h); h.set("priorPaid", "0"); h.set("submitted", true); return h; };
 type H = ReturnType<typeof setup>;
 const findIn = (el: unknown, t: string): { props: Record<string, unknown> } | null => {
   if (el === null || el === undefined || typeof el !== "object") return null;

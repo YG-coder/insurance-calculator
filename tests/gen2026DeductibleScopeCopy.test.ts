@@ -1,3 +1,4 @@
+import { enterHealthExpenses } from "./_uiExpenses";
 import { confirmNoPrior2026 } from "./_priorInputs";
 // G-14A — 500만원 공제금액 상한의 **적용 범위**를 화면에서 단정하지 않게 한다.
 //
@@ -40,7 +41,7 @@ const ui = readFileSync(UI_PATH, "utf8");
 const names = stateNamesFrom(ui);
 
 type Comp = () => unknown;
-const setup = () => { const h = mount(HealthCalcMulti2026 as unknown as Comp, names); confirmNoPrior2026(h); h.set("submitted", true); return h; };
+const setup = () => { const h = mount(HealthCalcMulti2026 as unknown as Comp, names); enterHealthExpenses(h); confirmNoPrior2026(h); h.set("submitted", true); return h; };
 type H = ReturnType<typeof setup>;
 // 판정 선택 변경 후에는 재계산을 눌러 금액·입력 검증을 대조한다. 초기화 전이는 gen2026UiState에서 별도 검증.
 const submit = (h: H) => {

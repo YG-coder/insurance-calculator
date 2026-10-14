@@ -1,3 +1,6 @@
+import { enterHealthExpenses } from "./_uiExpenses";
+import { confirmNoPrior2021 } from "./_priorInputs";
+// 2026-10-14: 누적 지급보험금은 명시적으로 0을 입력한다. 기본값/빈칸 검사는 별도로 검증한다.
 // F-3c — 4세대 도수 계열 보상 승인 구간(<표1> 주))을 반영한다.
 //
 // 종전 동작: 4세대 엔진은 연 50회·금액 한도만 적용하고, 승인 구간은 상수·분기·고지 어디에도
@@ -255,7 +258,7 @@ console.log("\n[UI] 도수에만 승인 select가 열리고 숨은 값은 전달
 {
   const names = stateNamesFrom(readFileSync("src/components/calculators/HealthCalcMulti2021.tsx", "utf8"));
   const setup = (state: Record<string, unknown> = {}) => {
-    const h = mount(HealthCalcMulti2021 as unknown as () => unknown, names);
+    const h = mount(HealthCalcMulti2021 as unknown as () => unknown, names); enterHealthExpenses(h); confirmNoPrior2021(h);
     for (const [k, v] of Object.entries(state)) h.set(k, v);
     return h.render();
   };

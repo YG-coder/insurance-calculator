@@ -1,3 +1,4 @@
+import { enterHealthExpenses } from "./_uiExpenses";
 import { confirmNoPrior2026 } from "./_priorInputs";
 // 5세대 상급병실료 차액.
 //
@@ -314,7 +315,7 @@ console.log("\n[가드] 소스·문구");
   const names = stateNamesFrom(uiSrc);
 
   /** 항상 새 화면에서 시작한다 — 남은 상태에 기대지 않기 위해서다. */
-  const fresh = () => { const h = mount(HealthCalcMulti2026 as unknown as () => unknown, names); confirmNoPrior2026(h); return h; };
+  const fresh = () => { const h = mount(HealthCalcMulti2026 as unknown as () => unknown, names); enterHealthExpenses(h); confirmNoPrior2026(h); return h; };
   const warnings = (scr: ReturnType<ReturnType<typeof fresh>["render"]>) =>
     scr.nodes.filter((n) => n.tag === "#NoticeBox" && n.props.variant === "warning").map((n) => n.text);
   const rcWarned = (scr: ReturnType<ReturnType<typeof fresh>["render"]>) =>

@@ -117,7 +117,7 @@ const btn = (active: boolean) =>
   }`;
 
 export default function HealthCalc5th() {
-  const [amount, setAmount] = useState<string>("300000");
+  const [amount, setAmount] = useState<string>("");
   const [coverage, setCoverage] = useState<Coverage>("non_benefit");
   const [visit, setVisit] = useState<Visit>("inpatient");
   // 급여 통원의 의료기관 종별. 최소공제가 갈리지만 종전부터 기본값이 있었고 이번에 바꾸지 않는다.

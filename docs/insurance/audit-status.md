@@ -2758,7 +2758,7 @@ insurancePay > 0  · actIndex 있음 → N회째
 | 원격 반영 | 성공 | `origin/main`에 `0df20f4` 정상 푸시. 강제 푸시 없음 |
 | GitHub CI | 성공 | 동일 SHA의 [CI run 38507908694](https://github.com/YG-coder/insurance-calculator/actions/runs/38507908694), `verify` 완료·success |
 | Vercel 운영 배포 | 성공 | [배포 체크 BuFvwSBaDCdC8WTCG8BqoohVL2kt](https://vercel.com/yg-coders-projects/insurance-calculator/BuFvwSBaDCdC8WTCG8BqoohVL2kt), GitHub Production deployment 7056302759, 2026-10-14 12:46:13 KST success |
-| 운영 주소 응답·정정 안내 | 확인 | 2026-10-14 12:47:52 KST, [공개 5세대 계산기](https://xn--989a00a773aktdxo7a.kr/5th-generation-health-insurance-calculator) HTTP 200. 비중증 근골격계·일반 주사 면책 안내와 약제 용도 안내가 제공되고 종전 잘못된 안내 문구는 없음 |
+| 운영 주소 응답·정정 안내 | 확인 | 2026-10-14 12:47:52 KST, [공개 5세대 계산기](https://보험계산기.kr/5th-generation-health-insurance-calculator) HTTP 200. 비중증 근골격계·일반 주사 면책 안내와 약제 용도 안내가 제공되고 종전 잘못된 안내 문구는 없음 |
 | 공개 화면 직접 조작 | 확인 기록 수신 | 단건·다회의 면책, 용도 미선택(이전 금액 숨김 포함), 항암제 예외 경로. 사용자가 전달한 아래 Claude의 Chrome 브라우저 조작 기록으로 확인 범위를 특정 |
 
 운영 배포의 실제 산출물 주소는
@@ -3080,3 +3080,20 @@ Codex 내장 브라우저의 수정 전 4세대 공개 페이지에서도 스크
   특정 확장을 원인으로 확정하지 않는다. 새 테스트 프로필에서 확장 활성 여부만 달리한 재현은 미실시다.
   과거 클라우드 Firebase 프로젝트를 확인하거나 삭제한 작업은 아니며, 앱 식별자나 개인 데이터는
   이 기록에 포함하지 않는다. 계산 코드와 배포 설정은 변경하지 않았다.
+
+
+## 2026-10-15 한글 도메인 표기 통일
+
+- 공통 기준 주소를 `https://보험계산기.kr`로 통일했다. 사이트맵·robots·canonical·공유 메타정보·
+  JSON-LD·문서 링크가 같은 표기를 사용한다. 페이지 이동의 상대경로와 기존 페이지 경로는 유지한다.
+- Next.js 16.3.1에서 `metadataBase`의 URL 객체가 한글 호스트를 퓨니코드로 재직렬화하는 것을
+  확인해 제거했다. URL 메타정보는 공통 기준 주소로 만든 완전한 절대 문자열을 사용한다.
+- 파일 기반 공유 이미지의 자동 URL 생성도 도메인을 변환하므로, 동일한 이미지 파일을
+  `public/opengraph-image.png`로 옮겨 기존 공개 경로를 유지하고 루트 head에서 이미지 URL을
+  직접 출력한다. 이미지 내용과 크기(1200×630)는 동일하다.
+- 빌드 결과 검사 `scripts/check-site-urls.mjs`를 `npm run build`에 연결했다.
+  사이트맵 URL·페이지별 canonical·공유 URL·공유 이미지의 주소/중복/누락과 생성 HTML 전체의
+  퓨니코드 재유입을 검사한다. 변경 전 빌드에서는 사이트맵의 퓨니코드 주소로 실패함을 확인했다.
+- 로컬: 기존 테스트 86개 통과. 최종 빌드에서 사이트맵 37개 공개 주소·HTML 39개·robots의
+  한글 표기 검사 통과. 계산 산식과 입력 정책은 변경하지 않았다.
+- 운영 반영·확인은 아래에 별도로 기록한다. 로컬 빌드 통과만으로 배포 완료로 처리하지 않는다.

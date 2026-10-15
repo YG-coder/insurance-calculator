@@ -239,6 +239,21 @@ tests/                        run-tests.mjs가 글롭으로 자동 탐색
 docs/insurance/               개발 문서 (아래 색인)
 ```
 
+## 도메인 표기
+
+사이트 기준 주소는 `src/lib/site.ts`의 `https://보험계산기.kr` 한 곳에서 관리합니다.
+페이지 이동에는 상대경로를 쓰며, 사이트맵·robots·canonical·Open Graph·JSON-LD에는
+같은 한글 절대주소를 출력합니다.
+
+메타정보 URL은 완전한 절대 문자열로 지정합니다. `metadataBase`를 URL 객체로 지정하면
+현재 Next.js에서 호스트가 퓨니코드로 재직렬화되므로 사용하지 않습니다.
+공유 이미지 원본은 `public/opengraph-image.png`에 있으며 기존 공개 경로를 유지합니다.
+이미지 메타태그는 루트 layout의 head에서 직접 출력해 한글 도메인을 보존합니다.
+
+`npm run build`는 빌드 뒤 `scripts/check-site-urls.mjs`를 실행해 사이트맵의 모든 공개 페이지와
+생성 HTML·robots를 검사합니다. canonical 일치, 공유 이미지 주소·중복·누락을 확인하며
+퓨니코드 표기가 다시 들어가면 빌드가 실패합니다.
+
 ## 개발 문서
 
 - [`docs/insurance/audit-status.md`](./docs/insurance/audit-status.md) — 감사 상태 기록, 설계 원칙, 남은 HOLD

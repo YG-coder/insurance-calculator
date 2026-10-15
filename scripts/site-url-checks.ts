@@ -39,6 +39,9 @@ export function inspectHtmlUrls(html: string, origin: string, expectedCanonical?
   const canonical: string[] = [];
   const openGraph: string[] = [];
   const images: string[] = [];
+  const ogImages: string[] = [];
+  const twitterImages: string[] = [];
+  const twitterCards: string[] = [];
   const refs: UrlReference[] = [];
   for (const [tag] of html.matchAll(/<link\b[^>]*>/gi)) {
     if (attribute(tag, "rel")?.split(/\s+/).includes("canonical")) {
@@ -50,6 +53,12 @@ export function inspectHtmlUrls(html: string, origin: string, expectedCanonical?
   }
   for (const [tag] of html.matchAll(/<meta\b[^>]*>/gi)) {
     const key = attribute(tag, "property") ?? attribute(tag, "name");
+    if (key === "twitter:card") {
+      const value = attribute(tag, "content");
+      assert(value, "twitter:card missing");
+      twitterCards.push(value);
+      continue;
+    }
     if (key !== "og:url" && key !== "og:image" && key !== "og:image:url"
         && key !== "og:image:secure_url" && key !== "twitter:image") continue;
     const value = attribute(tag, "content");
@@ -57,6 +66,8 @@ export function inspectHtmlUrls(html: string, origin: string, expectedCanonical?
     refs.push({ value, field: key });
     if (key === "og:url") openGraph.push(value);
     else images.push(value);
+    if (key === "og:image") ogImages.push(value);
+    if (key === "twitter:image") twitterImages.push(value);
   }
   let jsonLdBlocks = 0;
   let jsonLdUrlCount = 0;
@@ -72,7 +83,10 @@ export function inspectHtmlUrls(html: string, origin: string, expectedCanonical?
     assert.equal(canonical.length, 1, `${expectedCanonical}: canonical count`);
     assert.equal(new URL(canonical[0]).href, new URL(expectedCanonical).href, `${expectedCanonical}: canonical path`);
     assert.equal(openGraph.length, 1, `${expectedCanonical}: og:url count`);
+    assert(ogImages.length > 0, `${expectedCanonical}: og:image missing`);
+    assert(twitterImages.length > 0, `${expectedCanonical}: twitter:image missing`);
+    assert.deepEqual(twitterCards, ["summary_large_image"], `${expectedCanonical}: twitter:card`);
     assert(jsonLdBlocks > 0, `${expectedCanonical}: JSON-LD missing`);
   }
-  return { canonical, openGraph, images, jsonLdBlocks, jsonLdUrlCount };
+  return { canonical, openGraph, images, ogImages, twitterImages, twitterCards, jsonLdBlocks, jsonLdUrlCount };
 }

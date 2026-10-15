@@ -506,7 +506,9 @@ console.log("\n[커밋 D·E] 계산·화면 무변경 (기준 30dee21)");
     //   ⚠ `isPositiveInt`·`oneOf`·`showValue`·`rejected`와 값 목록 4종은 그대로다.
     //     `rejected()`의 안전 표시 계약(G-14D)도 그대로 재사용한다.
     "src/lib/insurance/engine/itemGuards.ts": "546f476a59ff0dd8ca85fd6e84c25eedeeaed80f63d042e1d662bdff0e1ebc94",
-    "src/app/5th-generation-health-insurance-calculator/page.tsx": "f4911800f4425117b0432602a6d43906868549cdaaeb1c4bdd5bd80e1af33902",
+    // 2026-10-15 공유 이미지 보완: socialMetadata import와 메타데이터 호출만 변경.
+    // 페이지 렌더 함수 본문은 직전 커밋과 동일함을 별도 대조하고 파일 해시를 갱신했다.
+    "src/app/5th-generation-health-insurance-calculator/page.tsx": "d53b0b35432488e2c8dca2a6ec16367391955a6f3a9d906c63b576dbb897e34e",
   };
   for (const [file, want] of Object.entries(FROZEN)) {
     const got = createHash("sha256").update(readFileSync(file)).digest("hex");

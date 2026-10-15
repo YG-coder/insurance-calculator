@@ -1,3 +1,4 @@
+import { socialMetadata } from "@/lib/metadata";
 import type { Metadata } from "next";
 import Link from "next/link";
 import HealthCalc5th from "@/components/calculators/HealthCalc5th";
@@ -14,11 +15,11 @@ export const metadata: Metadata = {
   description:
     "2026년 5월 출시된 5세대 실손보험 표준약관을 기준으로 급여·비급여(중증·비중증) 본인부담금과 보험 적용 금액을 계산하세요.",
   alternates: { canonical: URL },
-  openGraph: {
+  ...socialMetadata({
     title: "5세대 실손보험 자기부담금 계산기",
     description: "5세대 실손보험 기준 본인부담금·보험 적용 금액을 계산하세요.",
     url: URL,
-  },
+  }),
 };
 
 export default function Health5thPage() {

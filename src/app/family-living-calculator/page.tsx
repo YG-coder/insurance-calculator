@@ -1,3 +1,4 @@
+import { socialMetadata } from "@/lib/metadata";
 import type { Metadata } from "next";
 import FamilyLivingCalc from "@/components/calculators/FamilyLivingCalc";
 import NoticeBox from "@/components/NoticeBox";
@@ -11,11 +12,11 @@ export const metadata: Metadata = {
   description:
     "생애주기별로 월 생활비와 기간을 여러 구간으로 나눠 입력하면 총 유족 생활비를 계산합니다. 평균 생활비나 물가상승률 같은 추정값 없이, 입력한 금액만 합산합니다.",
   alternates: { canonical: URL },
-  openGraph: {
+  ...socialMetadata({
     title: "유족 생활비 계산기",
     description: "생활비 구간을 나눠 입력해 총 유족 생활비를 계산하세요.",
     url: URL,
-  },
+  }),
 };
 
 export default function FamilyLivingPage() {

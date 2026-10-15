@@ -1,3 +1,4 @@
+import { socialMetadata } from "@/lib/metadata";
 import type { Metadata } from "next";
 import JsonLd from "@/components/JsonLd";
 import Link from "next/link";
@@ -36,12 +37,12 @@ export async function generateMetadata({
     description: guide.description,
     keywords: [guide.keyword],
     alternates: { canonical: url },
-    openGraph: {
+    ...socialMetadata({
       type: "article",
       title: `${title} | ${SITE.name}`,
       description: guide.description,
       url,
-    },
+    }),
     robots: { index: true, follow: true },
   };
 }

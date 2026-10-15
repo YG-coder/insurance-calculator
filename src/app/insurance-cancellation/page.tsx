@@ -1,3 +1,4 @@
+import { socialMetadata } from "@/lib/metadata";
 import type { Metadata } from "next";
 import HubPage from "@/components/HubPage";
 import { SITE, HUBS } from "@/lib/site";
@@ -10,11 +11,11 @@ export const metadata: Metadata = {
   description:
     "보험 해지를 고민 중이라면 해지환급금, 앞으로 낼 보험료, 해지 vs 유지를 순서대로 계산하세요. 해지를 권유하지 않고, 판단에 필요한 숫자를 단계별로 안내합니다.",
   alternates: { canonical: URL },
-  openGraph: {
+  ...socialMetadata({
     title: "보험 해지 허브 — 해지 전 3단계 계산",
     description: "해지환급금 → 앞으로 낼 보험료 → 해지 vs 유지 순서로 계산하세요.",
     url: URL,
-  },
+  }),
 };
 
 export default function InsuranceCancellationHub() {

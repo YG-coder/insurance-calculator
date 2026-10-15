@@ -1,3 +1,4 @@
+import { socialMetadata } from "@/lib/metadata";
 import type { Metadata } from "next";
 import Link from "next/link";
 import HealthSurrenderCalc from "@/components/calculators/HealthSurrenderCalc";
@@ -12,11 +13,11 @@ export const metadata: Metadata = {
   description:
     "월 보험료와 납입 기간, 해지환급금을 입력하면 총 납입액·손해액·환급률·월평균 손실을 계산합니다. 남은 납입 보험료까지 비교해 해지 여부를 판단하세요.",
   alternates: { canonical: URL },
-  openGraph: {
+  ...socialMetadata({
     title: "해지환급금 계산기",
     description: "지금 해지하면 얼마를 돌려받고 얼마를 손해 보는지 계산하세요.",
     url: URL,
-  },
+  }),
 };
 
 export default function SurrenderValuePage() {

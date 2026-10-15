@@ -1,3 +1,4 @@
+import { socialMetadata } from "@/lib/metadata";
 import type { Metadata } from "next";
 import Link from "next/link";
 import FAQ from "@/components/FAQ";
@@ -14,16 +15,12 @@ export const metadata: Metadata = {
   title: { absolute: HOME_TITLE },
   description: HOME_DESCRIPTION,
   alternates: { canonical: SITE.url },
-  // ⚠ openGraph는 레이아웃 값을 통째로 대체한다(얕은 병합) — type·locale·siteName도 다시 적는다.
-  //   종전에는 홈 og:title이 레이아웃 기본값이라 <title>과 달랐다.
-  openGraph: {
+  ...socialMetadata({
     type: "website",
-    locale: "ko_KR",
     url: SITE.url,
-    siteName: SITE.name,
     title: HOME_TITLE,
     description: HOME_DESCRIPTION,
-  },
+  }),
 };
 
 /**

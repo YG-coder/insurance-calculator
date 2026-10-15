@@ -1,3 +1,4 @@
+import { socialMetadata } from "@/lib/metadata";
 import type { Metadata } from "next";
 import PremiumCalc from "@/components/calculators/PremiumCalc";
 import NoticeBox from "@/components/NoticeBox";
@@ -12,11 +13,11 @@ export const metadata: Metadata = {
   description:
     "월 소득과 월 보험료를 입력하면 소득에서 보험료가 차지하는 비중을 계산합니다. 적정 비중을 제시하지 않고, 입력한 값으로 비율만 계산합니다.",
   alternates: { canonical: URL },
-  openGraph: {
+  ...socialMetadata({
     title: "보험료 비중 계산기",
     description: "월 소득 대비 보험료 비중을 계산하세요.",
     url: URL,
-  },
+  }),
 };
 
 export default function PremiumPage() {

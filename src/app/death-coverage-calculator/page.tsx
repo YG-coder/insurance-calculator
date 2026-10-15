@@ -1,3 +1,4 @@
+import { socialMetadata } from "@/lib/metadata";
 import type { Metadata } from "next";
 import Link from "next/link";
 import DeathCoverageCalc from "@/components/calculators/DeathCoverageCalc";
@@ -12,11 +13,11 @@ export const metadata: Metadata = {
   description:
     "월 생활비와 보장 기간, 부채, 기존 사망보험금과 자산을 입력하면 필요한 사망보장금액을 계산합니다. 적정 보험금을 추천하지 않고, 유족 필요자금과 준비된 자금의 차이만 계산합니다.",
   alternates: { canonical: URL },
-  openGraph: {
+  ...socialMetadata({
     title: "사망보장 계산기",
     description: "유족 필요자금과 준비된 자금의 차이로 필요 사망보장금액을 계산하세요.",
     url: URL,
-  },
+  }),
 };
 
 export default function DeathCoveragePage() {

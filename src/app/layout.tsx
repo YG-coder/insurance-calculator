@@ -1,3 +1,4 @@
+import { socialMetadata } from "@/lib/metadata";
 import type { Metadata } from "next";
 import JsonLd from "@/components/JsonLd";
 import "./globals.css";
@@ -24,14 +25,12 @@ export const metadata: Metadata = {
         "보험료 비교",
     ],
 
-    openGraph: {
+    ...socialMetadata({
         type: "website",
-        locale: "ko_KR",
         url: SITE.url,
-        siteName: SITE.name,
         title: `${SITE.name} - 실손·보장·보험 의사결정 무료 계산`,
         description: SITE.description,
-    },
+    }),
 
     robots: {
         index: true,

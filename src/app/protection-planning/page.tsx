@@ -1,3 +1,4 @@
+import { socialMetadata } from "@/lib/metadata";
 import type { Metadata } from "next";
 import HubPage from "@/components/HubPage";
 import { SITE, HUBS } from "@/lib/site";
@@ -10,11 +11,11 @@ export const metadata: Metadata = {
   description:
     "유족 생활비, 사망보장 필요액, 보장 공백을 순서대로 계산해 필요한 보장에서 얼마가 부족한지 확인하세요. 적정 금액을 추천하지 않고, 입력한 값으로만 계산합니다.",
   alternates: { canonical: URL },
-  openGraph: {
+  ...socialMetadata({
     title: "보장 설계 허브 — 보장 부족분 3단계 계산",
     description: "유족 생활비 → 사망보장 → 보장 공백 순서로 계산하세요.",
     url: URL,
-  },
+  }),
 };
 
 export default function ProtectionPlanningHub() {

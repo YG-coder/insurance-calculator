@@ -1,3 +1,4 @@
+import { socialMetadata } from "@/lib/metadata";
 import type { Metadata } from "next";
 import Link from "next/link";
 import CoverageGapCalc from "@/components/calculators/CoverageGapCalc";
@@ -12,11 +13,11 @@ export const metadata: Metadata = {
   description:
     "필요 보장금액과 현재 보장금액을 입력하면 부족하거나 초과하는 금액을 계산합니다. 적정 보장금액을 추천하지 않고, 두 금액의 차이만 계산합니다.",
   alternates: { canonical: URL },
-  openGraph: {
+  ...socialMetadata({
     title: "보장 공백 계산기",
     description: "필요 보장금액과 현재 보장의 차이(부족/초과)를 계산하세요.",
     url: URL,
-  },
+  }),
 };
 
 export default function CoverageGapPage() {

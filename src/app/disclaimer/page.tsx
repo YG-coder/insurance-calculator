@@ -1,3 +1,4 @@
+import { socialMetadata } from "@/lib/metadata";
 import type { Metadata } from "next";
 import JsonLd from "@/components/JsonLd";
 import NoticeBox from "@/components/NoticeBox";
@@ -11,12 +12,12 @@ export const metadata: Metadata = {
   description:
     "보험계산기 사이트의 계산 결과는 이용자가 입력한 값을 기준으로 한 참고용 정보입니다. 실제 보험료·보험금과의 차이, 정보 활용 범위, 면책 범위, 책임의 한계를 안내합니다.",
   alternates: { canonical: PAGE_URL },
-  openGraph: {
+  ...socialMetadata({
     title: "면책사항 | 보험계산기",
     description:
       "보험계산기 사이트의 계산 결과 활용 범위와 책임의 한계를 안내합니다.",
     url: PAGE_URL,
-  },
+  }),
   robots: {
     index: true,
     follow: true,

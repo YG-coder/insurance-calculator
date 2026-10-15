@@ -1,3 +1,4 @@
+import { socialMetadata } from "@/lib/metadata";
 import type { Metadata } from "next";
 import CarCalc from "@/components/calculators/CarCalc";
 import NoticeBox from "@/components/NoticeBox";
@@ -12,11 +13,11 @@ export const metadata: Metadata = {
   description:
     "여러 보험사에서 받은 연간 자동차보험 견적을 입력하면 최저·최고·차액과 연간 차액을 12개월로 나눈 월 환산 차액을 비교합니다. 보험료를 추정하지 않고, 입력한 견적만 비교합니다.",
   alternates: { canonical: URL },
-  openGraph: {
+  ...socialMetadata({
     title: "자동차보험 견적 비교 계산기",
     description: "받은 자동차보험 견적들의 최저·최고·차액을 비교하세요.",
     url: URL,
-  },
+  }),
 };
 
 export default function CarPage() {

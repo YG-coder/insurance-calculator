@@ -1,3 +1,4 @@
+import { socialMetadata } from "@/lib/metadata";
 import type { Metadata } from "next";
 import HubPage from "@/components/HubPage";
 import { SITE, HUBS } from "@/lib/site";
@@ -10,11 +11,11 @@ export const metadata: Metadata = {
   description:
     "4세대·5세대 실손보험 자기부담금을 계산하고, 세대별 차이와 청구 방법까지 한 흐름으로 이해하세요. 공개된 자기부담률을 그대로 적용해 계산합니다.",
   alternates: { canonical: URL },
-  openGraph: {
+  ...socialMetadata({
     title: "실손보험 허브",
     description: "실손 자기부담금 계산 → 세대 차이 → 청구 방법을 한 흐름으로.",
     url: URL,
-  },
+  }),
 };
 
 export default function SilsonHub() {

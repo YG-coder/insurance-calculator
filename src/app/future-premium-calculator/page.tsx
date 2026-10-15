@@ -1,3 +1,4 @@
+import { socialMetadata } from "@/lib/metadata";
 import type { Metadata } from "next";
 import Link from "next/link";
 import FuturePremiumCalc from "@/components/calculators/FuturePremiumCalc";
@@ -12,11 +13,11 @@ export const metadata: Metadata = {
   description:
     "월 보험료와 남은 납입 기간을 입력하면 앞으로 낼 총 보험료, 완납 시 총 납입액, 앞으로 부담 비중을 계산합니다. 보험을 끝까지 유지할 때의 총비용을 확인하세요.",
   alternates: { canonical: URL },
-  openGraph: {
+  ...socialMetadata({
     title: "앞으로 낼 보험료 계산기",
     description: "보험을 끝까지 유지하면 앞으로 얼마를 더 내야 하는지 계산하세요.",
     url: URL,
-  },
+  }),
 };
 
 export default function FuturePremiumPage() {

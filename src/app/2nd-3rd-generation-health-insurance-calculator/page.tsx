@@ -1,3 +1,4 @@
+import { socialMetadata } from "@/lib/metadata";
 import type { Metadata } from "next";
 import Link from "next/link";
 import HealthCalcStandardized from "@/components/calculators/HealthCalcStandardized";
@@ -13,11 +14,11 @@ export const metadata: Metadata = {
   description:
     "2009년 10월~2021년 6월 가입한 표준화 실손(2세대)·착한실손(3세대)의 본인부담금과 보험 적용 금액을 계산합니다. 금융감독원 보험업감독업무시행세칙 [별표 15] 표준약관 원문을 근거로 합니다.",
   alternates: { canonical: URL },
-  openGraph: {
+  ...socialMetadata({
     title: "2·3세대 실손보험 자기부담금 계산기",
     description: "표준화 실손(2세대)·착한실손(3세대) 기준 본인부담금을 계산하세요.",
     url: URL,
-  },
+  }),
 };
 
 export default function Health2nd3rdPage() {

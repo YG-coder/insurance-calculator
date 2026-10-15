@@ -247,11 +247,15 @@ docs/insurance/               개발 문서 (아래 색인)
 
 검색·공유 메타정보는 `metadataBase`와 Next.js 기본 처리를 사용합니다.
 공유 이미지 원본은 `src/app/opengraph-image.png`이며 같은 공개 경로에서 제공됩니다.
+페이지가 `openGraph`를 정의할 때는 `src/lib/metadata.ts`의 `socialMetadata()`로 이미지와
+기본 속성을 함께 넣습니다. Twitter에도 이미지와 `summary_large_image` 카드를 명시합니다.
 
 `npm run build`는 빌드 뒤 `scripts/check-site-urls.ts`를 실행합니다. canonical·Open Graph·
 사이트맵·robots·JSON-LD의 `url`/`@id`를 실제 생성 결과에서 모아 URL 파서로 정규화한 뒤,
 기준 origin과 대조합니다. canonical은 사이트맵의 해당 페이지 경로까지 일치해야 하며,
-공유 이미지 URL도 절대 URL이어야 합니다. 한글/퓨니코드 표기 자체는 실패 조건이 아닙니다.
+사이트맵의 공개 페이지마다 `og:image`·`twitter:image`와 `summary_large_image` 카드가
+필수이며, 이미지 URL도 기준 origin의 절대 URL이어야 합니다.
+한글/퓨니코드 표기 자체는 실패 조건이 아닙니다.
 
 호스트나 Origin을 비교하는 코드를 추가할 때는 동일한 방식으로 정규화한 값을 비교합니다.
 한글 문자열 리터럴과 요청 호스트를 직접 비교하지 않으며, 헤더·호스트 매칭 설정에는 ASCII 정본을

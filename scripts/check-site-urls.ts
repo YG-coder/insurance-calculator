@@ -49,4 +49,4 @@ function inspect(directory: string) {
 inspect(output);
 assert(imageCount > 0, "공유 이미지의 절대 URL이 없습니다.");
 assert(jsonLdUrlCount > 0, "JSON-LD의 사이트 URL이 없습니다.");
-console.log(`[주소 검사] 공개 ${urls.length}개·HTML ${htmlCount}개·JSON-LD URL ${jsonLdUrlCount}개·공유 이미지 URL ${imageCount}개 origin 일치`);
+console.log(`[주소 검사] 공개 ${urls.length}개 이미지 필수 확인·HTML ${htmlCount}개·JSON-LD URL ${jsonLdUrlCount}개·공유 이미지 URL ${imageCount}개 origin 일치`);

@@ -1,3 +1,4 @@
+import { socialMetadata } from "@/lib/metadata";
 import type { Metadata } from "next";
 import CancelVsKeepCalc from "@/components/calculators/CancelVsKeepCalc";
 import NoticeBox from "@/components/NoticeBox";
@@ -11,11 +12,11 @@ export const metadata: Metadata = {
   description:
     "지금 해지하면 받는 해지환급금과, 그대로 유지하면 앞으로 낼 보험료를 나란히 보여줍니다. 어느 쪽이 유리한지 판단하지 않고 금전적인 두 금액만 비교합니다.",
   alternates: { canonical: URL },
-  openGraph: {
+  ...socialMetadata({
     title: "보험 해지 vs 유지 계산기",
     description: "해지환급금과 앞으로 낼 보험료를 나란히 비교하세요.",
     url: URL,
-  },
+  }),
 };
 
 export default function CancelVsKeepPage() {

@@ -1,3 +1,4 @@
+import { socialMetadata } from "@/lib/metadata";
 import type { Metadata } from "next";
 import JsonLd from "@/components/JsonLd";
 import Link from "next/link";
@@ -16,13 +17,13 @@ export const metadata: Metadata = {
   description:
     "실손보험·보험료·자동차보험 관련 가이드 모음. 청구 방법, 세대별 차이, 할인 특약, 보험료 절약법 등 실용적인 보험 정보를 정리했습니다.",
   alternates: { canonical: PAGE_URL },
-  openGraph: {
+  ...socialMetadata({
     type: "website",
     title: "보험 가이드 | 보험계산기",
     description:
       "실손·보험료·자동차보험에 대한 실용 가이드를 한곳에 모았습니다.",
     url: PAGE_URL,
-  },
+  }),
   robots: { index: true, follow: true },
 };
 

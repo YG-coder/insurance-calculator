@@ -3135,3 +3135,19 @@ Codex 내장 브라우저의 수정 전 4세대 공개 페이지에서도 스크
 - 로컬: 새 회귀 사례를 포함한 테스트 87개, 린트, 프로덕션 빌드(타입 검사 포함) 통과.
   사이트맵 37개·HTML 39개·JSON-LD URL 80개·공유 이미지 URL 10개의 정규화한 origin 일치 확인.
 - 운영 반영 결과는 아래에 별도로 기록한다.
+
+### 운영 확인 (주소 정규화 정책)
+
+- 배포 코드: `eefe5457d84cc5d656bf9a70236c60347fa5d46c`, `main` 정상 푸시.
+- GitHub CI: [38676773533](https://github.com/YG-coder/insurance-calculator/actions/runs/38676773533),
+  전체 테스트·보험 엔진 커버리지 기준·빌드 및 새 origin 일치 검사 모두 success.
+- Vercel: Production 배포 `7083138280`, success (2026-10-15 12:32:44 KST).
+- 직접 확인: Codex의 공개 HTTP 응답 및 HTML/XML 원문 대조,
+  2026-10-15 12:34:09 KST.
+- 사이트맵 37개 공개 주소가 모두 HTTP 200. canonical은 해당 사이트맵 주소와 정규화 후
+  전체 주소가 일치하고, og:url·robots의 Host/Sitemap·JSON-LD URL 79개는 정본 origin과 일치한다.
+- 공유 이미지는 Next.js 파일 기반 처리로 생성된 쿼리 포함 절대 URL이며, 기준 origin과 일치한다.
+  해당 이미지가 HTTP 200·image/png로 응답하고 원본 이미지와 파일 해시가 같음을 확인했다.
+- 소개 페이지의 표시용 도메인·문의 주소는 한글로 유지된다. 한글 도메인으로 요청한
+  사이트맵도 HTTP 200이며 동일 origin으로 처리됨을 확인했다.
+- 주소 정본·표시 분리 보완은 로컬 검사·코드 배포·위 운영 확인까지 완료했다.

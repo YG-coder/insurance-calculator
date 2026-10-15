@@ -3180,3 +3180,24 @@ Codex 내장 브라우저의 수정 전 4세대 공개 페이지에서도 스크
 - 전체 회귀 검사 및 운영 배포 결과는 아래에 이어 기록한다.
 - 로컬 최종 검증: 전체 87개 테스트 및 CI 보험 엔진 검증 기준, 린트, 프로덕션 빌드
   (타입 검사·페이지별 이미지 필수 검사 포함) 통과.
+
+
+### 운영 확인 (공개 페이지별 공유 이미지)
+
+- 배포 코드: `0d7047891b1bcdc21d95cc5efaf2f32ac8da15f2`, `main` 정상 푸시.
+- Vercel: Production 배포 `7083497580`, success (2026-10-15 13:00:40 KST).
+- 직접 확인: Codex의 공개 HTTP 응답 및 HTML/XML 원문 대조,
+  2026-10-15 13:01:08 KST.
+- [사이트맵](https://보험계산기.kr/sitemap.xml)의 공개 37개 페이지 모두 HTTP 200이며,
+  `og:image` 37/37·`twitter:image` 37/37·`summary_large_image` 37/37을 확인했다.
+- 각 canonical은 해당 사이트맵 URL과 정규화 후 전체 주소가 일치하고,
+  og:url·이미지 URL·robots Host/Sitemap·JSON-LD URL 79개는 기준 origin과 일치한다.
+- 공유 이미지 `/opengraph-image.png`가 HTTP 200·image/png로 응답하고,
+  원본 이미지 파일과 SHA-256이 일치한다. 이미지 경로와 원본 내용은 유지했다.
+- 대표 4세대 계산기와 실손 세대 가이드에 Twitterbot·facebookexternalhit User-Agent로
+  요청한 4건에서도 필수 이미지·카드 태그를 확인했다. 이는 HTTP/HTML 확인이며,
+  SNS 앱 자체의 카드 렌더링을 확인한 것은 아니다.
+- 표시용 소개 도메인·문의 주소는 한글이며, 한글 사이트맵 주소 요청도 HTTP 200이다.
+- GitHub CI: [38679171486](https://github.com/YG-coder/insurance-calculator/actions/runs/38679171486),
+  전체 테스트·보험 엔진 검증 기준·빌드 및 공개 페이지별 이미지 필수 검사 모두 success.
+- 공유 이미지 보완은 코드 배포와 위 운영 HTTP 확인까지 완료했다.

@@ -1,6 +1,7 @@
 export const SITE = {
   name: "보험계산기",
-  url: "https://보험계산기.kr",
+  url: "https://xn--989a00a773aktdxo7a.kr",
+  displayUrl: "https://보험계산기.kr",
   description:
     "해지환급금·사망보장·보장 공백부터 실손보험 자기부담금까지, 보험 의사결정에 필요한 숫자를 직접 계산하세요. 추정값 없이 입력한 값으로 계산하는 참고용 보험 계산기입니다.",
 };

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { SITE } from "@/lib/site";
 
 const URL = `${SITE.url}/about`;
+const DISPLAY_DOMAIN = SITE.displayUrl.replace(/^https:\/\//, "");
 
 export const metadata: Metadata = {
   title: "사이트 소개",
@@ -60,7 +61,7 @@ export default function AboutPage() {
             가입 결정은 이용자 본인의 판단과 책임으로 이루어져야 합니다.
           </p>
           <p>
-            보험계산기.kr의 계산 결과는 참고용 정보이며, 실제 보험 가입·청구·보상 판단은 반드시 보험사
+            {DISPLAY_DOMAIN}의 계산 결과는 참고용 정보이며, 실제 보험 가입·청구·보상 판단은 반드시 보험사
             약관과 전문가 상담을 통해 확인해야 합니다.
           </p>
 
@@ -77,7 +78,7 @@ export default function AboutPage() {
 
           <h2>문의</h2>
           <p>
-            사이트 이용 중 오류나 개선 제안이 있으시면 <strong>support@보험계산기.kr</strong>로 연락해
+            사이트 이용 중 오류나 개선 제안이 있으시면 <strong>support@{DISPLAY_DOMAIN}</strong>로 연락해
             주시기 바랍니다. 보내주신 의견은 사이트 개선에 큰 도움이 됩니다.
           </p>
         </section>

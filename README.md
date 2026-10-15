@@ -241,18 +241,21 @@ docs/insurance/               개발 문서 (아래 색인)
 
 ## 도메인 표기
 
-사이트 기준 주소는 `src/lib/site.ts`의 `https://보험계산기.kr` 한 곳에서 관리합니다.
-페이지 이동에는 상대경로를 쓰며, 사이트맵·robots·canonical·Open Graph·JSON-LD에는
-같은 한글 절대주소를 출력합니다.
+기준 주소는 `src/lib/site.ts`의 `SITE.url` 한 곳에서 관리하며 퓨니코드 ASCII origin을 사용합니다.
+사람에게 보여주는 한글 주소는 `SITE.displayUrl`로 구분하고, 두 주소의 정규화한 origin이 같은지
+빌드와 회귀 검사에서 확인합니다. 페이지 이동에는 상대경로를 사용합니다.
 
-메타정보 URL은 완전한 절대 문자열로 지정합니다. `metadataBase`를 URL 객체로 지정하면
-현재 Next.js에서 호스트가 퓨니코드로 재직렬화되므로 사용하지 않습니다.
-공유 이미지 원본은 `public/opengraph-image.png`에 있으며 기존 공개 경로를 유지합니다.
-이미지 메타태그는 루트 layout의 head에서 직접 출력해 한글 도메인을 보존합니다.
+검색·공유 메타정보는 `metadataBase`와 Next.js 기본 처리를 사용합니다.
+공유 이미지 원본은 `src/app/opengraph-image.png`이며 같은 공개 경로에서 제공됩니다.
 
-`npm run build`는 빌드 뒤 `scripts/check-site-urls.mjs`를 실행해 사이트맵의 모든 공개 페이지와
-생성 HTML·robots를 검사합니다. canonical 일치, 공유 이미지 주소·중복·누락을 확인하며
-퓨니코드 표기가 다시 들어가면 빌드가 실패합니다.
+`npm run build`는 빌드 뒤 `scripts/check-site-urls.ts`를 실행합니다. canonical·Open Graph·
+사이트맵·robots·JSON-LD의 `url`/`@id`를 실제 생성 결과에서 모아 URL 파서로 정규화한 뒤,
+기준 origin과 대조합니다. canonical은 사이트맵의 해당 페이지 경로까지 일치해야 하며,
+공유 이미지 URL도 절대 URL이어야 합니다. 한글/퓨니코드 표기 자체는 실패 조건이 아닙니다.
+
+호스트나 Origin을 비교하는 코드를 추가할 때는 동일한 방식으로 정규화한 값을 비교합니다.
+한글 문자열 리터럴과 요청 호스트를 직접 비교하지 않으며, 헤더·호스트 매칭 설정에는 ASCII 정본을
+사용합니다. 현재 이 저장소에는 별도 호스트 비교·CORS·미들웨어 설정이 없습니다.
 
 ## 개발 문서
 

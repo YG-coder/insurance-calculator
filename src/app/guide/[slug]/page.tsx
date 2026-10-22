@@ -8,6 +8,7 @@ import NoticeBox from "@/components/NoticeBox";
 import { SITE } from "@/lib/site";
 import {
   CLUSTER_META,
+  GUIDE_REVIEW_LABEL,
   getGuide,
   publishedGuides,
   siblingGuides,
@@ -98,6 +99,9 @@ export default async function GuidePage({
     mainEntityOfPage: url,
     author: { "@type": "Organization", name: SITE.name },
     publisher: { "@type": "Organization", name: SITE.name },
+    ...(g.sources && g.sources.length > 0
+      ? { citation: g.sources.map((s) => s.url) }
+      : {}),
   };
 
   const faqJsonLd =
@@ -179,6 +183,54 @@ export default async function GuidePage({
           <FAQ items={g.faqs} />
         </section>
       )}
+
+      {/* 검수 상태·참고 자료 — 본문이 있다는 사실과 검수는 별개다(guides.ts GuideReview). */}
+      <section className="mt-12" aria-labelledby="guide-review-heading">
+        <h2 id="guide-review-heading" className="text-xl font-bold text-slate-900 mb-4">
+          검수 상태와 참고 자료
+        </h2>
+        {g.review.status === "pending" ? (
+          <NoticeBox variant="warning">
+            <strong>{GUIDE_REVIEW_LABEL.pending}</strong> — 이 글의 수치와 기준은 아직 공식 자료 원문과
+            대조하지 않았습니다. 가입하신 보험사의 약관과 금융감독원 안내를 기준으로 확인하세요.
+            {g.review.unchecked && (
+              <>
+                {" "}
+                <span className="block mt-2">대조하지 않은 범위: {g.review.unchecked}</span>
+              </>
+            )}
+          </NoticeBox>
+        ) : (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-700 space-y-2">
+            <p>
+              <strong>{GUIDE_REVIEW_LABEL[g.review.status]}</strong>
+              {g.review.checkedAt && <> · 확인일 {g.review.checkedAt}</>}
+            </p>
+            {g.review.scope && <p>확인한 범위: {g.review.scope}</p>}
+            {g.review.unchecked && <p>확인하지 않은 범위: {g.review.unchecked}</p>}
+          </div>
+        )}
+        {g.sources && g.sources.length > 0 && (
+          <ul className="mt-4 space-y-3 text-sm text-slate-700">
+            {g.sources.map((src) => (
+              <li key={src.url} className="rounded-lg border border-slate-100 bg-white p-4">
+                <a
+                  href={src.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-semibold text-brand-700 underline underline-offset-2 hover:text-brand-900"
+                >
+                  {src.title}
+                </a>
+                <div className="mt-1 text-xs text-slate-500">
+                  {src.issuer} · 대조일 {src.checkedAt}
+                </div>
+                {src.locator && <div className="mt-1 text-xs text-slate-600">{src.locator}</div>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       {/* 면책 */}
       <div className="mt-10">

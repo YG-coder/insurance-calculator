@@ -37,25 +37,26 @@ export default function CancelVsKeepCalc() {
         <button type="button" className="btn-primary w-full sm:w-auto disabled:opacity-40 disabled:cursor-not-allowed" disabled={missing} onClick={() => setSubmitted(true)}>
           두 금액 나란히 보기
         </button>
-        {missing && <p className="mt-2 text-xs text-slate-500">두 금액을 모두 입력해 주세요. 0원은 숫자 0으로 입력할 수 있습니다.</p>}
+        {missing && <p role="status" aria-live="polite" className="mt-2 text-xs text-slate-500">두 금액을 모두 입력해 주세요. 0원은 숫자 0으로 입력할 수 있습니다.</p>}
       </div>
 
-      {submitted && (
+      {submitted && !missing && (
         <div className="mt-8 space-y-4">
           {result.status === "NEED_INPUT" ? (
             <NoticeBox variant="info">{result.notes[0]}</NoticeBox>
           ) : (
             <>
+              <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">비교 결과. 현재 해지환급금 {won(result.surrenderValue ?? 0)}, 앞으로 낼 보험료 {won(result.futurePremium ?? 0)}.</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="rounded-2xl border border-slate-200 bg-white p-6">
                   <p className="text-sm font-semibold text-slate-500 mb-1">지금 해지하면</p>
                   <p className="text-sm text-slate-600 mb-2">현재 받을 수 있는 해지환급금</p>
-                  <p className="text-2xl font-bold text-slate-900">{won(result.surrenderValue ?? 0)}</p>
+                  <p className="break-all text-2xl font-bold text-slate-900">{won(result.surrenderValue ?? 0)}</p>
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-white p-6">
                   <p className="text-sm font-semibold text-slate-500 mb-1">그대로 유지하면</p>
                   <p className="text-sm text-slate-600 mb-2">앞으로 추가로 납입할 보험료</p>
-                  <p className="text-2xl font-bold text-slate-900">{won(result.futurePremium ?? 0)}</p>
+                  <p className="break-all text-2xl font-bold text-slate-900">{won(result.futurePremium ?? 0)}</p>
                 </div>
               </div>
 

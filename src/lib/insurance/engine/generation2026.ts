@@ -1,3 +1,4 @@
+import { roundedRateAmount, rateAmountExceeds } from "../common/exactMoney";
 import { routeOfGen2026Item, excludedSingle2026, GEN2026_NONCRITICAL_INJECTION_EXCEPTION_NOTE } from "./itemRouting2026";
 // 5세대 실손 엔진 (Engine Core). v0.4 게이팅 기준.
 //   - 값이 박힌 계산은 금융위 원문 직독 A 확정 항목만.
@@ -45,7 +46,7 @@ function ok(
   // 값을 넣지 않는 것으로 끝내지 않고 **키 자체를 만들지 않는다**.
   deductibleApplied?: number,
 ): CalcResult {
-  const r: CalcResult = { status: "OK", generation: "2026", amount, ownPay, insurancePay, rateBased: Math.round(amount * rateApplied), rateApplied, minDeductible, notes, appliedCaps };
+  const r: CalcResult = { status: "OK", generation: "2026", amount, ownPay, insurancePay, rateBased: roundedRateAmount(amount, rateApplied), rateApplied, minDeductible, notes, appliedCaps };
   if (deductibleApplied !== undefined) r.deductibleApplied = deductibleApplied;
   return r;
 }
@@ -332,7 +333,7 @@ export function calc2026(input: Gen2026ClaimInput): CalcResult {
     if (visitOf() === "inpatient") {
       // #1 A: 급여 입원 20%
       const rate = GEN2026.benefit.inpatientRate;
-      const s = settle(amount, amount * rate);
+      const s = settle(amount, roundedRateAmount(amount, rate));
       return ok(amount, s.ownPay, s.insurancePay, rate, 0);
     }
     // 급여 통원: Max(건보율, 20%, 최소공제). 건보율은 건별 사용자 입력값이다.
@@ -371,7 +372,7 @@ export function calc2026(input: Gen2026ClaimInput): CalcResult {
     const holds: string[] = [];
     const nhis = input.nhisCoinsuranceRate;
     const md = GEN2026.benefit.outpatient.minDeductible;
-    if (nhis === undefined) holds.push("급여 통원: 건강보험 본인부담률 미제공 → 계산 불가(#2 입력 필요)");
+    if (nhis === undefined) holds.push("급여 통원: 건강보험 본인부담률 미제공 → 계산 불가. 진료비 영수증이나 보험사 안내에서 확인한 본인부담률을 입력해 주세요.");
     else if (!(typeof nhis === "number" && Number.isFinite(nhis) && nhis >= 0 && nhis <= 1)) {
       holds.push(`급여 통원: 건강보험 본인부담률(nhisCoinsuranceRate)은 0 이상 1 이하의 유한한 숫자여야 합니다(비율이며 백분율이 아닙니다 — 20%는 0.2). 받은 값의 형식: ${typeof nhis}`);
     }
@@ -389,7 +390,7 @@ export function calc2026(input: Gen2026ClaimInput): CalcResult {
     //   `undefined`(미지정)와 "clinic"은 같은 병·의원급 최소공제로 간다 — 종전 그대로다.
     const tier = tierRaw === "hospital" ? "hospital" : "clinic";
     const deduct = md[tier];
-    const s = settle(amount, Math.max(amount * rate, deduct));
+    const s = settle(amount, Math.max(roundedRateAmount(amount, rate), deduct));
     return ok(amount, s.ownPay, s.insurancePay, rate, deduct);
   }
 
@@ -570,7 +571,7 @@ export function calc2026(input: Gen2026ClaimInput): CalcResult {
         ]);
       }
       const rate = c.inpatientRate; // 30% A
-      let deductRaw = amount * rate;
+      let deductRaw = roundedRateAmount(amount, rate);
       const appliedCaps: CapCode[] = [];
       // #6 상급종합·종합 입원 **공제금액** 상한 500만(연 누적). 특별약관1 제5조⑤(인쇄 p.280)
       //   "…상해·질병 및 3대비급여 의료비(…) 중 **공제금액**이 …연간 500만원을 초과하는
@@ -578,7 +579,7 @@ export function calc2026(input: Gen2026ClaimInput): CalcResult {
       //   자기부담금 상한이 아니라 공제 상한이므로 settle의 insuranceCap이 아니라 공제액을 깎는다.
       if (tierOf() === "hospital") {
         const remaining = Math.max(c.annualDeductibleCap - priorDeductible, 0);
-        if (deductRaw > remaining) { deductRaw = remaining; appliedCaps.push("GEN2026_CRITICAL_INPATIENT_DEDUCTIBLE_ANNUAL"); }
+        if (rateAmountExceeds(amount, rate, remaining)) { deductRaw = remaining; appliedCaps.push("GEN2026_CRITICAL_INPATIENT_DEDUCTIBLE_ANNUAL"); }
         notes.push(`공제금액 상한 500만원은 계약일 또는 매년 계약해당일부터 1년간 누적 기준입니다. 이번 계산에는 기존 누적 공제금액 ${priorDeductible.toLocaleString("ko-KR")}원을 반영했습니다. 누적 대상은 약관상 공제금액이며, 보험가입금액 한도로 추가 부담한 금액은 포함되지 않습니다.`);
       }
       const s = settle(amount, deductRaw);
@@ -596,7 +597,7 @@ export function calc2026(input: Gen2026ClaimInput): CalcResult {
     if (checked.state === "zero") notes.push(zeroOutpatientLimitNote("1회당"));
     const limit = checked.state === "applied" ? checked.limit : undefined;
     notes.push(`중증 통원은 약관상 계약해당일 기준 1년간 ${c.outpatientAnnualVisits}회가 한도이지만, 1건 계산에는 반영되지 않습니다. 횟수를 반영하려면 여러 건 합산 계산을 이용해 주세요.`);
-    const ownPayRaw = Math.max(amount * rate, c.outpatientMinDeductible);
+    const ownPayRaw = Math.max(roundedRateAmount(amount, rate), c.outpatientMinDeductible);
     const s = settle(amount, ownPayRaw, limit);
     const appliedCaps: CapCode[] = s.capped ? ["GEN2026_CRITICAL_OUTPATIENT_PER_VISIT"] : [];
     // 1회당 가입금액이 구속되면 ownPay가 공제금액보다 커진다. 공제금액은 한도 반영 전 값이다.
@@ -627,9 +628,9 @@ export function calc2026(input: Gen2026ClaimInput): CalcResult {
     notes.push(perVisitLimit === undefined
       ? "1회당 300만원 한도는 「의료법」 제3조제2항 의료기관 중 종합병원을 제외한 곳에만 적용됩니다. 상급종합·종합병원 입원에는 적용하지 않았습니다(특별약관2 제3조 (1)제1항·(2)제1항)."
       : "병·의원급 입원의 비급여 의료비는 1회당 300만원이 한도입니다(특별약관2 제3조 (1)제1항·(2)제1항).");
-    const s = settle(amount, amount * rate, perVisitLimit);
+    const s = settle(amount, roundedRateAmount(amount, rate), perVisitLimit);
     const appliedCaps: CapCode[] = s.capped ? ["GEN2026_NONCRITICAL_INPATIENT_PER_VISIT"] : [];
-    return ok(amount, s.ownPay, s.insurancePay, rate, 0, notes, appliedCaps, deductibleOf(amount, amount * rate));
+    return ok(amount, s.ownPay, s.insurancePay, rate, 0, notes, appliedCaps, deductibleOf(amount, roundedRateAmount(amount, rate)));
   }
   // 비중증 통원: Max(50%, 5만). 약관이 "통원 1일당(외래 및 처방·조제비 합산)"으로 규정하므로
   // 한 건은 하루치를 합산한 금액이며, 최소공제도 하루에 한 번만 적용된다.
@@ -643,7 +644,7 @@ export function calc2026(input: Gen2026ClaimInput): CalcResult {
   }
   if (dayChecked.state === "zero") notes.push(zeroOutpatientLimitNote("1일당"));
   const dayLimit = dayChecked.state === "applied" ? dayChecked.limit : undefined;
-  const ownPayRaw = Math.max(amount * rate, n.outpatientMinDeductible);
+  const ownPayRaw = Math.max(roundedRateAmount(amount, rate), n.outpatientMinDeductible);
   const s = settle(amount, ownPayRaw, dayLimit);
   const appliedCaps: CapCode[] = s.capped ? ["GEN2026_NONCRITICAL_OUTPATIENT_PER_DAY"] : [];
   return ok(amount, s.ownPay, s.insurancePay, rate, n.outpatientMinDeductible, notes, appliedCaps, deductibleOf(amount, ownPayRaw));

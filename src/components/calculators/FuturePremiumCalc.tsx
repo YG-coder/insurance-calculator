@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { focusAfterUpdate } from "./focusAfterUpdate";
 import ResultCard from "@/components/ResultCard";
 import AmountInput from "@/components/AmountInput";
 import NoticeBox from "@/components/NoticeBox";
@@ -23,6 +24,9 @@ export default function FuturePremiumCalc() {
   });
 
   const hasPaid = paid !== "";
+  const blockedSummary = monthly === "" || remaining === ""
+    ? "계산하지 못했습니다. 월 보험료와 남은 납입 개월 수를 입력해 주세요. 완납한 경우 남은 개월 수에 0을 입력하세요."
+    : result.status === "NEED_INPUT" ? result.notes[0] : null;
 
   return (
     <div className="card">
@@ -33,28 +37,29 @@ export default function FuturePremiumCalc() {
         </div>
         <div>
           <label className="label-base" htmlFor="fp-remain">남은 납입 개월 수</label>
-          <AmountInput id="fp-remain" value={remaining} onChange={setRemaining} placeholder="예: 120" />
+          <AmountInput unit="" id="fp-remain" value={remaining} onChange={setRemaining} placeholder="예: 120" />
         </div>
         <div>
           <label className="label-base" htmlFor="fp-paid">
-            기납입 개월 수 <span className="text-slate-400 font-normal">(선택)</span>
+            기납입 개월 수 <span className="text-slate-500 font-normal">(선택)</span>
           </label>
-          <AmountInput id="fp-paid" value={paid} onChange={setPaid} placeholder="입력 시 완납 총액·부담 비중까지 계산" />
+          <AmountInput unit="" id="fp-paid" value={paid} onChange={setPaid} placeholder="입력 시 완납 총액·부담 비중까지 계산" />
         </div>
       </div>
 
       <div className="mt-6">
-        <button type="button" className="btn-primary w-full sm:w-auto" onClick={() => setSubmitted(true)}>
+        <button type="button" className="btn-primary w-full sm:w-auto" onClick={() => focusAfterUpdate(() => setSubmitted(true), "fp-blocked-summary")}>
           앞으로 낼 보험료 계산하기
         </button>
       </div>
 
       {submitted && (
         <div className="mt-8 space-y-4">
-          {result.status === "NEED_INPUT" ? (
-            <NoticeBox variant="info">{result.notes[0]}</NoticeBox>
+          {blockedSummary !== null ? (
+            <div id="fp-blocked-summary" role="alert" tabIndex={-1} className="mt-5 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">{blockedSummary}</div>
           ) : (
             <>
+              <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">계산 결과. 앞으로 낼 보험료 {won(result.futurePremium ?? 0)}.</p>
               <ResultCard
                 title="계산 결과"
                 items={[

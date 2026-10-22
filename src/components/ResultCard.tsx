@@ -13,13 +13,13 @@ export default function ResultCard({ title = "계산 결과", items }: Props) {
         {items.map((item, i) => (
           <div
             key={i}
-            className={`flex justify-between items-center pb-3 ${
+            className={`flex flex-col items-start gap-1 pb-3 sm:flex-row sm:justify-between sm:items-center ${
               i < items.length - 1 ? "border-b border-brand-100" : ""
             }`}
           >
             <span className="text-sm text-slate-600">{item.label}</span>
             <span
-              className={`font-bold ${
+              className={`max-w-full break-all font-bold sm:text-right ${
                 item.highlight ? "text-2xl text-brand-700" : "text-lg text-slate-900"
               }`}
             >

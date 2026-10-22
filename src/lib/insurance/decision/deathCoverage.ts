@@ -12,7 +12,8 @@ export interface DeathCoverageInput {
   usableAssets?: number;   // 활용 가능 자산(원) [C]
 }
 
-export interface DeathCoverageResult {
+interface DeathCoverageReady {
+  status: "OK";
   livingTotal: number;     // 생활비 총액 = 월 생활비 × 보장 개월
   neededTotal: number;     // 유족 필요자금
   preparedTotal: number;   // 준비된 자금
@@ -21,7 +22,27 @@ export interface DeathCoverageResult {
   isCovered: boolean;      // 추가 필요 없음(준비 >= 필요)
 }
 
+export type DeathCoverageResult = DeathCoverageReady | {
+  status: "OUT_OF_RANGE";
+  livingTotal: null;
+  neededTotal: null;
+  preparedTotal: null;
+  requiredCoverage: null;
+  surplus: null;
+  isCovered: false;
+  note: string;
+};
+
 export function calcDeathCoverage(input: DeathCoverageInput): DeathCoverageResult {
+  const blocked: DeathCoverageResult = {
+    status: "OUT_OF_RANGE", livingTotal: null, neededTotal: null, preparedTotal: null,
+    requiredCoverage: null, surplus: null, isCovered: false,
+    note: "정확하게 계산할 수 있는 범위를 벗어났습니다. 금액과 보장 기간을 줄여 다시 입력해 주세요.",
+  };
+  if ([input.monthlyLiving, input.coverageMonths, input.debt, input.otherFunds,
+    input.existingDeathBenefit, input.usableAssets].some((value) =>
+    value !== undefined && (!Number.isFinite(value) || Math.abs(value) > Number.MAX_SAFE_INTEGER),
+  )) return blocked;
   const monthlyLiving = nonNegativeInteger(input.monthlyLiving);
   const coverageMonths = nonNegativeInteger(input.coverageMonths);
   const debt = nonNegativeInteger(input.debt);
@@ -32,11 +53,13 @@ export function calcDeathCoverage(input: DeathCoverageInput): DeathCoverageResul
   const livingTotal = monthlyLiving * coverageMonths;
   const neededTotal = livingTotal + debt + otherFunds;
   const preparedTotal = existingDeathBenefit + usableAssets;
+  if (![livingTotal, neededTotal, preparedTotal].every(Number.isSafeInteger)) return blocked;
 
   const requiredCoverage = Math.max(neededTotal - preparedTotal, 0);
   const surplus = Math.max(preparedTotal - neededTotal, 0);
 
   return {
+    status: "OK",
     livingTotal, neededTotal, preparedTotal,
     requiredCoverage, surplus,
     isCovered: preparedTotal >= neededTotal,

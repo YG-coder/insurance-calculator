@@ -48,7 +48,19 @@ export function calcSurrender(input: SurrenderInput): SurrenderResult {
     futurePremium: null, totalAtCompletion: null, notes,
   };
 
+  const rangeError: SurrenderResult = {
+    ...base, status: "NEED_INPUT",
+    notes: ["정확하게 계산할 수 있는 범위를 벗어났습니다. 월 보험료·개월 수·해지환급금을 줄여 다시 입력해 주세요."],
+  };
+  if ([input.monthlyPremium, input.paidMonths, input.remainingMonths,
+    input.mode === "known" ? input.surrenderValue : undefined].some(
+    (value) => value !== undefined && (!Number.isFinite(value) || Math.abs(value) > Number.MAX_SAFE_INTEGER),
+  )) return rangeError;
+
   const totalPaid = monthlyPremium * paidMonths;
+  // 기존 소수 보험료/환급률 산식은 유지한다. 금액 크기의 정밀도 한계를
+  // 검사하며, 예상 환급금에 정수 조건을 걸어 정상 소수 결과를 막지 않는다.
+  if (!Number.isFinite(totalPaid) || totalPaid > Number.MAX_SAFE_INTEGER) return rangeError;
 
   // 유효성: 계산 불가 케이스
   if (paidMonths === 0 || totalPaid === 0) {
@@ -91,6 +103,8 @@ export function calcSurrender(input: SurrenderInput): SurrenderResult {
     const remaining = nonNegativeInteger(input.remainingMonths);
     futurePremium = monthlyPremium * remaining;
     totalAtCompletion = totalPaid + futurePremium;
+    if (!Number.isFinite(futurePremium) || futurePremium > Number.MAX_SAFE_INTEGER
+      || !Number.isFinite(totalAtCompletion) || totalAtCompletion > Number.MAX_SAFE_INTEGER) return rangeError;
   }
 
   return {

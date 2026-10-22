@@ -9,8 +9,18 @@ export default function PolicyGenerationGuide() {
   const [hasChangedPolicy, setHasChangedPolicy] = useState(false);
   const generation = hasChangedPolicy ? "INVALID" : generationFromPolicyDate(date);
 
+  const status = hasChangedPolicy
+    ? "전환·재가입 계약은 최초 가입일만으로 세대를 판단할 수 없습니다. 현재 보험증권과 적용 약관을 확인해 주세요."
+    : !date ? ""
+    : generation === "2021" ? "4세대 가입 시기에 해당합니다. 아래 계산기 이동 링크를 확인하세요."
+    : generation === "2026" ? "5세대 가입 시기에 해당합니다. 아래 계산기 이동 링크를 확인하세요."
+    : generation === "2009" || generation === "2017" ? `${generation === "2009" ? "2세대" : "3세대"} 가입 시기에 해당합니다. 아래 계산기 이동 링크를 확인하세요.`
+    : generation === "PRE_STANDARD" ? "표준화 이전 상품으로 계산 결과를 제공하지 않습니다. 보험증권과 개별 약관을 확인해 주세요."
+    : "계약일을 확인해 주세요. 세대를 판단하지 못했습니다.";
+
   return (
     <section className="mb-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+      <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{status}</p>
       <label className="block text-sm font-semibold text-slate-800" htmlFor="policy-start-date">
         내 실손보험 세대 확인
       </label>

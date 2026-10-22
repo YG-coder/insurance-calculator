@@ -120,7 +120,7 @@ console.log("\n[가드] 소스에 종별 조건이 실제로 연결돼 있다");
   //   좁힌 뒤의 값을 `inpatientTier`에 담아 한도 판정에 쓴다. 확인하려는 성질은 종전과 같다 —
   //   **한도를 종별로 고른다.**
   check("한도를 종별로 고른다", /limitTiers\.includes\(inpatientTier\) \? n\.inpatientPerVisitLimit : undefined/.test(eng));
-  check("한도를 무조건 적용하지 않음", !/settle\(amount, amount \* rate, n\.inpatientPerVisitLimit\)/.test(eng));
+  check("한도를 무조건 적용하지 않음", !/settle\(amount, roundedRateAmount\(amount, rate\), n\.inpatientPerVisitLimit\)/.test(eng));
   check("종별 미지정을 막는다", /tierOf\(\) !== "clinic" && tierOf\(\) !== "hospital"/.test(eng));
   check("적용 대상 목록을 상수에서 읽는다", /n\.inpatientPerVisitLimitTiers/.test(eng));
   check("소스에 종별 목록을 다시 나열하지 않음", !/\["clinic"\]/.test(eng));

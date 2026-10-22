@@ -15,6 +15,7 @@
 //   사라졌다. 남겨 두면 다음에 추가되는 행 축이 다시 조용히 변형될 자리가 생긴다.
 //   ⚠ 함수 자체는 바꾸지 않았다. 다른 엔진(`multiClaim.ts`·`multiClaim2026.ts`·
 //     `generation*.ts`)이 각자의 계약으로 쓰고 있고, 이번 범위가 아니다.
+import { roundedRateAmount } from "../common/exactMoney";
 import { settle } from "../common/settle";
 import { GEN2026 } from "./constants";
 import { calculateMany2026 } from "./multiClaim2026";
@@ -637,7 +638,7 @@ function runOnce(
         status: "OK", generation: "2026", index, covered: false,
         item: input.item, actIndex: null,
         amount, ownPay: amount, insurancePay: 0,
-        rateBased: Math.round(amount * spec.rate), rateApplied: spec.rate,
+        rateBased: roundedRateAmount(amount, spec.rate), rateApplied: spec.rate,
         minDeductible: spec.fixed, deductibleApplied: 0,
         // 보상 대상이 아닌 행위에는 약관상 공제가 적용되지 않는다 → 500만원 pool도 소진하지 않는다.
         deductible: { deductibleBeforeAnnualCap: 0, deductibleApplied: 0, excessOwnPay: amount, poolUsedAfter: null },
@@ -649,7 +650,7 @@ function runOnce(
 
     // ── 공제금액 ── <표1> "1회당 N원과 보장대상의료비의 R% 중 큰 금액"
     const deductibleBeforeAnnualCap =
-      Math.min(amount, Math.max(0, Math.round(Math.max(spec.fixed, amount * spec.rate))));
+      Math.min(amount, Math.max(0, Math.max(spec.fixed, roundedRateAmount(amount, spec.rate))));
     let deductibleApplied = deductibleBeforeAnnualCap;
     let poolUsedAfter: number | null = null;
 
@@ -683,7 +684,7 @@ function runOnce(
       status: "OK", generation: "2026", index, covered: true,
       item: input.item, actIndex: counts ? count : null,
       amount: s.amount, ownPay: s.ownPay, insurancePay: s.insurancePay,
-      rateBased: Math.round(amount * spec.rate), rateApplied: spec.rate,
+      rateBased: roundedRateAmount(amount, spec.rate), rateApplied: spec.rate,
       minDeductible: spec.fixed, deductibleApplied,
       deductible: breakdown,
       notes: [], appliedCaps,

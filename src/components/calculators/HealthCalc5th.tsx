@@ -1,6 +1,8 @@
 "use client";
 
+import { percentToRate } from "@/lib/insurance/common/exactMoney";
 import { useState } from "react";
+import { focusAfterUpdate } from "./focusAfterUpdate";
 import ResultCard from "@/components/ResultCard";
 import RawAmountInput from "@/components/RawAmountInput";
 import NoticeBox from "@/components/NoticeBox";
@@ -204,7 +206,7 @@ export default function HealthCalc5th() {
    *   사용자가 친 십진 값 자체를 들고 있으면 두 문제가 모두 사라진다.
    * ⚠ 하한은 엔진과 **같은 규칙값**을 쓴다. `floorRate`는 `0.2`이고 `0.2 * 100`은 정확히
    *   `20`이라 이 곱셈에는 흔적이 없다. 화면에 `20`을 하드코딩하지 않는다.
-   * ⚠ 이것은 **표시 전용**이다. 엔진에는 여전히 `nhisRateNum / 100`이 간다.
+   * ⚠ 이것은 **표시 전용**이다. 엔진에는 십진 소수점을 이동한 `percentToRate(nhisRateNum)`이 간다.
    */
   const benefitOutpatientPct = !usesNhisRate || nhisRateNum === null || nhisRateNum === undefined
     ? null
@@ -258,7 +260,7 @@ export default function HealthCalc5th() {
             //     보존되고, 통원으로 돌아오면 같은 값이 다시 전달된다.
             tier: visit === "outpatient" ? benefitTier : undefined,
             // ⚠ 여기서 깎지 않는다. 범위 판정은 파서가 이미 했다.
-            nhisCoinsuranceRate: nhisRateNum === undefined ? undefined : nhisRateNum / 100,
+            nhisCoinsuranceRate: nhisRateNum === undefined ? undefined : percentToRate(nhisRateNum),
           })
       : needsItem || needsSeverity || needsTier || needsPurpose || limits === null
         ? null
@@ -274,6 +276,19 @@ export default function HealthCalc5th() {
             priorAnnualDeductible: limits.deductible,
             perVisitCoverageLimit: limits.perVisit,
           });
+
+  const blockers = amountInvalid ? ["병원비"] : [
+    nhisRateInvalid ? "건강보험 본인부담률" : null,
+    needsItem ? "치료유형" : null,
+    needsSeverity ? "질환 구분" : null,
+    needsTier ? "입원 의료기관" : null,
+    needsPurpose ? "약제 용도" : null,
+    outpatientLimitInvalid ? "통원 가입금액" : null,
+    priorDeductibleInvalid ? "이미 누적된 공제금액" : null,
+  ].filter((value): value is string => value !== null);
+  const blockedSummary = blockers.length > 0
+    ? `계산하지 못했습니다. 확인할 입력: ${blockers.join(", ")}. 자세한 안내는 아래에 있습니다.`
+    : result?.status === "PENDING_UNVERIFIED" ? `계산을 보류했습니다. ${result.notes.join(" ")}` : null;
 
   return (
     <div className="card">
@@ -497,10 +512,12 @@ export default function HealthCalc5th() {
       </div>
 
       <div className="mt-6">
-        <button type="button" className="btn-primary w-full sm:w-auto" onClick={() => setSubmitted(true)}>
+        <button type="button" className="btn-primary w-full sm:w-auto" onClick={() => focusAfterUpdate(() => setSubmitted(true), "single2026-blocked-summary")}>
           자기부담금 계산하기
         </button>
       </div>
+
+      {submitted && blockedSummary !== null && (<div id="single2026-blocked-summary" role="alert" tabIndex={-1} className="mt-5 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">{blockedSummary}</div>)}
 
       {submitted && (
         <div className="mt-8 space-y-4">
@@ -577,7 +594,9 @@ export default function HealthCalc5th() {
           {result?.status === "EXCLUDED" && <div role="status" aria-live="polite"><NoticeBox variant="info">{result.notes.join(" ")}</NoticeBox></div>}
           {/* 차단 사유는 엔진이 만든 문구를 그대로 보여준다. 화면에서 지어내지 않는다. */}
           {result && result.status === "PENDING_UNVERIFIED" && (
-            <NoticeBox variant="warning">{result.notes.join(" ")}</NoticeBox>
+            <div>
+              <NoticeBox variant="warning">{result.notes.join(" ")}</NoticeBox>
+            </div>
           )}
 
           {/* ⚠ **정책 교체.** 종전 `num > 0`은 입력값 기준이라 정상 0원 결과를 안내 없이

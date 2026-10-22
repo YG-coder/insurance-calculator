@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { focusAfterUpdate } from "./focusAfterUpdate";
 import ResultCard from "@/components/ResultCard";
 import AmountInput from "@/components/AmountInput";
 import NoticeBox from "@/components/NoticeBox";
@@ -49,25 +50,25 @@ export default function FamilyLivingCalc() {
             <div className="flex items-center justify-between mb-3">
               <span className="text-sm font-semibold text-slate-500">구간 {i + 1}</span>
               {rows.length > 1 && (
-                <button type="button" onClick={() => removeRow(i)} className="text-xs text-slate-400 hover:text-red-500">
+                <button type="button" aria-label={`${i + 1}번 생활비 구간 삭제`} onClick={() => focusAfterUpdate(() => removeRow(i), `fl-m-${Math.min(i, rows.length - 2)}`)} className="text-xs text-slate-500 hover:text-red-500">
                   삭제
                 </button>
               )}
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="label-base">월 생활비 (원)</label>
+                <label className="label-base" htmlFor={`fl-m-${i}`}>월 생활비 (원)</label>
                 <AmountInput id={`fl-m-${i}`} value={r.monthly} onChange={(v) => update(i, "monthly", v)} placeholder="예: 3,000,000" />
               </div>
               <div>
-                <label className="label-base">기간</label>
+                <label className="label-base" htmlFor={`fl-y-${i}`}>기간</label>
                 <div className="flex items-center gap-2">
                   <div className="flex-1">
-                    <AmountInput id={`fl-y-${i}`} value={r.years} onChange={(v) => update(i, "years", v)} placeholder="예: 10" />
+                    <AmountInput id={`fl-y-${i}`} value={r.years} onChange={(v) => update(i, "years", v)} placeholder="예: 10" unit="" aria-label={`${i + 1}번째 구간 기간 (년)`} />
                   </div>
                   <span className="text-slate-500 text-sm">년</span>
                   <div className="w-20">
-                    <AmountInput id={`fl-e-${i}`} value={r.extra} onChange={(v) => update(i, "extra", v)} placeholder="0" />
+                    <AmountInput id={`fl-e-${i}`} value={r.extra} onChange={(v) => update(i, "extra", v)} placeholder="0" unit="" aria-label={`${i + 1}번째 구간 추가 개월`} />
                   </div>
                   <span className="text-slate-500 text-sm">개월</span>
                 </div>
@@ -79,7 +80,7 @@ export default function FamilyLivingCalc() {
 
       <div className="mt-4 flex flex-wrap gap-3">
         {rows.length < 6 && (
-          <button type="button" onClick={addRow} className="px-4 py-2 rounded-xl border border-slate-300 text-sm font-semibold text-slate-700 hover:border-brand-300">
+          <button type="button" onClick={() => focusAfterUpdate(addRow, `fl-m-${rows.length}`)} className="px-4 py-2 rounded-xl border border-slate-300 text-sm font-semibold text-slate-700 hover:border-brand-300">
             + 생활비 구간 추가
           </button>
         )}
@@ -87,17 +88,24 @@ export default function FamilyLivingCalc() {
           type="button"
           className="btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
           disabled={!canCalc}
-          onClick={() => setSubmitted(true)}
+          onClick={() => focusAfterUpdate(() => setSubmitted(true), "fl-blocked-summary")}
         >
           총 유족 생활비 계산하기
         </button>
       </div>
       {!canCalc && (
-        <p className="mt-2 text-xs text-slate-500">각 구간의 월 생활비와 기간(연)을 입력해 주세요.</p>
+        <p className="mt-2 text-xs text-slate-500" role="status" aria-live="polite">각 구간의 월 생활비와 기간(연)을 입력해 주세요.</p>
       )}
 
-      {submitted && result && (
+      {submitted && result?.status === "OUT_OF_RANGE" && (
+        <div id="fl-blocked-summary" className="mt-8" role="alert" tabIndex={-1}>
+          <NoticeBox variant="warning">{result.note}</NoticeBox>
+        </div>
+      )}
+      {submitted && result?.status === "OK" && (
         <div className="mt-8 space-y-4">
+          <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">계산 결과. 입력을 완료한 {validRows.length}개 구간의 생활비 합계 {won(result.total)}.{validRows.length < rows.length ? ` 미완성 ${rows.length - validRows.length}개 구간은 제외했습니다.` : ""}</p>
+          {validRows.length < rows.length && <NoticeBox variant="warning">월 생활비나 기간이 비어 있는 {rows.length - validRows.length}개 구간은 합계에서 제외했습니다. 모든 구간의 합계를 보려면 남은 입력을 완료해 주세요.</NoticeBox>}
           <ResultCard
             title="계산 결과"
             items={[

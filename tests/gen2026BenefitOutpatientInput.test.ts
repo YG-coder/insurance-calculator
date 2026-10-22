@@ -86,10 +86,10 @@ console.log("\n[G-15] 1. 정상 입력의 결과가 그대로다");
 
 console.log("\n[G-15] 2. nhisCoinsuranceRate — 거부 행렬");
 {
-  // undefined: 종전 미제공 안내 그대로
+  // undefined: 미입력 보류를 유지하면서 사용자가 확인할 방법을 안내한다.
   const miss = call(out({ tier: "clinic" }));
-  check("undefined → 종전 미제공 안내 그대로", isPending(miss)
-    && notes(miss) === "급여 통원: 건강보험 본인부담률 미제공 → 계산 불가(#2 입력 필요)", notes(miss));
+  check("undefined → 미입력 보류와 확인 방법 안내", isPending(miss)
+    && notes(miss) === "급여 통원: 건강보험 본인부담률 미제공 → 계산 불가. 진료비 영수증이나 보험사 안내에서 확인한 본인부담률을 입력해 주세요.", notes(miss));
 
   for (const [label, v] of [
     ["null", null], ["NaN", NaN], ["Infinity", Infinity], ["-Infinity", -Infinity],
@@ -141,7 +141,7 @@ console.log("\n[G-15] 4. 두 축이 동시에 무효이면 각각 안내한다")
     && notes(missAndTier).includes("미제공 → 계산 불가")
     && notes(missAndTier).includes('"clinic" 또는 "hospital"'), notes(missAndTier).slice(0, 80));
   check("미제공 안내가 첫 줄이다", !threw(missAndTier)
-    && missAndTier.r.notes[0] === "급여 통원: 건강보험 본인부담률 미제공 → 계산 불가(#2 입력 필요)");
+    && missAndTier.r.notes[0] === "급여 통원: 건강보험 본인부담률 미제공 → 계산 불가. 진료비 영수증이나 보험사 안내에서 확인한 본인부담률을 입력해 주세요.");
 }
 
 console.log("\n[G-15] 5. 범위 밖 경로는 무변경");
@@ -251,12 +251,12 @@ console.log("\n[G-15] 7. 소스 계약");
     /const tier = tierRaw === "hospital" \? "hospital" : "clinic";/.test(body));
   check("검사가 산식보다 앞이다",
     body.indexOf('tierRaw !== "hospital"') < body.indexOf("const rate = Math.max(nhis as number"));
-  check("미제공 안내가 그대로",
-    /"급여 통원: 건강보험 본인부담률 미제공 → 계산 불가\(#2 입력 필요\)"/.test(body));
-  check("산식이 그대로", /const s = settle\(amount, Math\.max\(amount \* rate, deduct\)\);/.test(body));
+  check("미제공 안내에 사용자가 확인할 방법을 제공한다",
+    /"급여 통원: 건강보험 본인부담률 미제공 → 계산 불가\. 진료비 영수증이나 보험사 안내에서 확인한 본인부담률을 입력해 주세요\."/.test(body));
+  check("정률 반올림 후 최소공제 적용(21차 정밀 연산)", /const s = settle\(amount, Math\.max\(roundedRateAmount\(amount, rate\), deduct\)\);/.test(body));
   check("20% 하한이 그대로", /Math\.max\(nhis as number, GEN2026\.benefit\.outpatient\.floorRate\)/.test(body));
-  check("급여 입원 분기가 그대로",
-    /const rate = GEN2026\.benefit\.inpatientRate;\n\s*const s = settle\(amount, amount \* rate\);/.test(body));
+  check("급여 입원 정률과 공제 경로 유지(21차 정밀 연산)",
+    /const rate = GEN2026\.benefit\.inpatientRate;\n\s*const s = settle\(amount, roundedRateAmount\(amount, rate\)\);/.test(body));
   // 안내를 만들면서 값을 문자열로 만들지 않는다 — Symbol·toString 예외를 피한다.
   check("안내에 받은 값 자체를 넣지 않는다(typeof만)",
     /받은 값의 형식: \$\{typeof nhis\}/.test(body) && /받은 값의 형식: \$\{typeof tierRaw\}/.test(body)

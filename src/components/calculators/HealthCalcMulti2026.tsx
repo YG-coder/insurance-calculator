@@ -1,6 +1,9 @@
 "use client";
 
+import { percentToRate } from "@/lib/insurance/common/exactMoney";
 import { useState } from "react";
+import { focusAfterUpdate } from "./focusAfterUpdate";
+import { flushSync } from "react-dom";
 import NoticeBox from "@/components/NoticeBox";
 import RawAmountInput from "@/components/RawAmountInput";
 import ResultCard from "@/components/ResultCard";
@@ -830,7 +833,7 @@ export default function HealthCalcMulti2026() {
         tier: visit === "outpatient" ? benefitTier : undefined,
         // ⚠ 검증된 값만 넘긴다. 무효(null)이면 아래 게이트가 이 호출 자체를 막으므로
         //   여기서 `?? 0`이나 타입 단언으로 통과시키지 않는다. 빈 값은 undefined 그대로다.
-        nhisCoinsuranceRate: nhisRateNum === undefined || nhisRateNum === null ? undefined : nhisRateNum / 100,
+        nhisCoinsuranceRate: nhisRateNum === undefined || nhisRateNum === null ? undefined : percentToRate(nhisRateNum),
         amounts: amounts.map((a) => gen2026Amount(a) as number),
       })
     : money !== null && deductibles !== null && nonBenefitItem === "general" && severity !== "" && cause !== "" && !needsTier
@@ -856,6 +859,43 @@ export default function HealthCalcMulti2026() {
   // ⚠ 타입 단언 없이 route로만 좁힌다.
   const special = itemResult !== null && itemResult.route === "special_item" ? itemResult : null;
   const room = roomResult !== null && roomResult.route === "room_charge" ? roomResult : null;
+
+  // 4세대 다회 계산기와 같은 제출 정책: 차단 안내 한 곳에만 포커스를 보낸다.
+  const blockedSummaryId = "multi2026-blocked-summary";
+  const blockers = [
+    needsItem ? "치료유형" : null,
+    needsSeverity ? "질환 구분" : null,
+    needsPurpose ? "약제 용도" : null,
+    rcIncomplete ? "입원 차액·일수" : null,
+    amountsIncomplete ? "진료비" : null,
+    rowAmountsIncomplete ? "행위 진료비" : null,
+    nhisRateInvalid && !amountsIncomplete ? "건강보험 본인부담률" : null,
+    needsTier ? "입원 의료기관" : null,
+    needsPriorCount ? "이미 보상한 횟수" : null,
+    needsPriorActs ? "이미 받은 치료행위 수" : null,
+    needsOutDays ? "이미 사용한 통원일수" : null,
+    needsOutVisits ? "이미 사용한 통원 횟수" : null,
+    needsCause ? "원인" : null,
+    priorInsuranceInvalid ? "기존 지급보험금" : null,
+    annualLimitInvalid ? "연간 가입금액" : null,
+    outpatientLimitInvalid ? "통원 가입금액" : null,
+    priorDeductibleInvalid ? "누적 공제금액" : null,
+    priorPoolInvalid ? "누적 공제금액" : null,
+    rowsIncomplete ? "행별 치료 형태·의료기관" : null,
+  ].filter((value): value is string => value !== null);
+  const blockedSummary = result?.status === "OK" || result?.status === "EXCLUDED"
+    ? null
+    : blockers.length > 0
+      ? `계산하지 못했습니다. 입력 ${blockers.length}곳을 확인해 주세요: ${blockers.join(", ")}. 자세한 안내는 아래에 있습니다.`
+      : result?.status === "PENDING_UNVERIFIED"
+        ? `계산을 보류했습니다. 확인이 필요한 안내 ${result.notes.length}건이 아래에 있습니다.`
+        : null;
+  const submit = () => {
+    flushSync(() => setSubmitted(true));
+    if (typeof document !== "undefined") {
+      document.getElementById(blockedSummaryId)?.focus();
+    }
+  };
 
   const setRow = (i: number, patch: Partial<SpecialRow>) => {
     setRows((old) => old.map((r, j) => j === i ? { ...r, ...patch } : r));
@@ -930,12 +970,12 @@ export default function HealthCalcMulti2026() {
     {showRoomChargeForm
       ? <>
         <div className="mt-5 space-y-3">{rcRows.map((row, i) => <div className="grid grid-cols-2 items-end gap-2 sm:grid-cols-4" key={i}>
-          <label className="text-sm font-semibold">{i + 1}번째 입원의 상급병실료 차액 총액<input className="input-base mt-1" inputMode="numeric" value={row.amount} onChange={(e) => setRcRow(i, { amount: e.target.value })} /></label>
+          <label className="text-sm font-semibold">{i + 1}번째 입원의 상급병실료 차액 총액<input className="input-base mt-1" inputMode="numeric" value={row.amount} id={`gen2026-room-amount-${i}`} onChange={(e) => setRcRow(i, { amount: e.target.value })} /></label>
           <label className="text-sm font-semibold">총 입원일수<input className="input-base mt-1" inputMode="numeric" value={row.days} onChange={(e) => setRcRow(i, { days: e.target.value })} placeholder="예: 10" /></label>
           <span />
-          <button className={smallButton} disabled={rcRows.length === 1} onClick={() => setRcRows((old) => old.filter((_, j) => j !== i))}>삭제</button>
+          <button className={smallButton} disabled={rcRows.length === 1} aria-label={`${i + 1}번 행 삭제`} onClick={() => focusAfterUpdate(() => setRcRows((old) => old.filter((_, j) => j !== i)), `gen2026-room-amount-${Math.min(i, rcRows.length - 2)}`)}>삭제</button>
         </div>)}</div>
-        <div className="mt-3 flex flex-wrap gap-2"><button className={smallButton} onClick={() => setRcRows((old) => [...old, { amount: "", days: "" }])}>입원 추가</button></div>
+        <div className="mt-3 flex flex-wrap gap-2"><button className={smallButton} onClick={() => focusAfterUpdate(() => setRcRows((old) => [...old, { amount: "", days: "" }]), `gen2026-room-amount-${rcRows.length}`)}>입원 추가</button></div>
       </>
       : showSpecialForm
       ? <>
@@ -949,9 +989,9 @@ export default function HealthCalcMulti2026() {
           {needsRowTier && row.visit === "inpatient"
             ? <label className="text-sm font-semibold">의료기관<select className="input-base mt-1" value={row.tier} onChange={(e) => setRow(i, { tier: e.target.value as Tier | "" })}><option value="">선택</option><option value="clinic">병·의원급</option><option value="hospital">상급종합·종합병원</option></select></label>
             : <span />}
-          <button className={smallButton} disabled={rows.length === 1} onClick={() => setRows((old) => old.filter((_, j) => j !== i))}>삭제</button>
+          <button className={smallButton} disabled={rows.length === 1} aria-label={`${i + 1}번 행 삭제`} onClick={() => focusAfterUpdate(() => setRows((old) => old.filter((_, j) => j !== i)), `gen2026-row-amount-${Math.min(i, rows.length - 2)}`)}>삭제</button>
         </div>)}</div>
-        <div className="mt-3 flex flex-wrap gap-2"><button className={smallButton} onClick={() => setRows((old) => [...old, emptyRow()])}>행 추가</button></div>
+        <div className="mt-3 flex flex-wrap gap-2"><button className={smallButton} onClick={() => focusAfterUpdate(() => setRows((old) => [...old, emptyRow()]), `gen2026-row-amount-${rows.length}`)}>행 추가</button></div>
       </>
       : <>
         <div className="mt-5 space-y-3">{amounts.map((amount, i) => <div className="flex items-end gap-2" key={i}>
@@ -960,9 +1000,9 @@ export default function HealthCalcMulti2026() {
               onChange={(v) => setAmounts((old) => old.map((prev, j) => j === i ? v : prev))}
               placeholder="예: 300,000" ariaLabel={`${i + 1}건 진료비`} /></div>
           </label>
-          <button className={smallButton} disabled={amounts.length === 1} onClick={() => setAmounts((old) => old.filter((_, j) => j !== i))}>삭제</button>
+          <button className={smallButton} disabled={amounts.length === 1} aria-label={`${i + 1}번 행 삭제`} onClick={() => focusAfterUpdate(() => setAmounts((old) => old.filter((_, j) => j !== i)), `gen2026-amount-${Math.min(i, amounts.length - 2)}`)}>삭제</button>
         </div>)}</div>
-        <div className="mt-3 flex flex-wrap gap-2"><button className={smallButton} onClick={() => setAmounts((old) => [...old, ""])}>행 추가</button><input className="input-base w-20" inputMode="numeric" autoComplete="off" value={copyCount} onChange={(e) => setCopyCount(e.target.value)} aria-label="복사할 횟수" /><button className={smallButton} disabled={copySourceInvalid || copyCountInvalid} onClick={() => {
+        <div className="mt-3 flex flex-wrap gap-2"><button className={smallButton} onClick={() => focusAfterUpdate(() => setAmounts((old) => [...old, ""]), `gen2026-amount-${amounts.length}`)}>행 추가</button><input className="input-base w-20" inputMode="numeric" autoComplete="off" value={copyCount} onChange={(e) => setCopyCount(e.target.value)} aria-label="복사할 횟수" /><button className={smallButton} disabled={copySourceInvalid || copyCountInvalid} onClick={() => {
           // ⚠ 버튼 비활성만으로는 부족하다. 핸들러에서도 원본을 다시 검증한다.
           if (copySourceInvalid) return;
           // ⚠ 무효한 횟수로 실행되면 종전처럼 **이미 입력한 행이 지워지고 1행만 남는다.**
@@ -1012,7 +1052,13 @@ export default function HealthCalcMulti2026() {
       <p className="text-xs text-slate-500 sm:col-span-2">보험계약이 종료된 뒤에도 <b>계속 중인 치료</b>는 연간 보장한도(금액)에서 <b>지급한 금액</b>을, 연간 보장한도(횟수)에서 <b>보상한 횟수</b>를 뺀 잔여분을 한도로 보상합니다(특별약관1 제3조(3)제7항·제5조 제4항 — 이월 계산 전용이며, 보험기간 중 연간 한도의 소진 기준을 정하는 조항이 아닙니다). 일반 비급여의 통원 가입금액(20만 원)과 연간 보험가입금액은 이 보장종목에 적용되지 않습니다.</p>
     </div>}
 
-    <button className="btn-primary mt-6" onClick={() => setSubmitted(true)}>여러 건 계산하기</button>
+    <button type="button" className="btn-primary mt-6" onClick={submit}>여러 건 계산하기</button>
+    {submitted && blockedSummary !== null && <div
+      id={blockedSummaryId}
+      role="alert"
+      tabIndex={-1}
+      className="mt-5 rounded-xl border border-amber-300 bg-amber-100 p-4 text-sm font-semibold leading-relaxed text-amber-900 outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+    >{blockedSummary}</div>}
     {submitted && needsItem && <div className="mt-5"><NoticeBox variant="warning">비급여는 <b>치료유형</b>에 따라 적용되는 보장종목과 산식이 다릅니다. 치료유형을 먼저 선택해 주세요. 선택 전에는 계산하지 않습니다.</NoticeBox></div>}
     {/* ⚠ 진료비가 무효이면 그 안내가 먼저다 — 종전 우선순위를 그대로 둔다(`amountsIncomplete`가
            같은 게이트에서 먼저 걸린다). 여기는 진료비가 유효할 때의 본인부담률 전용 안내다.

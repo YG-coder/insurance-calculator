@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { focusAfterUpdate } from "./focusAfterUpdate";
 import ResultCard from "@/components/ResultCard";
 import AmountInput from "@/components/AmountInput";
 import NoticeBox from "@/components/NoticeBox";
@@ -38,29 +39,35 @@ export default function PremiumCalc() {
           type="button"
           className="btn-primary w-full sm:w-auto disabled:opacity-40 disabled:cursor-not-allowed"
           disabled={missing}
-          onClick={() => setSubmitted(true)}
+          onClick={() => focusAfterUpdate(() => setSubmitted(true), "pr-blocked-summary")}
         >
           보험료 비중 계산하기
         </button>
         {missing && (
-          <p className="mt-2 text-xs text-slate-500">월 소득과 월 보험료를 모두 입력해 주세요.</p>
+          <p className="mt-2 text-xs text-slate-500" role="status" aria-live="polite">월 소득과 월 보험료를 모두 입력해 주세요.</p>
         )}
       </div>
 
       {submitted && result && (
         <div className="mt-8 space-y-4">
-          {result.status === "NEED_INCOME" ? (
-            <NoticeBox variant="info">
+          {result.status === "OUT_OF_RANGE" ? (
+            <div id="pr-blocked-summary" role="alert" tabIndex={-1}>
+              <NoticeBox variant="warning">{result.note}</NoticeBox>
+            </div>
+          ) : result.status === "NEED_INCOME" ? (
+            <div id="pr-blocked-summary" role="alert" tabIndex={-1}><NoticeBox variant="info">
               보험료 비중을 계산하려면 월 소득을 입력해 주세요. (소득이 0이면 비율을 계산할 수 없습니다.)
-            </NoticeBox>
+            </NoticeBox></div>
           ) : (
             <>
+              <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">계산 결과. 보험료 비중 {result.ratioPercentText}%.</p>
               <div className="rounded-2xl border border-brand-200 bg-brand-50 p-6 text-center">
                 <p className="text-sm font-semibold text-slate-500 mb-1">보험료 비중</p>
-                <p className="text-4xl font-bold text-brand-700">
-                  {(result.ratioPercent ?? 0).toFixed(1)}%
+                <p className="text-4xl font-bold text-brand-700 break-all">
+                  {result.ratioPercentText}%
                 </p>
                 <p className="text-sm text-slate-500 mt-2">입력한 월 소득 기준(세전·세후 중 사용자가 선택)</p>
+                <p className="text-xs text-slate-500 mt-1">비율은 소수 둘째 자리에서 반올림해 표시합니다.</p>
               </div>
               <ResultCard
                 title="입력·연간 환산"

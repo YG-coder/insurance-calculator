@@ -45,7 +45,7 @@ export default function CoverageGapCalc() {
           보장 공백 계산하기
         </button>
         {missing && (
-          <p className="mt-2 text-xs text-slate-500">
+          <p role="status" aria-live="polite" className="mt-2 text-xs text-slate-500">
             필요 보장금액과 현재 보장금액을 모두 입력해 주세요. (보장이 없으면 0을 입력)
           </p>
         )}
@@ -53,6 +53,7 @@ export default function CoverageGapCalc() {
 
       {submitted && result && (
         <div className="mt-8 space-y-4">
+          <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">계산 결과. {result.direction === "short" ? `부족 보장금액 ${won(result.shortfall)}` : result.direction === "over" ? `초과 보장금액 ${won(result.surplus)}` : "필요 보장금액과 현재 보장금액이 같습니다."}</p>
           <ResultCard
             title="계산 결과"
             items={[

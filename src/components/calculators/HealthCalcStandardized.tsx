@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { focusAfterUpdate } from "./focusAfterUpdate";
 import ResultCard from "@/components/ResultCard";
 import RawAmountInput from "@/components/RawAmountInput";
 import NoticeBox from "@/components/NoticeBox";
+import { choiceClass, choiceTabIndex, moveChoice } from "./choiceGroup";
 import { calculateMany } from "@/lib/insurance/engine/multiClaim";
 import { ClaimLine, Facility, Plan, Visit } from "@/lib/insurance/engine/types";
 import { CAP_LABELS } from "@/lib/insurance/engine/capLabels";
@@ -124,12 +126,11 @@ const stdRepeatCount = (v: string): number | null => {
   return Number.isSafeInteger(n) && n >= 1 && n <= MAX_ROWS ? n : null;
 };
 
-const btn = (active: boolean) =>
-  `px-4 py-3 rounded-xl border text-sm font-semibold transition ${
-    active
-      ? "bg-brand-600 text-white border-brand-600"
-      : "bg-white text-slate-700 border-slate-300 hover:border-brand-300"
-  }`;
+// 선택 버튼 묶음(가입 세대·자기부담 유형)의 접근성 규칙은 ./choiceGroup.ts (7차, 6차 R-06 과 같은 정책).
+//   ⚠ 자기부담 유형은 처음에 **미선택(null)** 이다 — 가입 시기로 추정하지 않는 기존 계약을 유지한다.
+//     미선택 묶음은 첫 항목이 Tab 정지점이고 aria-checked 는 모두 false 다.
+const GENERATION_VALUES = ["2009", "2017"] as const;
+const PLAN_VALUES = ["standard", "selective"] as const;
 
 const FACILITY_LABELS: Record<Facility, string> = {
   clinic: "의원급",
@@ -226,6 +227,17 @@ export default function HealthCalcStandardized() {
     ? []
     : [...new Set(result.lines.flatMap((line) => line.notes))];
 
+  const blockers = [
+    needsAmounts ? "행별 진료비" : null,
+    needsVisits ? "이미 사용한 외래 방문 횟수" : null,
+    needsPrescriptions ? "이미 사용한 처방전 건수" : null,
+    perVisitInvalid ? "회당 보험가입금액" : null,
+    priorPaidInvalid ? "이미 부담한 입원 자기부담금" : null,
+  ].filter((value): value is string => value !== null);
+  const blockedSummary = blockers.length > 0
+    ? `계산하지 못했습니다. 확인할 입력: ${blockers.join(", ")}. 자세한 안내는 아래에 있습니다.`
+    : result?.status === "PENDING_UNVERIFIED" ? result.notes.join(" ") : null;
+
   // 빠른 채우기 금액은 모든 행의 진료비를 덮어쓴다. 같은 규칙으로 판정한다.
   const quickAmountInvalid = stdAmount(quickAmount) === null;
   const quickCountNum = stdRepeatCount(quickCount);
@@ -252,12 +264,30 @@ export default function HealthCalcStandardized() {
     <div className="card">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="sm:col-span-2">
-          <label className="label-base">가입 세대</label>
-          <div className="grid grid-cols-2 gap-2 max-w-md">
-            <button type="button" onClick={() => setGeneration("2009")} className={btn(generation === "2009")}>
+          <label className="label-base" id="std-generation-label">가입 세대</label>
+          <div role="radiogroup" aria-labelledby="std-generation-label" className="grid grid-cols-2 gap-2 max-w-md">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={generation === "2009"}
+              tabIndex={choiceTabIndex(GENERATION_VALUES, generation, "2009")}
+              data-value="2009"
+              onClick={() => setGeneration("2009")}
+              onKeyDown={(e) => moveChoice(e, GENERATION_VALUES, generation, setGeneration)}
+              className={choiceClass(generation === "2009")}
+            >
               2세대 (2009.10~2017.3)
             </button>
-            <button type="button" onClick={() => setGeneration("2017")} className={btn(generation === "2017")}>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={generation === "2017"}
+              tabIndex={choiceTabIndex(GENERATION_VALUES, generation, "2017")}
+              data-value="2017"
+              onClick={() => setGeneration("2017")}
+              onKeyDown={(e) => moveChoice(e, GENERATION_VALUES, generation, setGeneration)}
+              className={choiceClass(generation === "2017")}
+            >
               3세대 (2017.4~2021.6)
             </button>
           </div>
@@ -268,12 +298,30 @@ export default function HealthCalcStandardized() {
         </div>
 
         <div className="sm:col-span-2">
-          <label className="label-base">자기부담 유형</label>
-          <div className="grid grid-cols-2 gap-2 max-w-md">
-            <button type="button" onClick={() => setPlan("standard")} className={btn(plan === "standard")}>
+          <label className="label-base" id="std-plan-label">자기부담 유형</label>
+          <div role="radiogroup" aria-labelledby="std-plan-label" className="grid grid-cols-2 gap-2 max-w-md">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={plan === "standard"}
+              tabIndex={choiceTabIndex(PLAN_VALUES, plan, "standard")}
+              data-value="standard"
+              onClick={() => setPlan("standard")}
+              onKeyDown={(e) => moveChoice(e, PLAN_VALUES, plan, setPlan)}
+              className={choiceClass(plan === "standard")}
+            >
               표준형
             </button>
-            <button type="button" onClick={() => setPlan("selective")} className={btn(plan === "selective")}>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={plan === "selective"}
+              tabIndex={choiceTabIndex(PLAN_VALUES, plan, "selective")}
+              data-value="selective"
+              onClick={() => setPlan("selective")}
+              onKeyDown={(e) => moveChoice(e, PLAN_VALUES, plan, setPlan)}
+              className={choiceClass(plan === "selective")}
+            >
               선택형
             </button>
           </div>
@@ -299,7 +347,7 @@ export default function HealthCalcStandardized() {
         <div className="space-y-2">
           {rows.map((row, i) => (
             <div key={row.id} className="grid grid-cols-1 sm:grid-cols-[2rem_1fr_9rem_11rem_2.5rem] gap-2 items-center">
-              <span className="hidden sm:block text-xs text-slate-400 text-center">{i + 1}</span>
+              <span className="hidden sm:block text-xs text-slate-500 text-center">{i + 1}</span>
               <RawAmountInput
                 id={`std-amount-${row.id}`}
                 value={row.amount}
@@ -318,7 +366,7 @@ export default function HealthCalcStandardized() {
               </select>
               <select
                 aria-label={`${i + 1}번 방문 구분`}
-                className="input-base w-full disabled:bg-slate-100 disabled:text-slate-400"
+                className="input-base w-full disabled:bg-slate-100 disabled:text-slate-500"
                 value={row.facility}
                 disabled={row.visit === "inpatient"}
                 onChange={(e) => patch(row.id, { facility: e.target.value as Facility })}
@@ -332,7 +380,7 @@ export default function HealthCalcStandardized() {
                 aria-label={`${i + 1}번 행 삭제`}
                 className="px-3 py-3 rounded-xl border border-slate-300 text-sm text-slate-500 hover:border-red-300 hover:text-red-600 disabled:opacity-40"
                 disabled={rows.length <= 1}
-                onClick={() => setRows((prev) => prev.filter((r) => r.id !== row.id))}
+                onClick={() => focusAfterUpdate(() => setRows((prev) => prev.filter((r) => r.id !== row.id)), `std-amount-${rows[i + 1]?.id ?? rows[i - 1]?.id}`)}
               >
                 ×
               </button>
@@ -345,7 +393,7 @@ export default function HealthCalcStandardized() {
             type="button"
             className="px-4 py-2 rounded-xl border border-slate-300 text-sm font-semibold text-slate-700 hover:border-brand-300 disabled:opacity-40"
             disabled={rows.length >= MAX_ROWS}
-            onClick={() => setRows((prev) => [...prev, newRow()])}
+            onClick={() => { const row = newRow(); focusAfterUpdate(() => setRows((prev) => [...prev, row]), `std-amount-${row.id}`); }}
           >
             + 행 추가
           </button>
@@ -480,10 +528,12 @@ export default function HealthCalcStandardized() {
       </div>
 
       <div className="mt-6">
-        <button type="button" className="btn-primary w-full sm:w-auto" onClick={() => setSubmitted(true)}>
+        <button type="button" className="btn-primary w-full sm:w-auto" onClick={() => focusAfterUpdate(() => setSubmitted(true), "std-blocked-summary")}>
           자기부담금 계산하기
         </button>
       </div>
+
+      {submitted && blockedSummary !== null && (<div id="std-blocked-summary" role="alert" tabIndex={-1} className="mt-5 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">{blockedSummary}</div>)}
 
       {submitted && (
         <div className="mt-8 space-y-4">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { focusAfterUpdate } from "./focusAfterUpdate";
 import ResultCard from "@/components/ResultCard";
 import AmountInput from "@/components/AmountInput";
 import NoticeBox from "@/components/NoticeBox";
@@ -44,34 +45,34 @@ export default function DeathCoverageCalc() {
         </div>
 
         <div>
-          <label className="label-base">생활비 보장 기간</label>
+          <label className="label-base" htmlFor="dc-years">생활비 보장 기간</label>
           <div className="flex items-center gap-2">
             <div className="flex-1">
-              <AmountInput id="dc-years" value={years} onChange={setYears} placeholder="예: 20" />
+              <AmountInput id="dc-years" value={years} onChange={setYears} placeholder="예: 20" unit="" aria-label="생활비 보장 기간 (년)" />
             </div>
             <span className="text-slate-500 text-sm">년</span>
             <div className="w-24">
-              <AmountInput id="dc-extra" value={extraMonths} onChange={setExtraMonths} placeholder="0" />
+              <AmountInput id="dc-extra" value={extraMonths} onChange={setExtraMonths} placeholder="0" unit="" aria-label="생활비 보장 기간 추가 개월 (0~11)" />
             </div>
             <span className="text-slate-500 text-sm">개월</span>
           </div>
-          <p className="mt-1 text-xs text-slate-400">개월 칸은 선택(0~11). 미입력 시 0.</p>
+          <p className="mt-1 text-xs text-slate-500">개월 칸은 선택(0~11). 미입력 시 0.</p>
         </div>
 
         <div>
-          <label className="label-base" htmlFor="dc-debt">현재 남은 부채 <span className="text-slate-400 font-normal">(선택)</span></label>
+          <label className="label-base" htmlFor="dc-debt">현재 남은 부채 <span className="text-slate-500 font-normal">(선택)</span></label>
           <AmountInput id="dc-debt" value={debt} onChange={setDebt} placeholder="대출 등 확정 부채" />
         </div>
         <div>
-          <label className="label-base" htmlFor="dc-other">기타 목적자금 <span className="text-slate-400 font-normal">(선택)</span></label>
+          <label className="label-base" htmlFor="dc-other">기타 목적자금 <span className="text-slate-500 font-normal">(선택)</span></label>
           <AmountInput id="dc-other" value={otherFunds} onChange={setOtherFunds} placeholder="이미 목표금액을 아는 경우만" />
         </div>
         <div>
-          <label className="label-base" htmlFor="dc-exist">기존 사망보험금 <span className="text-slate-400 font-normal">(선택)</span></label>
+          <label className="label-base" htmlFor="dc-exist">기존 사망보험금 <span className="text-slate-500 font-normal">(선택)</span></label>
           <AmountInput id="dc-exist" value={existing} onChange={setExisting} placeholder="이미 가입한 사망보험" />
         </div>
         <div>
-          <label className="label-base" htmlFor="dc-assets">활용 가능 자산 <span className="text-slate-400 font-normal">(선택)</span></label>
+          <label className="label-base" htmlFor="dc-assets">활용 가능 자산 <span className="text-slate-500 font-normal">(선택)</span></label>
           <AmountInput id="dc-assets" value={assets} onChange={setAssets} placeholder="예금·부동산 등" />
         </div>
       </div>
@@ -81,17 +82,23 @@ export default function DeathCoverageCalc() {
           type="button"
           className="btn-primary w-full sm:w-auto disabled:opacity-40 disabled:cursor-not-allowed"
           disabled={missing}
-          onClick={() => setSubmitted(true)}
+          onClick={() => focusAfterUpdate(() => setSubmitted(true), "dc-blocked-summary")}
         >
           필요 사망보장금액 계산하기
         </button>
         {missing && (
-          <p className="mt-2 text-xs text-slate-500">월 생활비와 보장 기간(연)을 입력해 주세요.</p>
+          <p className="mt-2 text-xs text-slate-500" role="status" aria-live="polite">월 생활비와 보장 기간(연)을 입력해 주세요.</p>
         )}
       </div>
 
-      {submitted && result && (
+      {submitted && result?.status === "OUT_OF_RANGE" && (
+        <div id="dc-blocked-summary" className="mt-8" role="alert" tabIndex={-1}>
+          <NoticeBox variant="warning">{result.note}</NoticeBox>
+        </div>
+      )}
+      {submitted && result?.status === "OK" && (
         <div className="mt-8 space-y-4">
+          <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">계산 결과. 추가로 필요한 사망보장금액 {won(result.requiredCoverage)}.</p>
           <ResultCard
             title="계산 결과"
             items={[

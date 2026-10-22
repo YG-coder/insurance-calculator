@@ -22,6 +22,7 @@
 //   상급병실료 행에는 약관상 '공제금액'이 규정돼 있지 않고, 제5조⑤가 이 행에 적용된다는
 //   명시적 근거나 공식 해석을 찾지 못했다(GEN2026-ROOM-CHARGE-DEDUCTIBLE-POOL = HOLD).
 //   미지급 50%를 deductibleApplied로 만들지도 않는다.
+import { roundedRateAmount, roundedIntegerRatio } from "../common/exactMoney";
 import { GEN2026 } from "./constants";
 import { CAUSE_VALUES, SEVERITY_VALUES, isClaimAmount, isPositiveInt, oneOf, rejected } from "./itemGuards";
 import {
@@ -111,9 +112,10 @@ function validate(input: Gen2026RoomChargeInput): Gen2026RejectedResult | Checke
     if (!isClaimAmount(total)) {
       return rejected(`${i + 1}번째 입원의 상급병실료 차액(roomChargeTotal)`, total);
     }
-    // 총 입원일수는 약관에 산정 방법 정의가 없다. 추정하지 않고 양의 정수만 받는다.
-    if (!isPositiveInt(stay.inpatientDays)) {
-      return rejected(`${i + 1}번째 입원의 총 입원일수(inpatientDays)`, stay.inpatientDays);
+    // 일수 자체와 일수×1일 지급한도가 모두 안전한 정수여야 상세 금액도 정확하다.
+    if (typeof stay.inpatientDays !== "number" || !isPositiveInt(stay.inpatientDays) || !Number.isSafeInteger(stay.inpatientDays)
+      || stay.inpatientDays > Math.floor(Number.MAX_SAFE_INTEGER / R.dailyPayCap)) {
+      return rejected(`${i + 1}번째 입원의 총 입원일수(inpatientDays) — 일수×1일 지급한도의 안전 정수 범위`, stay.inpatientDays);
     }
     stayTotals.push(total);
   }
@@ -266,7 +268,7 @@ export function calculateRoomCharge2026(
 
     // ⚠ 순서가 값을 바꾼다. 50%를 먼저 적용한 뒤 1일 평균 **보험금**에 한도를 건다.
     //   반대로 하면(병실료를 먼저 자르고 50%) 1일 지급이 최대 5만원으로 절반이 된다.
-    const payBeforeCaps = Math.round(total * R.payRate);
+    const payBeforeCaps = roundedRateAmount(total, R.payRate);
     const dailyCapAmount = R.dailyPayCap * days;
     const payAfterDailyCap = Math.min(payBeforeCaps, dailyCapAmount);
     if (payAfterDailyCap < payBeforeCaps) appliedCaps.push("GEN2026_ROOM_CHARGE_DAILY_AVERAGE_LIMIT");
@@ -290,7 +292,7 @@ export function calculateRoomCharge2026(
       rateBased: payBeforeCaps, rateApplied: R.payRate, minDeductible: 0,
       // ⚠ deductibleApplied는 채우지 않는다. 이 행에는 약관상 '공제금액' 개념이 없다.
       inpatientDays: days,
-      dailyAverageRoomCharge: Math.round(total / days),
+      dailyAverageRoomCharge: roundedIntegerRatio(total, days),
       payBeforeCaps, dailyCapAmount, baseOwnPay, dailyCapExcess, annualCapExcess, excessOwnPay,
       notes: [], appliedCaps,
     });

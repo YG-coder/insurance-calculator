@@ -11,6 +11,7 @@
 //      settle의 insuranceCap이 아니라 ownPayRaw를 깎아야 한다(5세대 500만 상한과 같은 성질).
 //   4) 통원 공제 분류축(Facility)은 4세대의 Tier와 다르다. 종합병원이 2·3세대에서는 1만5천원,
 //      4세대에서는 상급종합과 같은 2만원이다. 섞어 쓰면 안 된다.
+import { roundedRateAmount, rateAmountExceeds } from "../common/exactMoney";
 import { CapCode, ClaimInput, CalcResult, Facility, Plan } from "./types";
 import { GEN2009, GEN2009_NOT_APPLIED, GEN2017, GEN2017_NOT_APPLIED } from "./constants";
 import { settle, normalizeAmount } from "../common/settle";
@@ -128,9 +129,9 @@ export function calcStandardized(generation: StandardizedGeneration, input: Clai
     const prior = Math.max(0, priorAnnualPaid ?? 0);
     const remaining = Math.max(capValue - prior, 0);
 
-    let ownPayRaw = amount * rate;
+    let ownPayRaw = roundedRateAmount(amount, rate);
     const appliedCaps: CapCode[] = [];
-    if (ownPayRaw > remaining) {
+    if (rateAmountExceeds(amount, rate, remaining)) {
       ownPayRaw = remaining;
       appliedCaps.push(cap);
     }
@@ -142,7 +143,7 @@ export function calcStandardized(generation: StandardizedGeneration, input: Clai
     const s = settle(amount, ownPayRaw);
     return {
       status: "OK", generation, amount: s.amount, ownPay: s.ownPay, insurancePay: s.insurancePay,
-      rateBased: Math.round(amount * rate), rateApplied: rate, minDeductible: 0,
+      rateBased: roundedRateAmount(amount, rate), rateApplied: rate, minDeductible: 0,
       notes, appliedCaps,
     };
   }
@@ -153,7 +154,7 @@ export function calcStandardized(generation: StandardizedGeneration, input: Clai
   // 표준형만 정률과 비교한다. 선택형은 정액 공제뿐이다.
   const rate = plan === "standard" ? constants.outpatientStandardRate : 0;
   const ownPayRaw = plan === "standard"
-    ? Math.max(amount * rate, minDeductible)
+    ? Math.max(roundedRateAmount(amount, rate), minDeductible)
     : minDeductible;
 
   // 회(건)당 가입금액은 계약자가 정하는 값이라 상수화할 수 없다.
@@ -174,7 +175,7 @@ export function calcStandardized(generation: StandardizedGeneration, input: Clai
   const s = settle(amount, ownPayRaw, visitLimit);
   return {
     status: "OK", generation, amount: s.amount, ownPay: s.ownPay, insurancePay: s.insurancePay,
-    rateBased: Math.round(amount * rate), rateApplied: rate, minDeductible,
+    rateBased: roundedRateAmount(amount, rate), rateApplied: rate, minDeductible,
     notes, appliedCaps: s.capped ? [perVisitCap] : [],
   };
 }

@@ -245,7 +245,7 @@ console.log("\n[표시] 적용 비율 라벨이 계산에 쓰인 비율과 같�
     && !/Math\.max\(nhisRateNum, 20\)/.test(body));
   check("소스: 표시용 값이 엔진 인자로 새지 않는다",
     !/nhisCoinsuranceRate: [^\n]*benefitOutpatientPct/.test(body)
-    && /nhisCoinsuranceRate: nhisRateNum === undefined \? undefined : nhisRateNum \/ 100,/.test(code));
+    && /nhisCoinsuranceRate: nhisRateNum === undefined \? undefined : percentToRate\(nhisRateNum\),/.test(code));
 }
 
 // ── 빈 값 / 공백 ─────────────────────────────────────────────────────
@@ -393,7 +393,7 @@ console.log("\n[소스] 비율 전용 파서 · 게이트 · 금지 사항");
   // ⚠ **미전달·전달 형태는 여기서 확인한다.** 결과 비교로는 증명되지 않는다.
   check("전달은 null을 배제한 뒤에만 일어난다(타입 단언·0 대체 없음)",
     /\? nhisRateNum === null\s*\n\s*\? null\s*\n\s*: calc2026\(\{/.test(code)
-    && /nhisCoinsuranceRate: nhisRateNum === undefined \? undefined : nhisRateNum \/ 100,/.test(code)
+    && /nhisCoinsuranceRate: nhisRateNum === undefined \? undefined : percentToRate\(nhisRateNum\),/.test(code)
     && !/nhisRateNum as number/.test(code) && !/nhisRateNum \?\? 0/.test(code)
     && !/gen2026NhisRate\(nhisRate\) \?\? /.test(body));
   check("결과 계산 결과에서 비율을 역산하거나 되쓰지 않는다",
@@ -413,8 +413,8 @@ console.log("\n[소스] 비율 전용 파서 · 게이트 · 금지 사항");
     // ⚠ 주석을 걷어내고 본다 — 교체 이유 주석이 종전 조건식을 인용한다.
     && !/num > 0/.test(code.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "")));
   const eng = readFileSync("src/lib/insurance/engine/generation2026.ts", "utf8");
-  check("엔진과 20% 하한은 그대로다",
-    /if \(nhis === undefined\) holds\.push\("급여 통원: 건강보험 본인부담률 미제공 → 계산 불가\(#2 입력 필요\)"\);/.test(eng)
+  check("입력 부족 차단과 20% 하한을 유지한다",
+    /if \(nhis === undefined\) holds\.push\("급여 통원: 건강보험 본인부담률 미제공 → 계산 불가\. 진료비 영수증이나 보험사 안내에서 확인한 본인부담률을 입력해 주세요\."\);/.test(eng)
     && /const rate = Math\.max\(nhis as number, GEN2026\.benefit\.outpatient\.floorRate\);/.test(eng));
   const widgetSrc = readFileSync("src/components/RawAmountInput.tsx", "utf8");
   check("공용 위젯 파일은 그대로다",

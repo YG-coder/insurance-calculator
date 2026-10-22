@@ -214,9 +214,9 @@ console.log("\n[라벨] 다회에는 적용 비율 표시가 없다 — 만들�
   const t = text(h);
   check("화면에 자기부담률 표기가 없다", !/자기부담률 \(/.test(t));
   check("부동소수점 흔적이 화면에 없다", !/(0{6,}|9{6,})\d*%/.test(t) && !/0\.26899999/.test(t));
-  check("표시용 값을 계산 인자로 재사용하지 않는다(전달은 검증값 /100 하나뿐)",
+  check("표시용 값을 계산 인자로 재사용하지 않는다(전달은 검증값의 십진 소수점 이동 하나뿐)",
     (body.match(/nhisCoinsuranceRate:/g) ?? []).length === 1
-    && /nhisCoinsuranceRate: nhisRateNum === undefined \|\| nhisRateNum === null \? undefined : nhisRateNum \/ 100,/.test(body));
+    && /nhisCoinsuranceRate: nhisRateNum === undefined \|\| nhisRateNum === null \? undefined : percentToRate\(nhisRateNum\),/.test(body));
 }
 
 // ── ⑧ 소스 계약 ───────────────────────────────────────────────────────

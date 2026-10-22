@@ -284,14 +284,15 @@ console.log("\n[G-35] 6. 4세대 단건 PENDING — 의도한 변경이고, 공�
 {
   // ⚠ **무회귀가 아니라 의도 변경 버킷이다.** 종전 게이트는 `result.status`를 보지 않아
   //   차단 결과도 `?? 0` 때문에 전부 0원인 카드로 그렸다. 이제 그리지 않는다.
-  // ⚠ 이번 커밋에서 **차단 안내 UI는 만들지 않았다.** 저장소에 공용 PENDING 컴포넌트가 없고
+  // 과거 G-35에서는 차단 안내 UI를 만들지 않았다. 17차는 방어용 안내를 추가했다.
+  // 당시 저장소에 공용 PENDING 컴포넌트가 없고
   //   (네 화면이 NoticeBox 패턴을 각자 반복한다), 이 화면은 `tier`를 유효 리터럴로만 싣고
   //   stray 축을 넘기지 않아 공개 화면에서 도달 경로를 찾지 못했다 — **없다고 단정하지 않는다.**
   check("4세대 단건 게이트가 status를 본다", /result !== null && result\.status === "OK"/.test(SRC.g4));
   check("화면이 급여 통원에만 종별을 싣는다(도달 불가의 근거)",
     /tier: coverage === "benefit" && visit === "outpatient" \? tier : undefined/.test(SRC.g4));
   check("종별 상태가 유효 리터럴로만 초기화된다", /useState<Tier>\("clinic"\)/.test(SRC.g4));
-  check("차단 안내 UI를 새로 만들지 않았다", !/PENDING_UNVERIFIED/.test(SRC.g4));
+  check("17차: 차단 결과도 안내하며 기존 정상 결과 게이트를 유지", /PENDING_UNVERIFIED/.test(SRC.g4) && /single2021-blocked-summary/.test(SRC.g4));
 }
 
 console.log(`\n[G-35 정상 0원 결과 카드] ✅ ${pass} / ❌ ${fail}`);

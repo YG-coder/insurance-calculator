@@ -243,10 +243,10 @@ console.log("\n[가드] 소스·문구");
   const eng = readFileSync("src/lib/insurance/engine/roomCharge2026.ts", "utf8");
   const ui = readFileSync("src/components/calculators/HealthCalcMulti2026.tsx", "utf8").replace(/\s+/g, " ");
   const page = readFileSync("src/app/5th-generation-health-insurance-calculator/page.tsx", "utf8").replace(/\s+/g, " ");
-  check("보상률을 상수에서 읽는다", /Math\.round\(total \* R\.payRate\)/.test(eng) && !/\* 0\.5/.test(eng));
+  check("보상률을 상수에서 읽는다", /roundedRateAmount\(total, R\.payRate\)/.test(eng) && !/\* 0\.5/.test(eng));
   check("일 한도를 상수에서 읽는다", /R\.dailyPayCap \* days/.test(eng) && !/100_000 \* days/.test(eng));
   check("50%를 먼저 적용한 뒤 일 한도를 건다",
-    /const payBeforeCaps = Math\.round\(total \* R\.payRate\);[\s\S]{0,200}const payAfterDailyCap = Math\.min\(payBeforeCaps, dailyCapAmount\);/.test(eng));
+    /const payBeforeCaps = roundedRateAmount\(total, R\.payRate\);[\s\S]{0,200}const payAfterDailyCap = Math\.min\(payBeforeCaps, dailyCapAmount\);/.test(eng));
   check("일 한도 CapCode가 실제 절삭에만 붙는다",
     /if \(payAfterDailyCap < payBeforeCaps\) appliedCaps\.push\("GEN2026_ROOM_CHARGE_DAILY_AVERAGE_LIMIT"\)/.test(eng));
   check("연간 한도 CapCode가 실제 절삭에만 붙는다",

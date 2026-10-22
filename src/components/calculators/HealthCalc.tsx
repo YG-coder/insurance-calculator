@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { focusAfterUpdate } from "./focusAfterUpdate";
 import ResultCard from "@/components/ResultCard";
 import RawAmountInput from "@/components/RawAmountInput";
 import NoticeBox from "@/components/NoticeBox";
+import { choiceClass, moveChoice } from "./choiceGroup";
 import { CAP_LABELS } from "@/lib/insurance/engine/capLabels";
 import { calculate } from "@/lib/insurance/engine/engine";
 
@@ -13,6 +15,13 @@ type Tier = "clinic" | "hospital";         // 병·의원급 / 상급종합·종
 
 const won = (n: number) =>
   `${Math.max(0, Math.round(n)).toLocaleString("ko-KR")}원`;
+
+// ── 단일 선택 버튼 묶음의 접근성 (R-06) — 규칙·도우미는 ./choiceGroup.ts 에 있다(7차에 분리). ──
+//   시각 상태·DOM 상태·키보드 모두 같은 상태값 하나(coverage/visit/tier)를 본다. 상태와 계산 전달 경로는
+//   바꾸지 않는다. 이 화면의 세 묶음은 항상 선택값이 있으므로 Tab 정지점은 선택된 항목이다.
+const COVERAGE_VALUES = ["benefit", "non_benefit"] as const;
+const VISIT_VALUES = ["outpatient", "inpatient"] as const;
+const TIER_VALUES = ["clinic", "hospital"] as const;
 
 /**
  * 4세대 **단건** 진료비 파서. 원문 문자열을 형식으로 **먼저** 판정한다.
@@ -75,6 +84,10 @@ export default function HealthCalc() {
   const ownPay = result?.ownPay ?? 0;
   const insurancePay = result?.insurancePay ?? 0;
 
+  const blockedSummary = amountInvalid
+    ? "계산하지 못했습니다. 병원비를 올바르게 입력해 주세요. 실제 0원은 숫자 0을 입력하세요."
+    : result?.status === "PENDING_UNVERIFIED" ? result.notes.join(" ") : null;
+
   return (
     <div className="card">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -92,27 +105,29 @@ export default function HealthCalc() {
         </div>
 
         <div>
-          <label className="label-base">진료 구분</label>
-          <div className="grid grid-cols-2 gap-2">
+          <label className="label-base" id="med-coverage-label">진료 구분</label>
+          <div role="radiogroup" aria-labelledby="med-coverage-label" className="grid grid-cols-2 gap-2">
             <button
               type="button"
+              role="radio"
+              aria-checked={coverage === "benefit"}
+              tabIndex={coverage === "benefit" ? 0 : -1}
+              data-value="benefit"
               onClick={() => setCoverage("benefit")}
-              className={`px-4 py-3 rounded-xl border text-sm font-semibold transition ${
-                coverage === "benefit"
-                  ? "bg-brand-600 text-white border-brand-600"
-                  : "bg-white text-slate-700 border-slate-300 hover:border-brand-300"
-              }`}
+              onKeyDown={(e) => moveChoice(e, COVERAGE_VALUES, coverage, setCoverage)}
+              className={choiceClass(coverage === "benefit")}
             >
               급여
             </button>
             <button
               type="button"
+              role="radio"
+              aria-checked={coverage === "non_benefit"}
+              tabIndex={coverage === "non_benefit" ? 0 : -1}
+              data-value="non_benefit"
               onClick={() => setCoverage("non_benefit")}
-              className={`px-4 py-3 rounded-xl border text-sm font-semibold transition ${
-                coverage === "non_benefit"
-                  ? "bg-brand-600 text-white border-brand-600"
-                  : "bg-white text-slate-700 border-slate-300 hover:border-brand-300"
-              }`}
+              onKeyDown={(e) => moveChoice(e, COVERAGE_VALUES, coverage, setCoverage)}
+              className={choiceClass(coverage === "non_benefit")}
             >
               비급여
             </button>
@@ -120,27 +135,29 @@ export default function HealthCalc() {
         </div>
 
         <div className="sm:col-span-2">
-          <label className="label-base">치료 형태</label>
-          <div className="grid grid-cols-2 gap-2 max-w-md">
+          <label className="label-base" id="med-visit-label">치료 형태</label>
+          <div role="radiogroup" aria-labelledby="med-visit-label" className="grid grid-cols-2 gap-2 max-w-md">
             <button
               type="button"
+              role="radio"
+              aria-checked={visit === "outpatient"}
+              tabIndex={visit === "outpatient" ? 0 : -1}
+              data-value="outpatient"
               onClick={() => setVisit("outpatient")}
-              className={`px-4 py-3 rounded-xl border text-sm font-semibold transition ${
-                visit === "outpatient"
-                  ? "bg-brand-600 text-white border-brand-600"
-                  : "bg-white text-slate-700 border-slate-300 hover:border-brand-300"
-              }`}
+              onKeyDown={(e) => moveChoice(e, VISIT_VALUES, visit, setVisit)}
+              className={choiceClass(visit === "outpatient")}
             >
               통원
             </button>
             <button
               type="button"
+              role="radio"
+              aria-checked={visit === "inpatient"}
+              tabIndex={visit === "inpatient" ? 0 : -1}
+              data-value="inpatient"
               onClick={() => setVisit("inpatient")}
-              className={`px-4 py-3 rounded-xl border text-sm font-semibold transition ${
-                visit === "inpatient"
-                  ? "bg-brand-600 text-white border-brand-600"
-                  : "bg-white text-slate-700 border-slate-300 hover:border-brand-300"
-              }`}
+              onKeyDown={(e) => moveChoice(e, VISIT_VALUES, visit, setVisit)}
+              className={choiceClass(visit === "inpatient")}
             >
               입원
             </button>
@@ -149,27 +166,29 @@ export default function HealthCalc() {
 
         {visit === "outpatient" && coverage === "benefit" && (
           <div className="sm:col-span-2">
-            <label className="label-base">방문 의료기관</label>
-            <div className="grid grid-cols-2 gap-2 max-w-md">
+            <label className="label-base" id="med-tier-label">방문 의료기관</label>
+            <div role="radiogroup" aria-labelledby="med-tier-label" className="grid grid-cols-2 gap-2 max-w-md">
               <button
                 type="button"
+                role="radio"
+                aria-checked={tier === "clinic"}
+                tabIndex={tier === "clinic" ? 0 : -1}
+                data-value="clinic"
                 onClick={() => setTier("clinic")}
-                className={`px-4 py-3 rounded-xl border text-sm font-semibold transition ${
-                  tier === "clinic"
-                    ? "bg-brand-600 text-white border-brand-600"
-                    : "bg-white text-slate-700 border-slate-300 hover:border-brand-300"
-                }`}
+                onKeyDown={(e) => moveChoice(e, TIER_VALUES, tier, setTier)}
+                className={choiceClass(tier === "clinic")}
               >
                 병·의원급
               </button>
               <button
                 type="button"
+                role="radio"
+                aria-checked={tier === "hospital"}
+                tabIndex={tier === "hospital" ? 0 : -1}
+                data-value="hospital"
                 onClick={() => setTier("hospital")}
-                className={`px-4 py-3 rounded-xl border text-sm font-semibold transition ${
-                  tier === "hospital"
-                    ? "bg-brand-600 text-white border-brand-600"
-                    : "bg-white text-slate-700 border-slate-300 hover:border-brand-300"
-                }`}
+                onKeyDown={(e) => moveChoice(e, TIER_VALUES, tier, setTier)}
+                className={choiceClass(tier === "hospital")}
               >
                 상급종합·종합병원
               </button>
@@ -185,18 +204,19 @@ export default function HealthCalc() {
         <button
           type="button"
           className="btn-primary w-full sm:w-auto"
-          onClick={() => setSubmitted(true)}
+          onClick={() => focusAfterUpdate(() => setSubmitted(true), "single2021-blocked-summary")}
         >
           자기부담금 계산하기
         </button>
       </div>
 
+      {submitted && blockedSummary !== null && (<div id="single2021-blocked-summary" role="alert" tabIndex={-1} className="mt-5 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">{blockedSummary}</div>)}
+
       {/* ⚠ **정책 교체.** 종전 조건은 `num > 0`이었다 — 입력값을 보느라 (1) 정상 0원 결과를
              감췄고, (2) `result.status`를 **아예 보지 않아** 엔진이 차단한 결과도 `?? 0` 때문에
              전부 0원인 카드로 그렸다. 결과 상태를 기준으로 바꿔 두 문제를 함께 닫는다.
-             ⚠ 차단 안내 UI는 이번에 만들지 않는다 — 이 화면은 `tier`를 항상 유효 리터럴로만
-             싣고 stray 축을 넘기지 않아 공개 화면에서 PENDING 도달 경로를 찾지 못했다
-             (없다고 단정하지는 않는다). 도달하면 카드를 그리지 않는 계약만 고정한다. */}
+             공개 화면의 PENDING 도달 경로는 아직 확인되지 않았다. 17차에서는 방어용
+             보류 안내도 제공하며, 기존 정상 결과 게이트와 계산 입력은 그대로 유지한다. */}
       {submitted && result !== null && result.status === "OK" && (
         <div className="mt-8">
           {/* ⚠ **라이브 리전은 요약 한 문장만 담는다.** 결과 카드·표를 이 안에 넣으면

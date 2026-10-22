@@ -1,6 +1,7 @@
 // ⚠ `normalizeAmount`를 더 이상 import하지 않는다. 진료비를 조용히 고치던 유일한
 //   호출부를 이번에 검증으로 바꿨고, 남겨 두면 "여기서도 값을 고친다"고 읽힌다.
 //   `settle()`이 내부에서 여전히 자기 인자를 정규화하며 그 동작은 그대로다.
+import { roundedRateAmount } from "../common/exactMoney";
 import { settle } from "../common/settle";
 import { GEN2021 } from "./constants";
 import { calc2021 } from "./generation2021";
@@ -531,11 +532,11 @@ export function calculateMany2021(input: Gen2021MultiClaimInput): MultiClaimResu
       }
       if (rc.annualVisits !== null) visits += 1;
       const remaining = Math.max(rc.annualLimit - paid, 0);
-      const s = settle(amount, Math.max(amount * GEN2021.rider.deductRate, GEN2021.rider.minDeductible), remaining);
+      const s = settle(amount, Math.max(roundedRateAmount(amount, GEN2021.rider.deductRate), GEN2021.rider.minDeductible), remaining);
       single = {
         status: "OK", generation: "2021", amount: s.amount,
         ownPay: s.ownPay, insurancePay: s.insurancePay,
-        rateBased: Math.round(amount * GEN2021.rider.deductRate),
+        rateBased: roundedRateAmount(amount, GEN2021.rider.deductRate),
         rateApplied: GEN2021.rider.deductRate,
         minDeductible: GEN2021.rider.minDeductible,
         notes: [], appliedCaps: s.capped ? [rc.moneyCap] : [],

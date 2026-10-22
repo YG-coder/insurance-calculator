@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { focusAfterUpdate } from "./focusAfterUpdate";
+import { flushSync } from "react-dom";
 import NoticeBox from "@/components/NoticeBox";
 import RawAmountInput from "@/components/RawAmountInput";
 import ResultCard from "@/components/ResultCard";
@@ -310,6 +312,35 @@ export default function HealthCalcMulti2021() {
               priorAnnualOutpatientVisits: gen2021Count(priorOutVisits) ?? undefined,
             } satisfies Gen2021MultiGeneralNonBenefitOutpatientInput);
 
+  // ── 제출 뒤 보류·오류 안내의 접근성 정책 (R-07) ─────────────────────────────
+  //   보류·오류 안내는 제출 버튼 아래에 조건부로 **붙었다 떨어지는** 요소라, 보조기술 사용자는
+  //   버튼을 눌러도 무엇이 일어났는지 알 길이 없었다(정상 계산만 role="status" 요약이 있었다).
+  //   정책: 제출할 때마다 차단 사유를 한 문장으로 요약한 **role="alert" 요약 한 곳**을 렌더하고
+  //   그곳으로 포커스를 보낸다. 사유별 NoticeBox 를 모두 alert 로 만들지 않는다 — 사유 수만큼
+  //   낭독이 겹쳐 오히려 묻힌다. 요약은 "어느 입력 몇 곳"만 말하고 자세한 안내는 아래 상자가 맡는다.
+  //   정상 계산의 role="status" 요약과 결과 카드·표는 그대로 둔다(표를 라이브 리전에 넣지 않는다).
+  //   ⚠ 훅(useRef/useEffect)을 쓰지 않는다 — tests/_uiRender.ts 의 최소 렌더러는 useState 만 제공한다.
+  //     포커스는 클릭 핸들러에서 flushSync 로 DOM 을 먼저 반영한 뒤 id 로 찾아 보낸다.
+  const BLOCKED_SUMMARY_ID = "multi2021-blocked-summary";
+  const blockers = [
+    needsOutVisits ? "이미 사용한 비급여 통원 횟수" : null,
+    needsRiderVisits ? "이미 받은 치료 횟수" : null,
+    needsAmounts ? `${badAmountRows.join(", ")}번째 행 진료비` : null,
+    limitInvalid ? "증권상 연간 가입금액" : null,
+    paidInvalid ? "누적기간 내 기존 지급보험금" : null,
+  ].filter((v): v is string => v !== null);
+  const pendingNoteCount = result !== null && result.status === "PENDING_UNVERIFIED" ? result.notes.length : 0;
+  const blockedSummary = blockers.length > 0
+    ? `계산하지 못했습니다. 입력 ${blockers.length}곳을 확인해 주세요: ${blockers.join(", ")}. 자세한 안내는 아래에 있습니다.`
+    : pendingNoteCount > 0
+      ? `계산을 보류했습니다. 확인이 필요한 안내 ${pendingNoteCount}건이 아래에 있습니다.`
+      : null;
+  const submit = () => {
+    // DOM 을 먼저 갱신해야 요약 요소가 존재한다. 차단이 없으면 포커스는 그대로 둔다(정상 요약은 status 리전이 알린다).
+    flushSync(() => setSubmitted(true));
+    document.getElementById(BLOCKED_SUMMARY_ID)?.focus();
+  };
+
   const setLine = (index: number, value: string) =>
     setAmounts((old) => old.map((v, i) => i === index ? value : v));
   const smallButton = "rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:border-brand-300 disabled:opacity-40";
@@ -365,11 +396,11 @@ export default function HealthCalcMulti2021() {
                   ariaLabel={`${i + 1}건 진료비`} />
               </div>
             </label>
-            <button type="button" className={smallButton} onClick={() => setAmounts((old) => old.filter((_, j) => j !== i))} disabled={amounts.length === 1}>삭제</button>
+            <button type="button" className={smallButton} aria-label={`${i + 1}번 행 삭제`} onClick={() => focusAfterUpdate(() => setAmounts((old) => old.filter((_, j) => j !== i)), `gen2021-amount-${Math.min(i, amounts.length - 2)}`)} disabled={amounts.length === 1}>삭제</button>
           </div>
         ))}
         <div className="flex flex-wrap gap-2">
-          <button type="button" className={smallButton} onClick={() => setAmounts((old) => [...old, ""])}>행 추가</button>
+          <button type="button" className={smallButton} onClick={() => focusAfterUpdate(() => setAmounts((old) => [...old, ""]), `gen2021-amount-${amounts.length}`)}>행 추가</button>
           <input className="input-base w-20" inputMode="numeric" autoComplete="off" value={copyCount} onChange={(e) => setCopyCount(e.target.value)} aria-label="복사할 횟수" />
           <button type="button" className={smallButton} disabled={copySourceInvalid || copyCountInvalid} onClick={() => {
             // ⚠ 버튼 비활성만으로는 부족하다. 핸들러에서도 막는다 — 무효한 첫 행을
@@ -444,7 +475,14 @@ export default function HealthCalcMulti2021() {
       {rider === "manual_therapy" && <div className="mt-4"><NoticeBox variant="info">도수치료·체외충격파치료·증식치료는 각 치료횟수를 합산해 <b>최초 {GEN2021.rider.mskApproval.initialApproved}회</b>를 보장하고, 이후에는 증상의 개선·병변 호전 등이 확인된 경우에 한하여 <b>{GEN2021.rider.mskApproval.step}회 단위</b>로 연간 {GEN2021.rider.manual_therapy.annualVisits}회까지 보상합니다(실손의료보험 특별약관 제3조 (3)3대비급여 제1항 &lt;표1&gt; 주)). 이 계산기는 증상 개선 여부를 판정하지 않습니다.</NoticeBox></div>}
       {rider === "mri" && <div className="mt-4"><NoticeBox variant="info">비급여 MRI·MRA는 약관상 <b>금액 한도만</b> 있고 연간 횟수 한도가 없습니다. 그래서 이미 받은 횟수를 묻지 않습니다.</NoticeBox></div>}
 
-      <button type="button" className="btn-primary mt-6" onClick={() => setSubmitted(true)}>여러 건 계산하기</button>
+      <button type="button" className="btn-primary mt-6" onClick={submit}>여러 건 계산하기</button>
+
+      {submitted && blockedSummary !== null && <div
+        id={BLOCKED_SUMMARY_ID}
+        role="alert"
+        tabIndex={-1}
+        className="mt-5 rounded-xl border border-amber-300 bg-amber-100 p-4 text-sm font-semibold leading-relaxed text-amber-900 outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+      >{blockedSummary}</div>}
 
       {submitted && needsOutVisits && <div className="mt-5"><NoticeBox variant="warning">계약해당일 기준 1년간 <b>이미 사용한 비급여 통원 횟수</b>를 입력해 주세요. 이전 통원이 없으면 <b>0</b>을 입력하세요. 비급여 통원은 연 {GEN2021.nonBenefitOutpatientAnnualVisits}회가 한도라 이 값이 있어야 계산할 수 있고, 계산기가 0으로 추정하지 않습니다. 0 이상의 정수만 받으며 음수·소수는 계산하지 않습니다.</NoticeBox></div>}
       {submitted && needsRiderVisits && <div className="mt-5"><NoticeBox variant="warning">계약해당일 기준 1년간 <b>이미 받은 치료 횟수</b>를 입력해 주세요. 받은 치료가 없으면 <b>0</b>을 입력하세요. 이 특약은 연 {rider === "manual_therapy" ? GEN2021.rider.manual_therapy.annualVisits : GEN2021.rider.injection.annualVisits}회가 한도라 이 값이 있어야 계산할 수 있고, 계산기가 0으로 추정하지 않습니다. 0 이상의 정수만 받으며 음수·소수는 계산하지 않습니다.</NoticeBox></div>}

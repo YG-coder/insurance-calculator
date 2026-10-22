@@ -33,6 +33,16 @@ export function calcFuturePremium(input: FuturePremiumInput): FuturePremiumResul
     notes: [],
   };
 
+  // 입력과 산출 금액이 원 단위 정밀도를 보장할 수 있는 범위를 벗어나면
+  // 일부 금액만 남기지 않고 기존 NEED_INPUT 안내로 전체 계산을 보류한다.
+  const rangeError: FuturePremiumResult = {
+    ...base, status: "NEED_INPUT",
+    notes: ["정확하게 계산할 수 있는 범위를 벗어났습니다. 월 보험료와 개월 수를 줄여 다시 입력해 주세요."],
+  };
+  if ([input.monthlyPremium, input.remainingMonths, input.paidMonths].some(
+    (value) => value !== undefined && (!Number.isFinite(value) || Math.abs(value) > Number.MAX_SAFE_INTEGER),
+  )) return rangeError;
+
   // 필수: 월 보험료 + 남은 납입 개월
   if (monthlyPremium === 0 || remainingMonths === 0) {
     if (remainingMonths === 0 && monthlyPremium > 0) {
@@ -44,6 +54,7 @@ export function calcFuturePremium(input: FuturePremiumInput): FuturePremiumResul
   }
 
   const futurePremium = monthlyPremium * remainingMonths;
+  if (!Number.isSafeInteger(futurePremium)) return rangeError;
 
   let paidSoFar: number | null = null;
   let totalAtCompletion: number | null = null;
@@ -52,6 +63,7 @@ export function calcFuturePremium(input: FuturePremiumInput): FuturePremiumResul
   if (hasPaid) {
     paidSoFar = monthlyPremium * paidMonths;
     totalAtCompletion = paidSoFar + futurePremium;
+    if (!Number.isSafeInteger(paidSoFar) || !Number.isSafeInteger(totalAtCompletion)) return rangeError;
     futureSharePercent = totalAtCompletion > 0 ? (futurePremium / totalAtCompletion) * 100 : null;
   }
 

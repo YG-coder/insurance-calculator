@@ -403,7 +403,7 @@ console.log("\n[커밋 D·E] 계산·화면 무변경 (기준 30dee21)");
     //   대응 축이 없는데, 종전에는 목록에 없어 **조용히 폐기**됐다(실측: 접근자 호출 0회).
     //   맨 끝이라 기존 14개 키의 안내 우선순위는 그대로이고, 계산식·검증 순서·반환 계약은
     //   한 글자도 바뀌지 않았다.
-    "src/lib/insurance/engine/roomCharge2026.ts": "b6ccccb1d2f7b566600bee3db256f57e1ff6337efe99c8f04b9354f971494dfc",
+    "src/lib/insurance/engine/roomCharge2026.ts": "1cc107e5822eacc9e9209c6c80e916e20f584abdcb957200684f88771739cd42",
     // ⚠ G-15에서 **의도적으로** 갱신했다(종전 2c019bb8…).
     //   급여 통원 분기가 `nhisCoinsuranceRate`·`tier`를 검증 없이 산식에 넣어, 타입을 우회한
     //   무효값이 `Math.max`/`md[tier]`에서 **NaN**이 되고 `settle()`의 유한성 폴백에 걸려
@@ -470,7 +470,9 @@ console.log("\n[커밋 D·E] 계산·화면 무변경 (기준 30dee21)");
     //     (3) `coverage`·`visit`·`tier`를 호출당 **한 번만** 읽는다(종전 2~4회). 첫 사용
     //         시점에 읽는 메모이제이션이라 선행 차단 경로의 접근자 순서는 그대로다.
     //   ⚠ 산식·상수·상한 절삭·`ok()`/`pending()`의 반환값·기존 안내 문구는 그대로다.
-    "src/lib/insurance/engine/generation2026.ts": "da82609ae0bebf16be1b93448fbcdd19a12bac97bc27013439539b727c1b1f3e",
+    // 20차: 본인부담률 미입력 안내의 내부 번호를 사용자 확인 문장으로만 교체했다.
+    // 문구를 되돌리면 이전 파일과 바이트 동일함을 대조했고, 계산/보류 조건은 유지한다.
+    "src/lib/insurance/engine/generation2026.ts": "0bcec86b7f9d3e236a31e2d16f6009828628bad20164c582460e41bbae2bba7f",
     // ⚠ G-33에서 **의도적으로** 갱신했다(종전 da28c9f7…). 제네릭 진입점이 **선택된 세대가
     //   소비하지 않는 5세대 전용 축**을 명시적으로 거부한다 — 종전에는 2009·2017·2021의
     //   모든 경로에서 `nhisCoinsuranceRate`·`severity`·`nonBenefitItem`·
@@ -510,6 +512,7 @@ console.log("\n[커밋 D·E] 계산·화면 무변경 (기준 30dee21)");
     // 페이지 렌더 함수 본문은 직전 커밋과 동일함을 별도 대조하고 파일 해시를 갱신했다.
     "src/app/5th-generation-health-insurance-calculator/page.tsx": "d53b0b35432488e2c8dca2a6ec16367391955a6f3a9d906c63b576dbb897e34e",
   };
+  // 21차: 정수 기반 반올림·병실료 일수 상한 수정 후 해시. claimRounding.test.ts로 산술을 별도 검증.
   for (const [file, want] of Object.entries(FROZEN)) {
     const got = createHash("sha256").update(readFileSync(file)).digest("hex");
     check(`무변경: ${file.split("/").pop()}`, got === want, `${got.slice(0, 12)} ≠ ${want.slice(0, 12)}`);

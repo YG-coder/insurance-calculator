@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { focusAfterUpdate } from "./focusAfterUpdate";
 import AmountInput from "@/components/AmountInput";
 import NoticeBox from "@/components/NoticeBox";
 import { calcCarQuoteCompare } from "@/lib/insurance/decision/carQuoteCompare";
@@ -37,9 +38,11 @@ export default function CarCalc() {
         {rows.map((r, i) => (
           <div key={i} className="grid grid-cols-1 sm:grid-cols-[1fr_1.2fr_auto] gap-3 items-end">
             <div>
-              {i === 0 && <label className="label-base">보험사 이름 <span className="text-slate-400 font-normal">(선택)</span></label>}
+              {i === 0 && <label className="label-base" htmlFor="car-n-0">보험사 이름 <span className="text-slate-500 font-normal">(선택)</span></label>}
               <input
+                id={`car-n-${i}`}
                 type="text"
+                aria-label={`견적 ${String.fromCharCode(65 + i)} 보험사 이름`}
                 value={r.name}
                 onChange={(e) => update(i, "name", e.target.value)}
                 placeholder={`견적 ${String.fromCharCode(65 + i)}`}
@@ -47,12 +50,12 @@ export default function CarCalc() {
               />
             </div>
             <div>
-              {i === 0 && <label className="label-base">연간 견적 금액 (원)</label>}
-              <AmountInput id={`car-a-${i}`} value={r.amount} onChange={(v) => update(i, "amount", v)} placeholder="예: 850,000" />
+              {i === 0 && <label className="label-base" htmlFor="car-a-0">연간 견적 금액 (원)</label>}
+              <AmountInput id={`car-a-${i}`} value={r.amount} onChange={(v) => update(i, "amount", v)} placeholder="예: 850,000" aria-label={`견적 ${String.fromCharCode(65 + i)} 연간 견적 금액 (원)`} />
             </div>
             <div>
               {rows.length > 2 && (
-                <button type="button" onClick={() => removeRow(i)} className="px-3 py-3 text-xs text-slate-400 hover:text-red-500">
+                <button type="button" aria-label={`견적 ${String.fromCharCode(65 + i)} 삭제`} onClick={() => focusAfterUpdate(() => removeRow(i), `car-n-${Math.min(i, rows.length - 2)}`)} className="px-3 py-3 text-xs text-slate-500 hover:text-red-500">
                   삭제
                 </button>
               )}
@@ -63,7 +66,7 @@ export default function CarCalc() {
 
       <div className="mt-4 flex flex-wrap gap-3">
         {rows.length < 6 && (
-          <button type="button" onClick={addRow} className="px-4 py-2 rounded-xl border border-slate-300 text-sm font-semibold text-slate-700 hover:border-brand-300">
+          <button type="button" onClick={() => focusAfterUpdate(addRow, `car-n-${rows.length}`)} className="px-4 py-2 rounded-xl border border-slate-300 text-sm font-semibold text-slate-700 hover:border-brand-300">
             + 견적 추가
           </button>
         )}
@@ -71,16 +74,21 @@ export default function CarCalc() {
           type="button"
           className="btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
           disabled={!canCalc}
-          onClick={() => setSubmitted(true)}
+          onClick={() => focusAfterUpdate(() => setSubmitted(true), "car-blocked-summary")}
         >
           견적 비교하기
         </button>
       </div>
-      {!canCalc && <p className="mt-2 text-xs text-slate-500">비교하려면 견적 금액을 2개 이상 입력해 주세요.</p>}
+      {!canCalc && <p className="mt-2 text-xs text-slate-500" role="status" aria-live="polite">비교하려면 견적 금액을 2개 이상 입력해 주세요.</p>}
 
+      {submitted && result?.status === "NEED_MORE" && (
+        <div id="car-blocked-summary" role="alert" tabIndex={-1} className="mt-5"><NoticeBox variant="warning">비교하려면 0원보다 큰 견적 금액을 2개 이상 입력해 주세요. 0원과 미입력 견적은 비교에서 제외합니다.</NoticeBox></div>
+      )}
       {submitted && result && result.status === "OK" && (
         <div className="mt-8 space-y-4">
-          <div className="overflow-hidden rounded-2xl border border-slate-200">
+          <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">비교 결과. {result.quotes.length}개 견적의 최고·최저 차액 {won(result.gap ?? 0)}.{result.quotes.length < rows.length ? ` 0원 또는 미입력 ${rows.length - result.quotes.length}개 견적은 제외했습니다.` : ""}</p>
+          {result.quotes.length < rows.length && <NoticeBox variant="info">0원 또는 금액이 비어 있는 {rows.length - result.quotes.length}개 견적은 비교에서 제외했습니다.</NoticeBox>}
+          <div tabIndex={0} role="region" aria-label="자동차보험 견적 비교표 (가로 스크롤 가능)" className="overflow-x-auto rounded-2xl border border-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-slate-500">
                 <tr>
@@ -106,11 +114,11 @@ export default function CarCalc() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="rounded-xl border border-slate-200 px-5 py-4">
               <p className="text-xs text-slate-500 mb-1">최고−최저 차액</p>
-              <p className="text-xl font-bold text-slate-900">{won(result.gap ?? 0)}</p>
+              <p className="break-all text-xl font-bold text-slate-900">{won(result.gap ?? 0)}</p>
             </div>
             <div className="rounded-xl border border-slate-200 px-5 py-4">
               <p className="text-xs text-slate-500 mb-1">월 환산 차액 (연간 차액 ÷ 12개월)</p>
-              <p className="text-xl font-bold text-slate-900">{won(result.monthlyGap ?? 0)}</p>
+              <p className="break-all text-xl font-bold text-slate-900">{won(result.monthlyGap ?? 0)}</p>
             </div>
           </div>
 

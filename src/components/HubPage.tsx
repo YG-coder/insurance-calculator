@@ -103,7 +103,7 @@ export default function HubPage({
                 href={c.href}
                 className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 hover:border-brand-300 hover:shadow-sm transition"
               >
-                <div className="text-xs text-slate-400 font-semibold mb-1">Step {i + 1}</div>
+                <div className="text-xs text-slate-500 font-semibold mb-1">Step {i + 1}</div>
                 <div className="font-semibold text-slate-800">{c.short}</div>
               </Link>
               {i < steps.length - 1 && <span className="hidden sm:block text-slate-300">→</span>}

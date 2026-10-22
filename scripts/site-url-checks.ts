@@ -83,6 +83,8 @@ export function inspectHtmlUrls(html: string, origin: string, expectedCanonical?
     assert.equal(canonical.length, 1, `${expectedCanonical}: canonical count`);
     assert.equal(new URL(canonical[0]).href, new URL(expectedCanonical).href, `${expectedCanonical}: canonical path`);
     assert.equal(openGraph.length, 1, `${expectedCanonical}: og:url count`);
+    // 개수만 보면 홈 주소를 상속한 og:url 이 통과한다. 전체 경로가 canonical 과 같아야 한다.
+    assert.equal(new URL(openGraph[0]).href, new URL(expectedCanonical).href, `${expectedCanonical}: og:url path`);
     assert(ogImages.length > 0, `${expectedCanonical}: og:image missing`);
     assert(twitterImages.length > 0, `${expectedCanonical}: twitter:image missing`);
     assert.deepEqual(twitterCards, ["summary_large_image"], `${expectedCanonical}: twitter:card`);

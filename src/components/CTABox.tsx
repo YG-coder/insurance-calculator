@@ -8,7 +8,7 @@ export default function CTABox() {
       <button type="button" className="btn-disabled" disabled aria-disabled>
         보험 상담 기능 준비 중입니다
       </button>
-      <p className="text-xs text-slate-400 mt-3">
+      <p className="text-xs text-slate-500 mt-3">
         ※ 본 사이트는 개인정보를 수집하지 않습니다.
       </p>
     </div>

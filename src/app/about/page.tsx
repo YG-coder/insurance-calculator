@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { SITE } from "@/lib/site";
+import { socialMetadata } from "@/lib/metadata";
 
 const URL = `${SITE.url}/about`;
 const DISPLAY_DOMAIN = SITE.displayUrl.replace(/^https:\/\//, "");
@@ -9,6 +10,12 @@ export const metadata: Metadata = {
   description:
       "보험계산기는 해지환급금·사망보장·보장 공백부터 실손보험 자기부담금까지, 보험 의사결정에 필요한 숫자를 입력한 값으로 계산하는 참고용 사이트입니다. 운영 목적과 정보의 한계를 안내합니다.",
   alternates: { canonical: URL },
+  // 공유 주소(og:url)는 루트 레이아웃의 홈 주소를 상속하므로 페이지마다 명시한다.
+  ...socialMetadata({
+    title: "사이트 소개",
+    description: "보험계산기의 운영 목적과 제공하는 계산기, 정보의 한계를 안내합니다.",
+    url: URL,
+  }),
 };
 
 export default function AboutPage() {

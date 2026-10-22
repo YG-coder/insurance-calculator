@@ -1,10 +1,19 @@
 import type { Metadata } from "next";
 import { SITE } from "@/lib/site";
+import { socialMetadata } from "@/lib/metadata";
+
+const URL = `${SITE.url}/terms`;
 
 export const metadata: Metadata = {
   title: "이용약관",
   description: "보험계산기 사이트의 이용약관입니다.",
-  alternates: { canonical: `${SITE.url}/terms` },
+  alternates: { canonical: URL },
+  // 공유 주소(og:url)는 루트 레이아웃의 홈 주소를 상속하므로 페이지마다 명시한다.
+  ...socialMetadata({
+    title: "이용약관",
+    description: "보험계산기 사이트의 이용약관입니다.",
+    url: URL,
+  }),
 };
 
 export default function TermsPage() {

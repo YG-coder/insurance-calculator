@@ -15,7 +15,7 @@
     "test:coverage": "c8 --all --src src/lib/insurance --check-coverage --lines 99 --statements 99 --functions 90 --branches 80 --reporter=text --reporter=json-summary node scripts/run-tests.mjs"
   },
   "dependencies": {
-    "next": "16.3.8",
+    "next": "16.4.2",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },

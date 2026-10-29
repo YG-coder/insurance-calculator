@@ -4,6 +4,7 @@ import JsonLd from "@/components/JsonLd";
 import NoticeBox from "@/components/NoticeBox";
 import FAQ from "@/components/FAQ";
 import { SITE } from "@/lib/site";
+import { contentUpdated } from "@/lib/content-dates";
 
 const PAGE_URL = `${SITE.url}/disclaimer`;
 
@@ -25,7 +26,7 @@ export const metadata: Metadata = {
 };
 
 export default function DisclaimerPage() {
-  const lastUpdated = "2026-10-03";
+  const lastUpdated = contentUpdated("/disclaimer");
 
   const faqs = [
     {
@@ -85,7 +86,7 @@ export default function DisclaimerPage() {
     <article className="container-base py-10">
       <header className="mb-8">
         <span className="inline-block px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold mb-3">
-          최종 업데이트 · {lastUpdated}
+          마지막 수정 · <time data-content-updated="/disclaimer" dateTime={lastUpdated}>{lastUpdated}</time>
         </span>
         <h1 className="text-3xl sm:text-4xl font-bold text-slate-900">
           면책사항
@@ -104,6 +105,13 @@ export default function DisclaimerPage() {
           대해 어떠한 법적 책임도 지지 않습니다.
         </NoticeBox>
       </div>
+
+      <p className="mb-6 text-sm leading-6 text-slate-600">
+        실손 계산기의 공식 자료와 근거 확인이 필요한 조건은 각 계산기 하단의{" "}
+        <a href="/2nd-3rd-generation-health-insurance-calculator#calculation-basis" className="font-semibold text-brand-700 underline underline-offset-2">
+          계산 기준과 참고 자료
+        </a>에서 확인하세요. 자료의 대조일은 해당 조문을 확인한 날이며, 페이지 수정일과 구분합니다.
+      </p>
 
       <section className="prose-seo">
         <h2>1. 정보 제공 목적</h2>

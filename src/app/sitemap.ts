@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { SITE, CALCULATORS, HUBS } from "@/lib/site";
 import { publishedGuides } from "@/lib/guides";
+import { contentUpdated } from "@/lib/content-dates";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const staticPages = ["", "/about", "/privacy", "/terms", "/disclaimer", "/guide"];
@@ -8,16 +9,19 @@ export default function sitemap(): MetadataRoute.Sitemap {
   return [
     ...staticPages.map((p) => ({
       url: `${SITE.url}${p}`,
+      lastModified: contentUpdated(p || "/"),
       changeFrequency: "weekly" as const,
       priority: p === "" ? 1.0 : 0.6,
     })),
     ...CALCULATORS.map((c) => ({
       url: `${SITE.url}${c.href}`,
+      lastModified: contentUpdated(c.href),
       changeFrequency: "weekly" as const,
       priority: 0.9,
     })),
     ...HUBS.map((h) => ({
       url: `${SITE.url}/${h.slug}`,
+      lastModified: contentUpdated("/" + h.slug),
       changeFrequency: "weekly" as const,
       priority: 0.8,
     })),

@@ -2,6 +2,7 @@ import { socialMetadata } from "@/lib/metadata";
 import type { Metadata } from "next";
 import Link from "next/link";
 import FAQ from "@/components/FAQ";
+import PageUpdated from "@/components/PageUpdated";
 import { CALCULATORS, SITE } from "@/lib/site";
 import { publishedGuides } from "@/lib/guides";
 import { HOME_GROUPS, REVIEW_STEPS, PROTECTION_STEPS } from "@/lib/home";
@@ -25,7 +26,7 @@ export const metadata: Metadata = {
 
 /**
  * 규정 대조일 — 확정(CONFIRMED) 규정 상수를 원문과 마지막으로 대조한 날(verifiedAt 최댓값).
- * ⚠ 페이지 수정일이 아니다. 홈은 관리하는 콘텐츠 수정일이 없어 dateModified를 두지 않는다.
+ * ⚠ 페이지 수정일이 아니다. 콘텐츠 수정일은 content-dates.ts에서 별도로 관리한다.
  * ⚠ 값이 없으면 빌드에서 멈춘다 — 날짜를 지어내지 않는다.
  */
 function regulationCheckedAt(): string {
@@ -75,6 +76,12 @@ export default function HomePage() {
               <Link href="#calculators" className={`inline-flex items-center rounded-xl border border-slate-300 px-5 py-3 font-semibold text-slate-700 hover:bg-slate-50 ${focus}`}>전체 계산기 {CALCULATORS.length}개</Link>
             </div>
             <p className="mt-5 text-xs leading-6 text-slate-500">회원가입 없이 · 입력값은 브라우저에서 계산 · 결과는 참고용</p>
+            <p className="mt-1 text-xs leading-6 text-slate-500">
+              적용한 조문과 근거 확인이 필요한 조건은 각 실손 계산기의{" "}
+              <Link href="/2nd-3rd-generation-health-insurance-calculator" className={`underline underline-offset-2 ${focus}`}>계산 기준과 참고 자료</Link>
+              에서 확인할 수 있습니다.
+            </p>
+            <PageUpdated path="/" name={SITE.name} />
             {/* 적용 대상은 실손 계산기뿐이다 — 해지·가족 보장 계산기는 표준약관 기반이 아니다.
                 ⚠ 외부 링크는 두지 않는다: tests/homeNavigation.test.ts가 홈의 외부 링크를 금지한다. */}
             <p className="mt-1 text-xs leading-6 text-slate-500">

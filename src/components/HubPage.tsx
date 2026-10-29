@@ -1,6 +1,7 @@
 import Link from "next/link";
 import JsonLd from "@/components/JsonLd";
 import FAQ from "@/components/FAQ";
+import PageUpdated from "@/components/PageUpdated";
 import { SITE, CALCULATORS } from "@/lib/site";
 import { publishedGuides } from "@/lib/guides";
 
@@ -91,6 +92,7 @@ export default function HubPage({
         </span>
         <h1 className="text-3xl sm:text-4xl font-bold text-slate-900">{hub.title}</h1>
         <p className="mt-3 text-slate-600 leading-relaxed">{intro}</p>
+        <PageUpdated path={"/" + hub.slug} name={hub.title} />
       </header>
 
       {/* 추천 순서 */}

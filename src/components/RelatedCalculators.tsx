@@ -1,6 +1,8 @@
 import Link from "next/link";
 import JsonLd from "@/components/JsonLd";
 import { CALCULATORS, SITE } from "@/lib/site";
+import CalculatorDetails from "@/components/CalculatorDetails";
+import { contentUpdated } from "@/lib/content-dates";
 
 type Props = {
   currentHref: string;
@@ -15,12 +17,15 @@ export default function RelatedCalculators({ currentHref }: Props) {
     name: current.title,
     description: current.description,
     url: `${SITE.url}${current.href}`,
+    dateModified: contentUpdated(current.href),
     applicationCategory: "FinanceApplication",
     operatingSystem: "Any",
     offers: { "@type": "Offer", price: "0", priceCurrency: "KRW" },
   } : null;
 
   return (
+    <>
+    <CalculatorDetails path={currentHref} />
     <section className="mt-12">
       {jsonLd && (
         <JsonLd id={`calculator-jsonld-${currentHref.replaceAll("/", "-")}`} data={jsonLd} />
@@ -47,5 +52,6 @@ export default function RelatedCalculators({ currentHref }: Props) {
         </Link>
       </div>
     </section>
+    </>
   );
 }

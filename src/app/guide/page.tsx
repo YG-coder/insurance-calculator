@@ -2,6 +2,7 @@ import { socialMetadata } from "@/lib/metadata";
 import type { Metadata } from "next";
 import JsonLd from "@/components/JsonLd";
 import Link from "next/link";
+import PageUpdated from "@/components/PageUpdated";
 import { SITE } from "@/lib/site";
 import {
   CLUSTER_META,
@@ -76,6 +77,17 @@ export default function GuideHubPage() {
           하단에서 관련 계산기로 바로 이동해 예상 금액도 확인할 수 있습니다.
         </p>
       </header>
+
+      <div className="mb-8">
+        <p className="text-sm leading-6 text-slate-600">
+          실손보험 글을 읽은 뒤 현재 계약에 맞게 금액을 확인하려면{" "}
+          <Link href="/2nd-3rd-generation-health-insurance-calculator" className="font-semibold text-brand-700 underline underline-offset-2">2·3세대 계산기</Link>,{" "}
+          <Link href="/health-insurance-calculator" className="font-semibold text-brand-700 underline underline-offset-2">4세대 계산기</Link>,{" "}
+          <Link href="/5th-generation-health-insurance-calculator" className="font-semibold text-brand-700 underline underline-offset-2">5세대 계산기</Link>를 이용하세요.
+          각 계산기 하단에서 계산 기준과 공식 자료도 확인할 수 있습니다.
+        </p>
+        <PageUpdated path="/guide" name="보험 가이드" />
+      </div>
 
       {/* 허브 자체 SEO 본문 (콘텐츠 깊이 확보) */}
       <section className="card mb-10 prose-seo">

@@ -4,14 +4,15 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbo",
-    "build": "next build && tsx scripts/check-site-urls.ts",
+    "build": "next build && tsx scripts/check-site-urls.ts && node --import tsx scripts/check-content-output.ts",
     "start": "next start",
     "lint": "eslint .",
     "test:insurance": "tsx tests/generation2021.test.ts && tsx tests/generation2021.correctness.test.ts && tsx tests/multiClaim.test.ts && tsx tests/multiClaim2021.test.ts && tsx tests/generation2026.test.ts && tsx tests/multiClaim2026.test.ts && tsx tests/regulatoryRules.test.ts",
     "test:build-output": "node --test scripts/build-output-files.check.mjs",
-    "pretest:all": "npm run test:build-output",
+    "check:content-dates": "node --import tsx scripts/check-content-dates.ts",
+    "pretest:all": "npm run test:build-output && npm run check:content-dates",
     "test:all": "node scripts/run-tests.mjs",
-    "pretest:coverage": "npm run test:build-output",
+    "pretest:coverage": "npm run test:build-output && npm run check:content-dates",
     "test:coverage": "c8 --all --src src/lib/insurance --check-coverage --lines 99 --statements 99 --functions 90 --branches 80 --reporter=text --reporter=json-summary node scripts/run-tests.mjs"
   },
   "dependencies": {

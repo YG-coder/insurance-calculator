@@ -46,6 +46,8 @@ export type Guide = {
   keyword: string; // 타깃 키워드
   intro: string; // H1 하단 도입부
   updated: string; // YYYY-MM-DD — 본문을 고친 날. 검수만 했을 때는 바꾸지 않는다(review.checkedAt 에 기록).
+  published?: string; // 최초 발행일이 별도로 확인된 경우. 수정일을 발행일로 갱신하지 않는다.
+  calculatorHrefs?: string[]; // 본문과 관련된 세대 계산기로 이어지는 문맥 링크.
   review: GuideReview; // 검수 상태 (필수)
   sources?: GuideSource[]; // 참고한 공식 자료
   body?: GuideBlock[]; // 비어 있으면 초안(미발행)
@@ -504,7 +506,9 @@ export const GUIDES: Guide[] = [
     keyword: "실손보험 청구 방법",
     intro:
       "병원비를 냈는데 실손보험금 청구를 미루다 깜빡하는 경우가 많습니다. 청구는 생각보다 간단하지만, 서류와 기한을 모르면 보장받을 금액을 놓치게 됩니다. 이 글에서는 실손보험 청구 절차를 단계별로 정리합니다.",
-    updated: "2026-10-22",
+    updated: "2026-10-29",
+    published: "2026-06-21",
+    calculatorHrefs: ["/2nd-3rd-generation-health-insurance-calculator", "/health-insurance-calculator", "/5th-generation-health-insurance-calculator"],
     review: {
       "status": "partial",
       "checkedAt": "2026-10-22",
@@ -571,7 +575,9 @@ export const GUIDES: Guide[] = [
     keyword: "실손보험 세대별 차이",
     intro:
       "실손보험은 가입·전환 시기에 따라 보장 구조가 다릅니다. 이 글은 기존 1~4세대를 비교하고, 2026년 5월 6일 출시된 5세대와의 차이도 함께 짚습니다.",
-    updated: "2026-10-22",
+    updated: "2026-10-29",
+    published: "2026-06-21",
+    calculatorHrefs: ["/2nd-3rd-generation-health-insurance-calculator", "/health-insurance-calculator", "/5th-generation-health-insurance-calculator"],
     review: {
       "status": "partial",
       "checkedAt": "2026-10-22",
@@ -638,7 +644,9 @@ export const GUIDES: Guide[] = [
     keyword: "4세대 실손보험 전환",
     intro:
       "기존 4세대 실손보험의 자기부담과 비급여 보험료 차등제를 설명합니다. 2026년 5월에는 5세대가 출시됐으므로, 현재 새로 가입하거나 전환할 상품은 별도로 확인해야 합니다.",
-    updated: "2026-10-22",
+    updated: "2026-10-29",
+    published: "2026-06-21",
+    calculatorHrefs: ["/2nd-3rd-generation-health-insurance-calculator", "/health-insurance-calculator", "/5th-generation-health-insurance-calculator"],
     review: {
       "status": "partial",
       "checkedAt": "2026-10-22",
@@ -708,7 +716,9 @@ export const GUIDES: Guide[] = [
     keyword: "실손보험 자기부담금",
     intro:
       "실손보험금을 청구해도 전액을 돌려받지 못하는 이유는 자기부담금 때문입니다. 계산 방식을 알면 실제 받을 금액을 가늠할 수 있습니다.",
-    updated: "2026-10-19",
+    updated: "2026-10-29",
+    published: "2026-06-21",
+    calculatorHrefs: ["/2nd-3rd-generation-health-insurance-calculator", "/health-insurance-calculator", "/5th-generation-health-insurance-calculator"],
     review: {
       status: "verified",
       checkedAt: "2026-10-19",
@@ -790,7 +800,9 @@ export const GUIDES: Guide[] = [
     keyword: "실손보험 비급여",
     intro:
       "비급여의 보장 여부와 자기부담은 가입 세대·특약에 따라 다릅니다. 기존4세대 설명과2026년 출시된5세대의 비중증 제외 항목을 구분합니다.",
-    updated: "2026-10-22",
+    updated: "2026-10-29",
+    published: "2026-06-21",
+    calculatorHrefs: ["/2nd-3rd-generation-health-insurance-calculator", "/health-insurance-calculator", "/5th-generation-health-insurance-calculator"],
     review: {
       "status": "partial",
       "checkedAt": "2026-10-22",

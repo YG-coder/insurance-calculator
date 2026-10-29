@@ -5,7 +5,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import FAQ from "@/components/FAQ";
 import NoticeBox from "@/components/NoticeBox";
-import { SITE } from "@/lib/site";
+import { SITE, CALCULATORS } from "@/lib/site";
 import {
   CLUSTER_META,
   GUIDE_REVIEW_LABEL,
@@ -94,7 +94,7 @@ export default async function GuidePage({
     headline: g.title,
     description: g.description,
     inLanguage: "ko-KR",
-    datePublished: g.updated,
+    datePublished: g.published ?? g.updated,
     dateModified: g.updated,
     mainEntityOfPage: url,
     author: { "@type": "Organization", name: SITE.name },
@@ -134,7 +134,7 @@ export default async function GuidePage({
 
       <header className="mb-8">
         <span className="inline-block px-3 py-1 rounded-full bg-brand-100 text-brand-700 text-xs font-semibold mb-3">
-          {cluster.label} · {g.updated} 기준
+          {cluster.label} · 마지막 수정 <time data-content-updated={"/guide/" + g.slug} dateTime={g.updated}>{g.updated}</time>
         </span>
         <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 leading-tight">
           {g.title}
@@ -173,6 +173,24 @@ export default async function GuidePage({
           </div>
         ))}
       </section>
+
+      {g.calculatorHrefs && g.calculatorHrefs.length > 0 && (
+        <section className="mt-10 rounded-xl border border-brand-200 bg-brand-50 p-5">
+          <h2 className="text-xl font-bold text-slate-900">가입한 세대에 맞게 계산하기</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-700">
+            보험증권에서 현재 적용되는 계약과 약관을 확인한 뒤 해당 세대의 계산기를 이용하세요.
+            전환·재가입했다면 처음 가입한 시기와 현재 계약이 다를 수 있습니다.
+          </p>
+          <ul className="mt-3 space-y-2 text-sm">
+            {g.calculatorHrefs.map((href) => {
+              const calc = CALCULATORS.find((item) => item.href === href);
+              if (!calc) throw new Error("등록되지 않은 가이드 계산기 링크: " + href);
+              return <li key={href}><Link href={href} className="font-semibold text-brand-700 underline underline-offset-2">{calc.title} →</Link></li>;
+            })}
+          </ul>
+          <p className="mt-3 text-xs text-slate-500">계산기에 입력값은 자동으로 전달되지 않습니다.</p>
+        </section>
+      )}
 
       {/* FAQ */}
       {g.faqs && g.faqs.length > 0 && (

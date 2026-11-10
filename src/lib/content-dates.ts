@@ -64,7 +64,7 @@ export const CONTENT_DATES: Record<string, ContentDate> = {
     watch: ["src/app/page.tsx"],
   },
   "/about": {
-    updated: "2026-10-02",
+    updated: "2026-11-11",
     watch: ["src/app/about/page.tsx"],
     ignore: [SOCIAL_URL_ONLY, DISPLAY_ORIGIN_ONLY],
   },

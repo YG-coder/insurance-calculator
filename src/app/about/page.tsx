@@ -32,6 +32,9 @@ export default function AboutPage() {
         </header>
 
         <section className="prose-seo">
+          <h2>운영 주체</h2>
+          <p>보험계산기는 인컴랩이 운영합니다.</p>
+
           <h2>사이트 운영 목적</h2>
           <p>
             보험은 종류가 많고 구조가 복잡해, 정작 <strong>지금 해지하는 게 나은지, 보장이 얼마나 부족한지</strong>

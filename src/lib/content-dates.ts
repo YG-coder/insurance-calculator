@@ -25,6 +25,14 @@ const STANDARDIZED_ENGINE_HOLD_ONLY = {
   sha: "7c709b4a3c9b2dd146ac103c9f95901b55e07ae0",
   reason: "공통 경로의 규칙·보류 안내 변경은 2·3세대에만 적용된다. 4·5세대 본문과 산식은 변경하지 않았다.",
 };
+const SELECTIVE_II_SHARED_MONEY_ONLY = {
+  sha: "dac123198350167cda9e732878ebc59eca50b1ed",
+  reason: "공통 금액 모듈에 추가한 두 공제율 합산 함수는 2·3세대 선택형Ⅱ에서만 사용한다.",
+};
+const SELECTIVE_II_OTHER_GENERATIONS = {
+  sha: SELECTIVE_II_SHARED_MONEY_ONLY.sha,
+  reason: "공통 약관·날짜 안내·입력 처리 변경은 2·3세대 선택형Ⅱ 지원을 위한 것이다. 해당 세대의 표준 입력과 산식에는 적용되지 않는다.",
+};
 
 const calculatorWatch = [
   "src/lib/insurance/common/**",
@@ -42,6 +50,7 @@ function calculator(path: string, component: string, engine: string): ContentDat
     // 2026-10-29: 계산 기준·출처 또는 입력값 계산 범위와 문맥 링크를 추가했다.
     updated: "2026-10-29",
     watch: ["src/app" + path + "/page.tsx", component, engine, ...calculatorWatch],
+    ignore: [SELECTIVE_II_SHARED_MONEY_ONLY],
   };
 }
 
@@ -104,7 +113,7 @@ export const CONTENT_DATES: Record<string, ContentDate> = {
       "src/components/calculators/HealthCalc.tsx",
       "src/components/calculators/HealthCalcMulti2021.tsx",
     ]),
-    ignore: [STANDARDIZED_ENGINE_HOLD_ONLY],
+    ignore: [STANDARDIZED_ENGINE_HOLD_ONLY, SELECTIVE_II_OTHER_GENERATIONS],
   },
   "/2nd-3rd-generation-health-insurance-calculator": silson("/2nd-3rd-generation-health-insurance-calculator", [
     "src/components/calculators/HealthCalcStandardized.tsx",
@@ -114,7 +123,7 @@ export const CONTENT_DATES: Record<string, ContentDate> = {
       "src/components/calculators/HealthCalc5th.tsx",
       "src/components/calculators/HealthCalcMulti2026.tsx",
     ]),
-    ignore: [STANDARDIZED_ENGINE_HOLD_ONLY],
+    ignore: [STANDARDIZED_ENGINE_HOLD_ONLY, SELECTIVE_II_OTHER_GENERATIONS],
   },
   "/surrender-value-calculator": calculator("/surrender-value-calculator",
     "src/components/calculators/HealthSurrenderCalc.tsx", "src/lib/insurance/decision/surrenderValue.ts"),

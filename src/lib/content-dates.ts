@@ -21,6 +21,10 @@ const DISPLAY_ORIGIN_ONLY = {
   sha: "eefe5457d84cc5d656bf9a70236c60347fa5d46c",
   reason: "주소 정본과 표시 분리. 소개 본문의 운영 목적·계산 방식은 변경하지 않았다.",
 };
+const STANDARDIZED_ENGINE_HOLD_ONLY = {
+  sha: "7c709b4a3c9b2dd146ac103c9f95901b55e07ae0",
+  reason: "공통 경로의 규칙·보류 안내 변경은 2·3세대에만 적용된다. 4·5세대 본문과 산식은 변경하지 않았다.",
+};
 
 const calculatorWatch = [
   "src/lib/insurance/common/**",
@@ -95,17 +99,23 @@ export const CONTENT_DATES: Record<string, ContentDate> = {
       ignore: [SHARE_IMAGE_ONLY],
     },
   ])),
-  "/health-insurance-calculator": silson("/health-insurance-calculator", [
-    "src/components/calculators/HealthCalc.tsx",
-    "src/components/calculators/HealthCalcMulti2021.tsx",
-  ]),
+  "/health-insurance-calculator": {
+    ...silson("/health-insurance-calculator", [
+      "src/components/calculators/HealthCalc.tsx",
+      "src/components/calculators/HealthCalcMulti2021.tsx",
+    ]),
+    ignore: [STANDARDIZED_ENGINE_HOLD_ONLY],
+  },
   "/2nd-3rd-generation-health-insurance-calculator": silson("/2nd-3rd-generation-health-insurance-calculator", [
     "src/components/calculators/HealthCalcStandardized.tsx",
   ], "2026-11-18"),
-  "/5th-generation-health-insurance-calculator": silson("/5th-generation-health-insurance-calculator", [
-    "src/components/calculators/HealthCalc5th.tsx",
-    "src/components/calculators/HealthCalcMulti2026.tsx",
-  ]),
+  "/5th-generation-health-insurance-calculator": {
+    ...silson("/5th-generation-health-insurance-calculator", [
+      "src/components/calculators/HealthCalc5th.tsx",
+      "src/components/calculators/HealthCalcMulti2026.tsx",
+    ]),
+    ignore: [STANDARDIZED_ENGINE_HOLD_ONLY],
+  },
   "/surrender-value-calculator": calculator("/surrender-value-calculator",
     "src/components/calculators/HealthSurrenderCalc.tsx", "src/lib/insurance/decision/surrenderValue.ts"),
   "/future-premium-calculator": calculator("/future-premium-calculator",

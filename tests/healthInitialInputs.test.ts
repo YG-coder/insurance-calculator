@@ -47,6 +47,39 @@ for (const [Component, name, state, pay] of [
   }
 }
 
+// 정상 결과를 이미 본 뒤에도 보류 유형으로 바꾸면 이전 금액이 사라져야 한다.
+const standardized = fresh(Standardized, "HealthCalcStandardized");
+const chooseStandardized = (value: string) => {
+  const choice = standardized.render().nodes.find(node => node.props["data-value"] === value);
+  assert(choice);
+  (choice.props.onClick as () => void)();
+};
+const standardizedSubmit = () => standardized.render().nodes.find(node => node.tag === "button" && node.text === "자기부담금 계산하기");
+standardized.set("rows", [{ id: 1, amount: "100000", visit: "inpatient" }]);
+standardized.set("priorPaid", "0");
+standardized.set("submitted", true);
+chooseStandardized("standard");
+assert.equal(standardized.render().resultItems()?.[1].value, "20,000원");
+for (const generation of ["2017", "2009"]) {
+  chooseStandardized(generation);
+  chooseStandardized("selectiveII");
+  assert.equal(standardizedSubmit()?.props.disabled, true);
+  assert.match(visibleCopy(standardized.renderMarkup()), /선택형Ⅱ.*계산을 보류합니다/);
+  assert.equal(standardized.render().resultItems(), null);
+}
+chooseStandardized("selective");
+assert.equal(standardizedSubmit()?.props.disabled, false);
+assert.equal(standardized.render().resultItems()?.[1].value, "10,000원");
+chooseStandardized("2017");
+assert.equal(standardizedSubmit()?.props.disabled, true);
+assert.match(visibleCopy(standardized.renderMarkup()), /3세대 선택형.*계산을 보류합니다/);
+assert.equal(standardized.render().resultItems(), null);
+chooseStandardized("2009");
+assert.equal(standardized.get("plan"), null);
+assert.equal(standardized.render().resultItems(), null);
+chooseStandardized("standard");
+assert.equal(standardized.render().resultItems()?.[1].value, "20,000원");
+
 const initial = fresh(FourthMany, "HealthCalcMulti2021");
 assert(Object.values(initial.get("priorPaidByAxis") as Record<string, string>).every(value => value === ""));
 for (const key of ["priorOutVisits", "priorManualVisits", "priorInjectionVisits"]) assert.equal(initial.get(key), "");

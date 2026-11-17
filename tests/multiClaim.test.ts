@@ -78,10 +78,23 @@ const counters = (ls: ClaimLine[]) => ({
       });
       const many = calculateMany(gen, { plan, lines: [line], ...counters([line]) });
       n++;
-      if (many.totalOwnPay !== single.ownPay || many.totalInsurancePay !== single.insurancePay) bad++;
+      if (many.status !== single.status || many.totalOwnPay !== single.ownPay || many.totalInsurancePay !== single.insurancePay) bad++;
     }
   }
   check(`1건 입력 = 단건 엔진 결과 (${n}케이스)`, bad === 0, `불일치 ${bad}건`);
+}
+
+// 이미 횟수 한도를 소진했어도 타입이 보류이면 행과 합계 지급액을 산출하지 않는다.
+for (const used of [0, 180]) {
+  const pending = calculateMany("2017", {
+    plan: "selective", lines: [inp(100_000), out(100_000)], priorAnnualPaid: 0,
+    priorAnnualOutpatientVisits: used,
+  });
+  check(`3세대 선택형 다회 보류(외래 ${used}회 사용)`,
+    pending.status === "PENDING_UNVERIFIED" && pending.lines.length === 0 &&
+    pending.totalAmount === 200_000 && pending.totalOwnPay === null &&
+    pending.totalInsurancePay === null && pending.appliedCaps.length === 0 &&
+    pending.notes.some(note => note.includes("3세대 선택형")));
 }
 
 // ── 4. 연간 횟수 한도 ────────────────────────────────────────────────
@@ -122,12 +135,12 @@ const counters = (ls: ClaimLine[]) => ({
 // ── 5. 회(건)당 가입금액 한도 ────────────────────────────────────────
 {
   const withLimit = calculateMany("2017", {
-    plan: "selective", lines: [out(1_000_000)], perVisitCoverageLimit: 300_000, priorAnnualOutpatientVisits: 0 });
+    plan: "standard", lines: [out(1_000_000)], perVisitCoverageLimit: 300_000, priorAnnualOutpatientVisits: 0 });
   check("회당 가입금액 30만원이 보험금 상한으로 구속", withLimit.totalInsurancePay === 300_000 && withLimit.totalOwnPay === 700_000);
   check("구속 시 capCode", withLimit.appliedCaps.includes("GEN2017_PER_VISIT_COVERAGE_LIMIT"));
 
-  const noLimit = calculateMany("2017", { plan: "selective", lines: [out(1_000_000)], priorAnnualOutpatientVisits: 0 });
-  check("미입력 시 적용하지 않음", noLimit.totalInsurancePay === 990_000 && noLimit.appliedCaps.length === 0);
+  const noLimit = calculateMany("2017", { plan: "standard", lines: [out(1_000_000)], priorAnnualOutpatientVisits: 0 });
+  check("미입력 시 적용하지 않음", noLimit.totalInsurancePay === 800_000 && noLimit.appliedCaps.length === 0);
   check("미입력 시 안내 문구", noLimit.notes.some((n) => n.includes("회(건)당 가입금액은 계약마다 다른 값")));
 
   // 입원에는 적용하지 않는다 — 회(건)당 한도는 외래·처방조제비 항목의 가입금액이다
@@ -178,7 +191,7 @@ const counters = (ls: ClaimLine[]) => ({
   const bad: Record<string, number> = { "합계 정합": 0, "건별 정수": 0, "총계 정수": 0, "0 <= ownPay <= amount": 0 };
   let n = 0;
   const amounts = [0, 1, 7, 9_999, 50_001, 300_000, 999_999, 5_000_000];
-  for (const gen of GENS) for (const plan of PLANS) {
+  for (const gen of GENS) for (const plan of (gen === "2017" ? ["standard"] as const : PLANS)) {
     for (const a of amounts) for (const b of amounts) {
       for (const f of ["clinic", "hospital", "tertiary", "pharmacy"] as const) {
         // ⚠ f === "pharmacy"면 두 통원 행이 처방조제라 필요한 축이 바뀐다.

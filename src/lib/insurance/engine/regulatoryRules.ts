@@ -512,6 +512,41 @@ const held = (
 
 // 각 사용 지점마다 ruleId를 분리한다. 값이 같아도 적용 대상·한도 성격이 다르면 다른 규칙이다.
 export const REGULATORY_RULES = {
+  GEN23_SELECTIVE_II_COST_SHARE: confirmed(
+    "GEN2-3-SELECTIVE-II-COST-SHARE", "2017", { benefit: 0.1, nonBenefit: 0.2 },
+    [
+      {
+        document: "2022년 실손의료보험 사업실적(잠정) — 금융감독원 보도자료 PDF",
+        issuer: "금융감독원",
+        publishedOrEffective: "2023-04-19",
+        url: "https://kiri.or.kr/PDF/weeklytrend/20230424/trend20230424_2.pdf",
+        locator: "인쇄 1쪽 실손보험 상품 현황 표 — 2세대 선택형Ⅰ·Ⅱ 및 3세대 표준형·선택형Ⅱ",
+      },
+      {
+        document: "유병력자 실손의료보험 출시 안내의 일반 실손 비교표",
+        issuer: "금융위원회",
+        publishedOrEffective: "2018-01-16",
+        url: "https://www.fsc.go.kr/no010101/72986",
+        locator: "참고2 일반 실손 입원·통원 자기부담률. 선택형Ⅱ 명칭과 판매 시기는 금감원 상품 현황 표에서 확인",
+      },
+      {
+        document: "삼성화재 2016년 11월 판매 약관의 실손의료비(선택형B)",
+        issuer: "삼성화재",
+        publishedOrEffective: "2016-11-01",
+        url: "https://www.samsungfire.com/publication/pdf/96156_0_20161101_file1.pdf",
+        locator: "상품요약서 I-56~57쪽 — 2세대 선택형Ⅱ 입원·통원·처방조제 공제의 개별 판매 상품 사례",
+      },
+      {
+        document: "삼성화재 NEW 새시대 건강파트너(1704.18) 실손의료비(선택형 C) 특별약관",
+        issuer: "삼성화재",
+        publishedOrEffective: "2017-04-01",
+        url: "https://www.samsungfire.com/publication/pdf/96218_0_20170401_file1.pdf",
+        locator: "제3조 보장종목별 보상내용 310~316쪽 — 3세대 선택형Ⅱ 입원과 외래·처방조제 공제의 개별 판매 상품 사례",
+      },
+    ],
+    "A등급은 금융당국 자료에서 교차 확인한 선택형Ⅱ 자기부담률 두 값에 한정한다. 통원·처방조제 문구는 삼성화재 판매 약관 사례다. 전체 상품이나 적용 시작일을 일괄 확정하지 않는다. 이 규칙은 안내에 사용하며 계산 엔진에는 미적용이다.",
+    "2026-11-18",
+  ),
   // ── 2세대(표준화 실손, 2009.10~2017.3) ─────────────────────────────
   //   전기(2010.3.29 본)에는 표준형·선택형 구분이 없고 통원 공제도 정액뿐이다.
   //   표준형과 통원 정률공제는 2012.12.28 개정본에서 처음 나타난다
@@ -564,11 +599,11 @@ export const REGULATORY_RULES = {
   ),
 
   // ── 3세대(착한실손, 2017.4~2021.6) ─────────────────────────────────
-  //   기본형 산식은 2세대 후기와 같다. 달라진 것은 3대비급여가 특별약관으로 분리된 점이다.
-  //   값이 같아도 근거 약관이 다르므로 ruleId를 분리한다.
-  GEN2017_INPATIENT_RATE_SELECTIVE: confirmed0902(
-    "GEN2017-INPATIENT-RATE-SELECTIVE", "2017", 0.1, [GEN3_TERMS],
-    "선택형 입원 90% 보상 → 자기부담 10%",
+  // 표준형과 3대비급여 특약의 근거를 따로 기록한다.
+  GEN2017_INPATIENT_RATE_SELECTIVE: held(
+    "GEN2017-INPATIENT-RATE-SELECTIVE", "2017", [GEN3_TERMS],
+    "2017년 별표 15 인쇄 175쪽에 합계 10% 선택형 문구가 있지만, 3세대 실제 판매 계약에 이 단일률을 직접 적용할 근거는 확보하지 못했다. 금감원 판매 현황과 확인한 판매 약관은 급여·비급여 비율을 나누는 선택형Ⅱ를 보여 준다(GEN2-3-SELECTIVE-II-COST-SHARE). 3세대 선택형의 단일률 계산을 보류한다.",
+    "2026-11-18",
   ),
   GEN2017_INPATIENT_RATE_STANDARD: confirmed0902(
     "GEN2017-INPATIENT-RATE-STANDARD", "2017", 0.2, [GEN3_TERMS],

@@ -2,6 +2,9 @@
 // body가 있으면 "발행", 없으면 "초안"으로 간주되어 허브/사이트맵/정적 생성에서 제외됩니다.
 // 3단계에서는 초안 항목의 body(+faqs)만 채우면 자동으로 발행됩니다.
 
+import { gen23OutpatientAmounts, gen3CopaymentAnswer, silsonCopaymentTable } from "./silson-guide-rules";
+import { REGULATORY_RULES } from "./insurance/engine/regulatoryRules";
+
 export type GuideCluster = "health" | "premium" | "car" | "hub";
 
 export type GuideBlock = {
@@ -9,6 +12,11 @@ export type GuideBlock = {
   // 문단/리스트 내 **굵게** 표기는 상세 페이지에서 <strong>으로 렌더링됩니다.
   p?: string[];
   ul?: string[];
+  table?: {
+    caption: string;
+    headers: string[];
+    rows: string[][];
+  };
 };
 
 export type GuideFAQ = { q: string; a: string };
@@ -716,22 +724,64 @@ export const GUIDES: Guide[] = [
     keyword: "실손보험 자기부담금",
     intro:
       "실손보험금을 청구해도 전액을 돌려받지 못하는 이유는 자기부담금 때문입니다. 계산 방식을 알면 실제 받을 금액을 가늠할 수 있습니다.",
-    updated: "2026-10-29",
+    updated: "2026-11-18",
     published: "2026-06-21",
     calculatorHrefs: ["/2nd-3rd-generation-health-insurance-calculator", "/health-insurance-calculator", "/5th-generation-health-insurance-calculator"],
     review: {
-      status: "verified",
-      checkedAt: "2026-10-19",
+      status: "partial",
+      checkedAt: "2026-11-18",
       scope:
-        "4세대 자기부담률(급여 20%·비급여 30%), 통원 최소공제액(급여 병·의원 1만 원, 상급종합·종합병원 2만 원, 비급여 3만 원), 예시 계산(8만·30만·200만 원)의 산술, FAQ 의 세대별 자기부담률을 표준약관 2021.7.1 발령본·연혁본과 대조했다. 2026-10-19 에 FAQ 의 3세대 비급여 특약 30%를 반영했다.",
+        "2·3세대 기본형과 3세대 특약의 공제 기준, 선택형Ⅱ 판매 약관 사례, 4세대 기준과 계산 예시, 5세대 일반담보의 입원·통원 공제 기준을 공식 자료와 대조했습니다.",
+      unchecked:
+        "2세대 전체 약관 연혁과 개별 보험사 상품의 예외는 전수 대조하지 않았습니다. 가입한 계약의 약관으로 확인하세요.",
     },
-    sources: [SRC_GEN4_TERMS, SRC_STD_TERMS_HISTORY],
+    sources: [
+      {
+        title: "보험업감독업무시행세칙 [별표 15] 표준약관 — 2017. 3. 22. 개정본",
+        issuer: "금융감독원 (국가법령정보센터)",
+        url: "https://www.law.go.kr/LSW/admRulBylContentsInfoR.do?bylSeq=1864538",
+        locator: "기본형 제3조 인쇄 175·178~179쪽, 3대 비급여 특약 제3조 인쇄 227·234·241쪽. 기본형 본문에 실린 선택형 문구와 선택형Ⅱ 판매 약관을 구분했습니다.",
+        checkedAt: "2026-11-18",
+      },
+      {
+        title: "별표 15 표준약관 — 2세대 초기·후기 연혁",
+        issuer: "금융감독원 (국가법령정보센터)",
+        url: FSS_BYLAW15_URL,
+        locator: "2010. 3. 29. 및 2012. 12. 28. 판본 실손의료보험 제3조 — 초기 계약과 표준형의 입원·통원 기준",
+        checkedAt: "2026-09-02",
+      },
+      ...REGULATORY_RULES.GEN23_SELECTIVE_II_COST_SHARE.sources.map((source) => ({
+        title: source.document,
+        issuer: source.issuer,
+        url: source.url,
+        locator: source.locator,
+        checkedAt: REGULATORY_RULES.GEN23_SELECTIVE_II_COST_SHARE.verifiedAt,
+      })),
+      SRC_GEN4_TERMS,
+      {
+        title: "5세대 실손의료보험 출시 안내",
+        issuer: "금융위원회·금융감독원",
+        url: "https://www.fsc.go.kr/no010101/86831",
+        locator: "급여 통원 자기부담금 산출 예시, 4세대·5세대 급여 및 비급여 비교표",
+        checkedAt: "2026-11-18",
+      },
+    ],
     body: [
       {
         h2: "자기부담금이란",
         p: [
           "자기부담금은 병원비 중 보험사가 보장하지 않고 **가입자가 직접 부담하는 금액**입니다. 실손보험은 실제 의료비를 보장하지만 100%를 주는 것이 아니라, 정해진 비율(자기부담률)이나 최소공제액을 뺀 나머지를 지급합니다.",
         ],
+      },
+      {
+        h2: "실손보험 세대별 자기부담금·공제금액 표",
+        p: [
+          "보험증권에서 현재 계약의 세대와 가입 유형을 확인하고 해당 행을 보세요. 비율은 보장대상 의료비에 적용하며, 급여 본인부담금은 건강보험 적용 후 환자가 낸 급여 금액입니다.",
+          `**2·3세대 외래·처방조제 정액**은 ${gen23OutpatientAmounts}입니다. 정률 공제가 있는 유형은 이 금액을 정률로 계산한 금액과 비교합니다. 4·5세대 급여 통원은 같은 통원의 병원비와 처방조제비를 합쳐 최소공제액을 적용합니다.`,
+          "선택형Ⅱ의 자기부담률은 금융당국 자료 기준입니다. 표의 외래·처방조제 비교 방식은 아래 삼성화재 판매 약관 사례에서 확인했습니다. 계약의 정확한 공제 기준은 본인 약관을 확인하세요.",
+          "표는 공제 기준을 비교한 자료입니다. 실제 보험금에는 계약별 보장한도·제외 항목이 적용됩니다. 5세대의 3대 비급여 등 별도 항목은 해당 담보 약관을 확인하세요.",
+        ],
+        table: silsonCopaymentTable,
       },
       {
         h2: "4세대 기준 자기부담률",
@@ -772,7 +822,7 @@ export const GUIDES: Guide[] = [
       {
         h2: "직접 계산해보기",
         p: [
-          "실제 자기부담금은 세대·항목별 한도·차등제까지 얽혀 있어 단순하지 않습니다. 4세대 가입자가 진료비를 넣어 본인부담금과 보험 적용 금액을 확인하려면 4세대 실손보험 자기부담금 계산기를 이용해보세요. 계산 결과는 참고용이며, 실제 보험금은 가입 상품의 약관과 보장 조건에 따라 달라질 수 있습니다.",
+          "아래에서 현재 계약의 세대에 맞는 계산기를 선택하세요. 2·3세대 계산기는 선택형Ⅱ와 3세대 선택형의 계산을 보류합니다. 이 경우 위 표와 본인 약관에서 공제 기준을 확인하세요.",
         ],
       },
     ],
@@ -786,8 +836,8 @@ export const GUIDES: Guide[] = [
         a: "통원에는 회당 최소공제액이 적용됩니다. 4세대 기준 급여 병·의원 1만 원, 급여 상급종합·종합병원 2만 원, 비급여 3만 원입니다. 진료비가 작으면 정률보다 최소공제액이 커서 실제 수령액이 적을 수 있습니다.",
       },
       {
-        q: "세대마다 자기부담금이 다른가요?",
-        a: "네. 1세대 0%(상품별 상이) → 2세대 10~20% → 3세대 급여 10~20%·비급여 20~30% → 4세대 급여 20%·비급여 30%로 세대가 올라갈수록 자기부담률이 높아집니다.",
+        q: "3세대 실손보험 자기부담금은 어떻게 계산하나요?",
+        a: gen3CopaymentAnswer,
       },
     ],
   },

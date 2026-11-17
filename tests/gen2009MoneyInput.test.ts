@@ -396,7 +396,7 @@ console.log("\n[소스] 파서·게이트·전달 형태");
     /const perVisitNum = !hasOutpatient \|\| perVisitLimit === "" \? undefined : stdMoney\(perVisitLimit\);/.test(code)
     && /const priorPaidNum = !hasInpatient \? undefined : stdMoney\(priorPaid\);/.test(code));
   check("게이트에 두 축이 합류한다",
-    /const gated = needsVisits \|\| needsPrescriptions \|\| needsAmounts \|\| perVisitInvalid \|\| priorPaidInvalid;/.test(code));
+    /const gated = planBlock !== null \|\| needsVisits \|\| needsPrescriptions \|\| needsAmounts \|\| perVisitInvalid \|\| priorPaidInvalid;/.test(code));
   check("null을 배제해야 엔진 인자가 만들어진다(타입 단언 없음)",
     /const money = gated \|\| perVisitNum === null \|\| priorPaidNum === null \? null : \{/.test(code)
     && /const result = money === null \? null : calculateMany\(/.test(code)

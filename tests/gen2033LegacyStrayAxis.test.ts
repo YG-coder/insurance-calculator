@@ -76,6 +76,8 @@ const STD: Record<string, Any> = {};
 for (const cov of ["benefit", "non_benefit"]) for (const v of ["outpatient", "inpatient"]) for (const pl of ["standard", "selective"]) {
   STD[`${cov}·${v}·${pl}`] = { amount: A, coverage: cov, visit: v, plan: pl, facility: v === "outpatient" ? "clinic" : undefined };
 }
+const supportedStandardizedCases = (generation: "2009" | "2017") =>
+  Object.entries(STD).filter(([, input]) => generation !== "2017" || input.plan === "standard");
 const G21: Record<string, Any> = {};
 for (const cov of ["benefit", "non_benefit"]) for (const v of ["outpatient", "inpatient"]) {
   // ⚠ G-34C: `tier`는 4세대 **급여 통원**만 소유한다. 나머지 세 경로에 실으면 `calc2021`이
@@ -87,7 +89,7 @@ const f = (g: Generation, i: Any) => wrap(() => calculate(g, i as unknown as Cla
 
 console.log("\n[G-33] 1. 이전 세대가 쓰지 않는 네 축은 값과 무관하게 거부한다");
 {
-  for (const gen of ["2009", "2017"] as const) for (const [n, b] of Object.entries(STD)) for (const key of FOUR) {
+  for (const gen of ["2009", "2017"] as const) for (const [n, b] of supportedStandardizedCases(gen)) for (const key of FOUR) {
     const r = f(gen, { ...b, [key]: NORMAL[key] });
     check(`${gen} ${n} · ${key} → 거부`, isRejected(r, gen, A)
       && note0(r).startsWith(`${gen}세대: `) && note0(r).includes(key), `${statusOf(r)} ${note0(r).slice(0, 26)}`);
@@ -108,7 +110,7 @@ console.log("\n[G-33] 1. 이전 세대가 쓰지 않는 네 축은 값과 무관
 console.log("\n[G-33] 2. perVisitCoverageLimit은 세대·경로별로 다르게 다룬다");
 {
   // 2·3세대 통원 — 실제 소비. 거부하지 않는다.
-  for (const gen of ["2009", "2017"] as const) for (const [n, b] of Object.entries(STD)) {
+  for (const gen of ["2009", "2017"] as const) for (const [n, b] of supportedStandardizedCases(gen)) {
     if (!n.includes("outpatient")) continue;
     const withLimit = f(gen, { ...b, perVisitCoverageLimit: 200_000 });
     const without = f(gen, b);
@@ -123,7 +125,7 @@ console.log("\n[G-33] 2. perVisitCoverageLimit은 세대·경로별로 다르게
     }
   }
   // 2·3세대 입원 — 미소비. 거부한다.
-  for (const gen of ["2009", "2017"] as const) for (const [n, b] of Object.entries(STD)) {
+  for (const gen of ["2009", "2017"] as const) for (const [n, b] of supportedStandardizedCases(gen)) {
     if (n.includes("outpatient")) continue;
     for (const [vn, v] of VALUES.slice(0, 8)) {
       const r = f(gen, { ...b, perVisitCoverageLimit: v });
@@ -143,7 +145,7 @@ console.log("\n[G-33] 2. perVisitCoverageLimit은 세대·경로별로 다르게
 
 console.log("\n[G-33] 3. undefined는 미제공과 같다");
 {
-  for (const gen of ["2009", "2017"] as const) for (const [n, b] of Object.entries(STD))
+  for (const gen of ["2009", "2017"] as const) for (const [n, b] of supportedStandardizedCases(gen))
     for (const key of [...FOUR, "perVisitCoverageLimit"]) {
       check(`${gen} ${n} · ${key} 명시적 undefined = 미제공`,
         shape(f(gen, { ...b, [key]: undefined })) === shape(f(gen, b)));

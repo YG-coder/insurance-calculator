@@ -99,7 +99,7 @@ const NORMAL: Record<string, unknown> = {
 
 /** 기준선 OK 경로 — 이 표가 스윕의 정의역이다. */
 const OK_PATHS: [Generation, string, Any][] = [];
-for (const g of ["2009", "2017"] as const) for (const pl of ["standard", "selective"]) for (const cov of ["benefit", "non_benefit"]) {
+for (const g of ["2009", "2017"] as const) for (const pl of (g === "2017" ? ["standard"] : ["standard", "selective"])) for (const cov of ["benefit", "non_benefit"]) {
   OK_PATHS.push([g, `${g}·${cov}·통원·${pl}`, { amount: A, coverage: cov, visit: "outpatient", plan: pl, facility: "clinic" }]);
   OK_PATHS.push([g, `${g}·${cov}·입원·${pl}`, { amount: A, coverage: cov, visit: "inpatient", plan: pl }]);
 }
@@ -155,7 +155,7 @@ console.log("\n[G-34A] 2. 세대끼리 바꿔 쓸 수 없는 축 — 소유하�
 
 console.log("\n[G-34A] 3. 경로별 소유권 — 같은 축이 한 경로에서는 소비, 다른 경로에서는 거부");
 {
-  for (const gen of ["2009", "2017"] as const) for (const pl of ["standard", "selective"] as const) {
+  for (const gen of ["2009", "2017"] as const) for (const pl of (gen === "2017" ? ["standard"] : ["standard", "selective"])) {
     const out: Any = { amount: A, coverage: "benefit", visit: "outpatient", plan: pl, facility: "clinic" };
     const inp: Any = { amount: 15_000_000, coverage: "benefit", visit: "inpatient", plan: pl };
     // 통원: facility·perVisitCoverageLimit 소비 / priorAnnualPaid 거부(값 0 포함)

@@ -170,6 +170,30 @@ export default async function GuidePage({
                 ))}
               </ul>
             )}
+            {block.table && (
+              <div className="my-4 overflow-x-auto">
+                <table className="w-full min-w-[32rem] border-collapse text-left text-sm text-slate-700">
+                  <caption className="pb-2 text-left font-semibold">{block.table.caption}</caption>
+                  <thead className="bg-slate-50">
+                    <tr>
+                      {block.table.headers.map((header) => (
+                        <th key={header} scope="col" className="border border-slate-200 px-3 py-2">{header}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {block.table.rows.map(([label, ...cells]) => (
+                      <tr key={label} className="align-top">
+                        <th scope="row" className="border border-slate-200 px-3 py-2 font-semibold">{label}</th>
+                        {cells.map((cell, index) => (
+                          <td key={index} className="border border-slate-200 px-3 py-2">{cell}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         ))}
       </section>

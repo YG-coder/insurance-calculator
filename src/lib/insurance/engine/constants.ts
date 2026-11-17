@@ -153,9 +153,7 @@ export const GEN2026 = {
 
 // ─────────────────────────────────────────────
 // 2세대(표준화 실손, 2009.10~2017.3) / 3세대(착한실손, 2017.4~2021.6)
-//   두 세대의 기본형 산식은 같다. 근거 약관이 다르므로 상수는 세대별로 분리해 파생한다.
-//   ⚠ 급여·비급여를 합한 금액에 단일 정률을 적용한다. 급여/비급여로 요율이 갈리는 것은 4세대부터다.
-//   ⚠ 선택형에는 통원 정률공제가 없다(정액 공제만). standardRate를 곱하지 말 것.
+//   현재 계산 범위는 2·3세대 표준형과 입원 합계 10%·통원 정액을 확인한 2세대 선택형Ⅰ이다.
 // ─────────────────────────────────────────────
 export const GEN2009 = {
   inpatientRate: {
@@ -172,7 +170,6 @@ export const GEN2009 = {
 export const GEN2017 = {
   inpatientRate: {
     standard: R.GEN2017_INPATIENT_RATE_STANDARD.value,
-    selective: R.GEN2017_INPATIENT_RATE_SELECTIVE.value,
   },
   inpatientAnnualOwnPayCap: R.GEN2017_INPATIENT_ANNUAL_OWN_PAY_CAP.value,
   outpatientStandardRate: R.GEN2017_OUTPATIENT_RATE_STANDARD.value,

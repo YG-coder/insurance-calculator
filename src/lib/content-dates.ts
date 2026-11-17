@@ -41,9 +41,9 @@ function calculator(path: string, component: string, engine: string): ContentDat
   };
 }
 
-function silson(path: string, components: readonly string[]): ContentDate {
+function silson(path: string, components: readonly string[], updated = "2026-10-29"): ContentDate {
   return {
-    updated: "2026-10-29",
+    updated,
     watch: [
       "src/app" + path + "/page.tsx",
       ...components,
@@ -101,7 +101,7 @@ export const CONTENT_DATES: Record<string, ContentDate> = {
   ]),
   "/2nd-3rd-generation-health-insurance-calculator": silson("/2nd-3rd-generation-health-insurance-calculator", [
     "src/components/calculators/HealthCalcStandardized.tsx",
-  ]),
+  ], "2026-11-18"),
   "/5th-generation-health-insurance-calculator": silson("/5th-generation-health-insurance-calculator", [
     "src/components/calculators/HealthCalc5th.tsx",
     "src/components/calculators/HealthCalcMulti2026.tsx",

@@ -17,7 +17,7 @@ import {
   MultiClaimInput, MultiClaimResult,
 } from "./types";
 import { GEN2009, GEN2017 } from "./constants";
-import { calcStandardized } from "./generationStandardized";
+import { calcStandardized, standardizedPlanBlock } from "./generationStandardized";
 import { normalizeAmount } from "../common/settle";
 
 type StandardizedGeneration = "2009" | "2017";
@@ -145,15 +145,15 @@ export function calculateMany(
   const { constants, visitCap, prescriptionCap } = LIMITS[generation];
   const lines = input.lines ?? [];
 
-  // plan 미지정은 단건과 같은 규약으로 보류한다. 값을 지어내지 않는다.
-  if (input.plan !== "standard" && input.plan !== "selective") {
-    return {
-      status: "PENDING_UNVERIFIED", generation, lines: [],
-      totalAmount: lines.reduce((sum, l) => sum + normalizeAmount(l.amount), 0),
-      totalOwnPay: null, totalInsurancePay: null, appliedCaps: [],
-      notes: ["표준형/선택형(plan) 미지정 → 계산 불가. 보험증권의 상품명 또는 가입내역에서 확인해 주세요."],
-    };
-  }
+  const plan = input.plan;
+  const blocked = (notes: string[]): MultiClaimResult => ({
+    status: "PENDING_UNVERIFIED", generation, lines: [],
+    totalAmount: lines.reduce((sum, l) => sum + normalizeAmount(l.amount), 0),
+    totalOwnPay: null, totalInsurancePay: null, appliedCaps: [], notes,
+  });
+  // 행별 횟수 한도가 먼저 처리되면 보류해야 할 계약에 금액이 생길 수 있다.
+  const planBlock = standardizedPlanBlock(generation, plan);
+  if (planBlock !== null) return blocked([planBlock]);
 
   // ── 이미 사용한 횟수·건수 축 ─────────────────────────────────────────
   //   ⚠ 4·5세대와 달리 이 묶음은 행마다 visit·facility가 다를 수 있다. 그래서 어떤 축이
@@ -176,12 +176,6 @@ export function calculateMany(
    *   적용되므로(아래 `line.visit === "outpatient"`) 나눈 축으로는 판정할 수 없다.
    */
   const hasOutpatient = lines.some((line) => line.visit === "outpatient");
-
-  const blocked = (notes: string[]): MultiClaimResult => ({
-    status: "PENDING_UNVERIFIED", generation, lines: [],
-    totalAmount: lines.reduce((sum, l) => sum + normalizeAmount(l.amount), 0),
-    totalOwnPay: null, totalInsurancePay: null, appliedCaps: [], notes,
-  });
 
   if (!usesVisits && visitsRaw !== undefined) {
     return blocked([
@@ -317,7 +311,7 @@ export function calculateMany(
       coverage: "benefit", // 2·3세대는 급여·비급여 합계에 단일 정률이라 요율에 영향이 없다
       visit: line.visit,
       facility: line.visit === "outpatient" ? facility : undefined,
-      plan: input.plan,
+      plan,
       priorAnnualPaid: line.visit === "inpatient" ? inpatientOwnPaySoFar : undefined,
       perVisitCoverageLimit: line.visit === "outpatient" ? input.perVisitCoverageLimit : undefined,
     });

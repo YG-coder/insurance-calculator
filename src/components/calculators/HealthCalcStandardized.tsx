@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { focusAfterUpdate } from "./focusAfterUpdate";
 import ResultCard from "@/components/ResultCard";
 import RawAmountInput from "@/components/RawAmountInput";
@@ -9,6 +10,7 @@ import { choiceClass, choiceTabIndex, moveChoice } from "./choiceGroup";
 import { calculateMany } from "@/lib/insurance/engine/multiClaim";
 import { ClaimLine, Facility, Plan, Visit } from "@/lib/insurance/engine/types";
 import { CAP_LABELS } from "@/lib/insurance/engine/capLabels";
+import { REGULATORY_RULES } from "@/lib/insurance/engine/regulatoryRules";
 
 type StdGeneration = "2009" | "2017";
 type Row = { id: number; amount: string; visit: Visit; facility: Facility };
@@ -130,7 +132,10 @@ const stdRepeatCount = (v: string): number | null => {
 //   ⚠ 자기부담 유형은 처음에 **미선택(null)** 이다 — 가입 시기로 추정하지 않는 기존 계약을 유지한다.
 //     미선택 묶음은 첫 항목이 Tab 정지점이고 aria-checked 는 모두 false 다.
 const GENERATION_VALUES = ["2009", "2017"] as const;
-const PLAN_VALUES = ["standard", "selective"] as const;
+const PLAN_VALUES = ["standard", "selective", "selectiveII"] as const;
+type PlanChoice = Plan | "selectiveII";
+const selectiveIIRates = REGULATORY_RULES.GEN23_SELECTIVE_II_COST_SHARE.value;
+const selectiveIICopy = `급여 ${Math.round(selectiveIIRates.benefit * 100)}%·비급여 ${Math.round(selectiveIIRates.nonBenefit * 100)}%`;
 
 const FACILITY_LABELS: Record<Facility, string> = {
   clinic: "의원급",
@@ -144,7 +149,7 @@ const newRow = (): Row => ({ id: nextId++, amount: "", visit: "outpatient", faci
 
 export default function HealthCalcStandardized() {
   const [generation, setGeneration] = useState<StdGeneration>("2017");
-  const [plan, setPlan] = useState<Plan | null>(null);
+  const [plan, setPlan] = useState<PlanChoice | null>(null);
   const [rows, setRows] = useState<Row[]>([newRow()]);
   const [quickAmount, setQuickAmount] = useState("");
   const [quickCount, setQuickCount] = useState("3");
@@ -153,6 +158,17 @@ export default function HealthCalcStandardized() {
   const [priorPaid, setPriorPaid] = useState("");
   const [perVisitLimit, setPerVisitLimit] = useState("");
   const [submitted, setSubmitted] = useState(false);
+
+  const planBlock = plan === "selectiveII"
+    ? "선택형Ⅱ는 급여와 비급여 의료비를 나눠 계산해야 하므로 현재 계산을 보류합니다."
+    : generation === "2017" && plan === "selective"
+      ? "3세대 선택형은 계약의 공제 기준을 확인해야 하므로 현재 계산을 보류합니다."
+      : null;
+
+  const selectGeneration = (next: StdGeneration) => {
+    if (generation === "2017" && next === "2009" && plan === "selective") setPlan(null);
+    setGeneration(next);
+  };
 
   const patch = (id: number, next: Partial<Row>) =>
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...next } : r)));
@@ -190,7 +206,7 @@ export default function HealthCalcStandardized() {
   const priorPaidNum = !hasInpatient ? undefined : stdMoney(priorPaid);
   const perVisitInvalid = perVisitNum === null;
   const priorPaidInvalid = priorPaidNum === null;
-  const gated = needsVisits || needsPrescriptions || needsAmounts || perVisitInvalid || priorPaidInvalid;
+  const gated = planBlock !== null || needsVisits || needsPrescriptions || needsAmounts || perVisitInvalid || priorPaidInvalid;
   // 회(건)당 가입금액에 명시적 0을 넣으면 엔진은 한도를 적용하지 않는다(`perVisitLimit()`의
   //   `<= 0`). 그런데 엔진의 "입력하지 않으면 적용하지 않습니다" 안내는 `undefined`일 때만
   //   나오므로, 0을 넣은 사용자는 **적용 여부에 대한 안내를 하나도 못 본다.**
@@ -209,7 +225,7 @@ export default function HealthCalcStandardized() {
     perVisit: perVisitNum, priorPaid: priorPaidNum,
   };
   const result = money === null ? null : calculateMany(generation, {
-    plan: plan ?? undefined,
+    plan: plan === "standard" || plan === "selective" ? plan : undefined,
     lines,
     priorAnnualPaid: money.priorPaid,
     priorAnnualOutpatientVisits: usesVisits ? stdCount(priorVisits) ?? undefined : undefined,
@@ -272,8 +288,8 @@ export default function HealthCalcStandardized() {
               aria-checked={generation === "2009"}
               tabIndex={choiceTabIndex(GENERATION_VALUES, generation, "2009")}
               data-value="2009"
-              onClick={() => setGeneration("2009")}
-              onKeyDown={(e) => moveChoice(e, GENERATION_VALUES, generation, setGeneration)}
+              onClick={() => selectGeneration("2009")}
+              onKeyDown={(e) => moveChoice(e, GENERATION_VALUES, generation, selectGeneration)}
               className={choiceClass(generation === "2009")}
             >
               2세대 (2009.10~2017.3)
@@ -284,22 +300,21 @@ export default function HealthCalcStandardized() {
               aria-checked={generation === "2017"}
               tabIndex={choiceTabIndex(GENERATION_VALUES, generation, "2017")}
               data-value="2017"
-              onClick={() => setGeneration("2017")}
-              onKeyDown={(e) => moveChoice(e, GENERATION_VALUES, generation, setGeneration)}
+              onClick={() => selectGeneration("2017")}
+              onKeyDown={(e) => moveChoice(e, GENERATION_VALUES, generation, selectGeneration)}
               className={choiceClass(generation === "2017")}
             >
               3세대 (2017.4~2021.6)
             </button>
           </div>
           <p className="mt-2 text-xs text-slate-500">
-            두 세대의 기본형 산식은 표준약관상 동일합니다. 3세대는 도수치료·주사·MRI가 별도 특약으로
-            분리되어 기본형 계산에 포함되지 않습니다.
+            3세대의 도수치료 등·비급여 주사·비급여 MRI는 별도 특약이며 기본형 계산에서 제외됩니다.
           </p>
         </div>
 
         <div className="sm:col-span-2">
           <label className="label-base" id="std-plan-label">자기부담 유형</label>
-          <div role="radiogroup" aria-labelledby="std-plan-label" className="grid grid-cols-2 gap-2 max-w-md">
+          <div role="radiogroup" aria-labelledby="std-plan-label" aria-describedby="std-plan-scope" className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <button
               type="button"
               role="radio"
@@ -322,13 +337,35 @@ export default function HealthCalcStandardized() {
               onKeyDown={(e) => moveChoice(e, PLAN_VALUES, plan, setPlan)}
               className={choiceClass(plan === "selective")}
             >
-              선택형
+              {generation === "2009" ? "선택형Ⅰ · 입원 합계 10%·통원 정액" : "선택형 · 계산 보류"}
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={plan === "selectiveII"}
+              tabIndex={choiceTabIndex(PLAN_VALUES, plan, "selectiveII")}
+              data-value="selectiveII"
+              onClick={() => setPlan("selectiveII")}
+              onKeyDown={(e) => moveChoice(e, PLAN_VALUES, plan, setPlan)}
+              className={choiceClass(plan === "selectiveII")}
+            >
+              선택형Ⅱ · 계산 보류
             </button>
           </div>
           <p className="mt-2 text-xs text-slate-500">
-            보험증권의 상품명·가입내역에서 확인하세요. 가입 시기로 추정하지 않습니다. 표준형은 자기부담이
-            크고 보험료가 낮으며, 선택형은 그 반대입니다.
+            보험증권의 상품명·가입내역에서 확인하세요. 가입 시기로 추정하지 않습니다.
+            2세대 선택형Ⅰ은 약관의 입원 합계 10%와 통원 정액 조건이 모두 맞을 때 선택하세요.
           </p>
+          <p id="std-plan-scope" className="mt-2 text-sm leading-relaxed text-amber-900">
+            선택형Ⅱ({selectiveIICopy})는 현재 지원 범위 밖입니다.
+            다른 유형으로 계산하면 실제보다 자기부담금이 적게 나올 수 있습니다.{" "}
+            <Link href="/guide/silson-copayment" className="font-semibold underline">세대별 공제금액 확인</Link>
+          </p>
+          {planBlock && (
+            <p id="std-plan-block" role="status" className="mt-2 text-sm font-semibold text-amber-900">
+              {planBlock} 가입한 계약의 약관을 확인하거나 보험사에 문의하세요.
+            </p>
+          )}
         </div>
       </div>
 
@@ -528,14 +565,14 @@ export default function HealthCalcStandardized() {
       </div>
 
       <div className="mt-6">
-        <button type="button" className="btn-primary w-full sm:w-auto" onClick={() => focusAfterUpdate(() => setSubmitted(true), "std-blocked-summary")}>
+        <button type="button" disabled={planBlock !== null} aria-describedby={planBlock ? "std-plan-block" : undefined} className="btn-primary w-full sm:w-auto disabled:cursor-not-allowed disabled:opacity-50" onClick={() => focusAfterUpdate(() => setSubmitted(true), "std-blocked-summary")}>
           자기부담금 계산하기
         </button>
       </div>
 
-      {submitted && blockedSummary !== null && (<div id="std-blocked-summary" role="alert" tabIndex={-1} className="mt-5 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">{blockedSummary}</div>)}
+      {submitted && planBlock === null && blockedSummary !== null && (<div id="std-blocked-summary" role="alert" tabIndex={-1} className="mt-5 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">{blockedSummary}</div>)}
 
-      {submitted && (
+      {submitted && planBlock === null && (
         <div className="mt-8 space-y-4">
           {needsVisits && (
             <NoticeBox variant="warning">

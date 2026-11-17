@@ -14,6 +14,12 @@ const OFFICIAL_HOSTS = [
   "www.knia.or.kr", "carinfo.knia.or.kr",
   "direct.hi.co.kr", "direct.samsungfire.com", "www.axa.co.kr", "www.directdb.co.kr",
 ];
+// 보험연구원에 공개된 금감원 원문과 두 판매 약관은 확인한 PDF 주소만 허용한다.
+const VERIFIED_DOCUMENT_URLS = new Set([
+  "https://kiri.or.kr/PDF/weeklytrend/20230424/trend20230424_2.pdf",
+  "https://www.samsungfire.com/publication/pdf/96156_0_20161101_file1.pdf",
+  "https://www.samsungfire.com/publication/pdf/96218_0_20170401_file1.pdf",
+]);
 
 // 1) 모든 가이드(초안 포함)에 review 가 있고, 발행 가이드는 규칙을 통과한다.
 for (const g of GUIDES) {
@@ -26,7 +32,8 @@ for (const g of publishedGuides()) {
   for (const src of g.sources ?? []) {
     const url = new URL(src.url);
     assert.equal(url.protocol, "https:", `${g.slug}: ${src.url}`);
-    assert.ok(OFFICIAL_HOSTS.includes(url.hostname), `${g.slug}: 공식 기관 주소가 아닙니다 — ${url.hostname}`);
+    assert.ok(OFFICIAL_HOSTS.includes(url.hostname) || VERIFIED_DOCUMENT_URLS.has(url.href),
+      `${g.slug}: 공식 기관 주소 또는 확인한 문서 주소가 아닙니다 — ${url.hostname}`);
     assert.match(src.checkedAt, /^\d{4}-\d{2}-\d{2}$/, `${g.slug}: 출처 대조일`);
   }
   if (g.review.status !== "pending") {

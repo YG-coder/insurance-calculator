@@ -3,6 +3,7 @@
 // 기대값은 금융감독원 보험업감독업무시행세칙 [별표 15] 표준약관 원문에서 직접 옮긴 것이며,
 // 구현을 다시 실행해 얻은 값이 아니다. 근거는 docs/insurance/insurance-gen123-engine-design.md 참조.
 import { calculate } from "../src/lib/insurance/engine/engine";
+import { calcStandardized } from "../src/lib/insurance/engine/generationStandardized";
 import { GEN2009, GEN2017 } from "../src/lib/insurance/engine/constants";
 import { REGULATORY_RULES as R } from "../src/lib/insurance/engine/regulatoryRules";
 import { CalcResult, Facility, Generation, Plan, Visit } from "../src/lib/insurance/engine/types";
@@ -57,11 +58,10 @@ const CASES: Case[] = [
   { name: "2세대 선택형 통원 상급종합 30만(정액만)", gen: "2009", plan: "selective", visit: "outpatient", facility: "tertiary", amount: 300_000, ownPay: 20_000, insurancePay: 280_000 },
   { name: "2세대 선택형 처방조제 30만(정액만)", gen: "2009", plan: "selective", visit: "outpatient", facility: "pharmacy", amount: 300_000, ownPay: 8_000, insurancePay: 292_000 },
   // 통원 경계 — 진료비가 공제금액보다 작으면 자기부담이 진료비를 넘을 수 없다
-  { name: "선택형 통원 5천원(공제 1만 > 진료비)", gen: "2017", plan: "selective", visit: "outpatient", facility: "clinic", amount: 5_000, ownPay: 5_000, insurancePay: 0 },
+  { name: "2세대 선택형 통원 5천원(공제 1만 > 진료비)", gen: "2009", plan: "selective", visit: "outpatient", facility: "clinic", amount: 5_000, ownPay: 5_000, insurancePay: 0 },
   { name: "표준형 통원 0원", gen: "2017", plan: "standard", visit: "outpatient", facility: "clinic", amount: 0, ownPay: 0, insurancePay: 0 },
   // 입원 — 표준형 20% / 선택형 10%
   { name: "3세대 표준형 입원 100만", gen: "2017", plan: "standard", visit: "inpatient", amount: 1_000_000, ownPay: 200_000, insurancePay: 800_000 },
-  { name: "3세대 선택형 입원 100만", gen: "2017", plan: "selective", visit: "inpatient", amount: 1_000_000, ownPay: 100_000, insurancePay: 900_000 },
   { name: "2세대 선택형 입원 100만", gen: "2009", plan: "selective", visit: "inpatient", amount: 1_000_000, ownPay: 100_000, insurancePay: 900_000 },
   // 입원 자기부담 연간 상한 200만원 — 경계 및 초과
   { name: "표준형 입원 1000만(20%=200만, 상한 경계)", gen: "2017", plan: "standard", visit: "inpatient", amount: 10_000_000, ownPay: 2_000_000, insurancePay: 8_000_000 },
@@ -95,16 +95,17 @@ for (const c of CASES) {
 //   PENDING이 되어 **비교 자체가 사라진다**(실측: 128 중 64). 검사 의미를 지키려고
 //   경로에 맞는 입력으로 바꾼다 — 비교 대상은 종전과 같은 128케이스다.
 let sameCount = 0, sameFail = 0;
-for (const plan of PLANS) for (const visit of VISITS) for (const facility of FACILITIES) {
+for (const visit of VISITS) for (const facility of FACILITIES) {
+  const plan = "standard";
   const fac = visit === "outpatient" ? facility : undefined;
   for (const amount of [0, 1, 7, 9_999, 50_000, 300_000, 1_000_000, 15_000_000]) {
     const a = calculate("2009", { amount, coverage: "benefit", visit, facility: fac, plan });
     const b = calculate("2017", { amount, coverage: "benefit", visit, facility: fac, plan });
     sameCount++;
-    if (a.ownPay !== b.ownPay || a.insurancePay !== b.insurancePay) sameFail++;
+    if (a.status !== "OK" || b.status !== "OK" || a.ownPay !== b.ownPay || a.insurancePay !== b.insurancePay) sameFail++;
   }
 }
-check(`2·3세대 기본형 산식 동일 (${sameCount}케이스)`, sameFail === 0, `불일치 ${sameFail}건`);
+check(`2·3세대 표준형 산식 동일 (${sameCount}케이스)`, sameFail === 0, `불일치 ${sameFail}건`);
 
 // ── 4. 전 매트릭스 불변식 ────────────────────────────────────────────
 const invariants: Record<string, number> = {
@@ -115,7 +116,7 @@ const invariants: Record<string, number> = {
   "generation 일치": 0,
 };
 let matrix = 0;
-for (const gen of GENS) for (const plan of PLANS) for (const visit of VISITS) for (const facility of FACILITIES) {
+for (const gen of GENS) for (const plan of (gen === "2017" ? ["standard"] as const : PLANS)) for (const visit of VISITS) for (const facility of FACILITIES) {
   for (const amount of [0, 1, 3, 7, 9_999, 10_000, 10_001, 50_000, 50_001, 100_001, 300_000, 999_999, 1_000_000, 9_999_999, 15_000_000]) {
     for (const prior of [undefined, 0, 500_000, 2_000_000, 5_000_000]) {
       // ⚠ G-34A 이전에는 `facility`와 `priorAnnualPaid`를 **두 경로 모두에** 실었다. 종전
@@ -128,7 +129,7 @@ for (const gen of GENS) for (const plan of PLANS) for (const visit of VISITS) fo
         priorAnnualPaid: visit === "inpatient" ? prior : undefined,
       });
       matrix++;
-      if (r.status !== "OK") continue;
+      if (r.status !== "OK") { invariants["정수 확정"]++; continue; }
       const own = r.ownPay as number, ins = r.insurancePay as number;
       if (own + ins !== r.amount) invariants["ownPay+insurancePay===amount"]++;
       if (!(own >= 0 && own <= r.amount)) invariants["0<=ownPay<=amount"]++;
@@ -147,11 +148,11 @@ const neg = calculate("2017", { amount: -50_000, coverage: "benefit", visit: "in
 check("음수 진료비는 0으로 정규화", neg.status === "OK" && neg.amount === 0 && neg.ownPay === 0 && neg.insurancePay === 0);
 const nan = calculate("2017", { amount: Number.NaN, coverage: "benefit", visit: "inpatient", plan: "standard" });
 check("NaN 진료비는 0으로 정규화", nan.status === "OK" && nan.amount === 0);
-const frac = calculate("2017", { amount: 10_000.9, coverage: "benefit", visit: "inpatient", plan: "selective" });
+const frac = calculate("2009", { amount: 10_000.9, coverage: "benefit", visit: "inpatient", plan: "selective" });
 check("소수 진료비는 floor", frac.amount === 10_000 && frac.ownPay === 1_000);
 const negPrior = calculate("2017", { amount: 15_000_000, coverage: "benefit", visit: "inpatient", plan: "standard", priorAnnualPaid: -1_000_000 });
 check("음수 누적액은 0으로 클램프", negPrior.ownPay === 2_000_000);
-const noFacility = calculate("2017", { amount: 300_000, coverage: "benefit", visit: "outpatient", plan: "selective" });
+const noFacility = calculate("2009", { amount: 300_000, coverage: "benefit", visit: "outpatient", plan: "selective" });
 check("facility 미지정 시 의원급 기본값", noFacility.minDeductible === 10_000 && noFacility.ownPay === 10_000);
 
 // ── 6. plan 미지정은 추정하지 않고 보류 ──────────────────────────────
@@ -160,9 +161,23 @@ for (const gen of GENS) {
   check(`${gen} plan 미지정 → PENDING_UNVERIFIED`, r.status === "PENDING_UNVERIFIED" && r.ownPay === null && r.rateApplied === null);
 }
 
+check("3세대 합계 10% 선택형 규칙은 값 없는 HOLD",
+  R.GEN2017_INPATIENT_RATE_SELECTIVE.status === "HOLD" && R.GEN2017_INPATIENT_RATE_SELECTIVE.value === null);
+for (const visit of VISITS) {
+  const input = { amount: 100_000, coverage: "non_benefit", visit, plan: "selective" } as const;
+  for (const engine of [calcStandardized, calculate]) {
+    const result = engine("2017", input);
+    check(`3세대 선택형 ${visit}: 금액과 요율 없이 보류`,
+      result.status === "PENDING_UNVERIFIED" && result.amount === 100_000 &&
+      result.ownPay === null && result.insurancePay === null && result.rateApplied === null &&
+      result.rateBased === null && result.minDeductible === null && result.appliedCaps.length === 0 &&
+      result.notes.some(note => note.includes("3세대 선택형")));
+  }
+}
+
 // ── 7. coverage가 요율을 가르지 않는다 (4세대와 다른 지점) ────────────
 let coverageDiff = 0;
-for (const gen of GENS) for (const plan of PLANS) for (const visit of VISITS) {
+for (const gen of GENS) for (const plan of (gen === "2017" ? ["standard"] as const : PLANS)) for (const visit of VISITS) {
   // ⚠ G-34A 이전에는 입원에도 `facility`를 실어 8건 중 4건이 이제 PENDING이 된다. 이 검사가
   //   지키려는 것은 "coverage가 요율을 가르지 않는다"이므로, 종별 축은 경로에 맞게 싣는다.
   //   두 결과가 **PENDING으로 같아지는 것**은 이 검사의 통과 근거가 될 수 없다.
@@ -176,8 +191,8 @@ check("급여/비급여로 자기부담이 갈리지 않음", coverageDiff === 0
 
 // ── 8. 선택형 통원에는 정률이 없다 ───────────────────────────────────
 let selectiveRateBad = 0;
-for (const gen of GENS) for (const facility of FACILITIES) {
-  const r = calculate(gen, { amount: 10_000_000, coverage: "benefit", visit: "outpatient", facility, plan: "selective" });
+for (const facility of FACILITIES) {
+  const r = calculate("2009", { amount: 10_000_000, coverage: "benefit", visit: "outpatient", facility, plan: "selective" });
   if (r.rateApplied !== 0) selectiveRateBad++;
   if (r.ownPay !== GEN2009.outpatientMinDeductible[facility]) selectiveRateBad++;
 }

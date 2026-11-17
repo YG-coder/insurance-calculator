@@ -266,12 +266,10 @@ console.log("\n[소스] 안내 조건만 바꾸고 계산·전달은 그대로")
     && /const usesPrescriptions = lines\.some\(isPharmacyLine\);/.test(engBody)
     && /if \(!usesVisits && visitsRaw !== undefined\) \{/.test(engBody)
     && /if \(!usesPrescriptions && prescriptionsRaw !== undefined\) \{/.test(engBody));
-  // ⚠ G-34B에서 `hasOutpatient`가 한 자리 더 쓰인다 — 통원 행이 없을 때
-  //   `perVisitCoverageLimit`을 **입력 계약으로 거부**하는 판정이다(두 카운터가 행 구성으로
-  //   판정하는 것과 같은 방식). 종전 성질("계산·한도에는 쓰지 않는다")은 그대로이고,
-  //   늘어난 자리는 계산이 아니라 거부 판정이다. 개수만 실측값으로 맞춘다.
+  // 통원 가입금액 입력 검증은 선택형Ⅱ에서도 통원 행이 있는 경우에만 적용한다.
   check("엔진: hasOutpatient를 계산·한도에 쓰지 않는다(안내와 입력 계약 전용)",
-    (engBody.match(/hasOutpatient/g) ?? []).length === 4);
+    (engBody.match(/hasOutpatient/g) ?? []).length === 5
+    && /if \(hasOutpatient\) \{\s*const limit = input\.perVisitCoverageLimit;/.test(engBody));
   check("엔진: 결과 타입과 집계는 그대로다",
     /const totalOwnPay = results\.reduce\(\(sum, r\) => sum \+ \(r\.ownPay \?\? 0\), 0\);/.test(engBody)
     && /const appliedCaps = \[\.\.\.new Set\(results\.flatMap\(\(r\) => r\.appliedCaps\)\)\];/.test(engBody)
@@ -293,10 +291,11 @@ console.log("\n[소스] 안내 조건만 바꾸고 계산·전달은 그대로")
     (code.match(/const \[perVisitLimit, setPerVisitLimit\]/g) ?? []).length === 1
     && !/perVisitLimitByFacility/.test(code) && !/prescriptionLimit/.test(code));
   const std = readFileSync("src/lib/insurance/engine/generationStandardized.ts", "utf8");
-  check("단건 엔진과 산식은 그대로다",
+  check("기존 단건 한도와 선택형Ⅱ 전용 검증이 함께 적용된다",
     /const prior = Math\.max\(0, priorAnnualPaid \?\? 0\);/.test(std)
     && /if \(value === undefined \|\| !Number\.isFinite\(value\) \|\| value <= 0\) return undefined;/.test(std)
-    && /const visitLimit = perVisitLimit\(input\.perVisitCoverageLimit\);/.test(std));
+    && /const enteredLimit = input\.perVisitCoverageLimit;/.test(std)
+    && /const visitLimit = perVisitLimit\(enteredLimit\);/.test(std));
   check("다른 세대 엔진을 건드리지 않았다",
     !/multiClaim2021|multiClaim2026/.test(engBody));
 }

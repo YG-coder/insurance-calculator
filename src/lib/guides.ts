@@ -180,6 +180,15 @@ const SRC_STD_TERMS_HISTORY: GuideSource = {
   checkedAt: "2026-10-19",
 };
 
+const selectiveIIRule = REGULATORY_RULES.GEN23_SELECTIVE_II_COST_SHARE;
+const SRC_SELECTIVE_II: GuideSource[] = selectiveIIRule.sources.map((source) => ({
+  title: source.document,
+  issuer: source.issuer,
+  url: source.url,
+  locator: source.locator,
+  checkedAt: selectiveIIRule.verifiedAt,
+}));
+
 const SRC_COMMERCIAL_ACT_662: GuideSource = {
   title: "상법 제662조(소멸시효) — 법률 제12397호, 2015. 3. 12. 시행",
   issuer: "국가법령정보센터",
@@ -583,16 +592,20 @@ export const GUIDES: Guide[] = [
     keyword: "실손보험 세대별 차이",
     intro:
       "실손보험은 가입·전환 시기에 따라 보장 구조가 다릅니다. 이 글은 기존 1~4세대를 비교하고, 2026년 5월 6일 출시된 5세대와의 차이도 함께 짚습니다.",
-    updated: "2026-10-29",
+    updated: "2026-11-18",
     published: "2026-06-21",
     calculatorHrefs: ["/2nd-3rd-generation-health-insurance-calculator", "/health-insurance-calculator", "/5th-generation-health-insurance-calculator"],
     review: {
       "status": "partial",
-      "checkedAt": "2026-10-22",
-      "scope": "기존1~4세대 구조의 과거 약관 근거와 별도로 2026.5.6 금융위 출시자료·Q&A로 5세대와 기존계약 전환을 대조했다. 2026.9.10 표준사업방법서 제17조의2①·②의 무심사 전환 예외(재전환 등은 심사 대상)·6개월·3개월·추가1회 철회를 확인했다. 4세대가 현재 가장 저렴하다는 단정과 1세대 일률0%·갱신 조건 임의변경 표현을 제거했다.",
-      "unchecked": "표준화 이전1세대 및 다른 회사·가입판본의 세부 공제·재가입·전환 실무는 미대조다. 표준 조항의 존재가 개별 계약 승인·보험료 절감을 확정하지 않는다. 2026.11 예정 할인제도의 실제 개시·최종 회사 조건은 이번 기준일 이후 사항이다."
+      "checkedAt": "2026-11-18",
+      "scope": "2·3세대의 표준형·선택형Ⅱ와 3대 비급여 특약 공제를 표준약관·금융당국 자료·판매 약관으로 대조했다. 2026.5.6 금융위 출시자료·Q&A로 5세대와 기존계약 전환을 확인했다. 2026.9.10 표준사업방법서 제17조의2①·②의 무심사 전환 예외(재전환 등은 심사 대상)·6개월·3개월·추가1회 철회를 확인했다.",
+      "unchecked": "표준화 이전 1세대와 보험사·가입판본별 세부 공제·재가입·전환 실무는 미대조다. 개별 계약의 전환 승인·보험료 절감과 2026년 11월 할인제도의 시행 여부·보험사별 최종 조건은 별도로 확인해야 한다."
     },
-    sources: [SRC_FSC_GEN4_RELEASE, SRC_STD_TERMS_HISTORY, SRC_GEN4_TERMS, SRC_STD_METHODS_2026_CONVERSION, SRC_HI2307_CONVERSION, SRC_R16_METHOD, SRC_R16_GEN5],
+    sources: [
+      SRC_FSC_GEN4_RELEASE, SRC_STD_TERMS_HISTORY, SRC_GEN4_TERMS, SRC_STD_METHODS_2026_CONVERSION,
+      SRC_HI2307_CONVERSION, SRC_R16_METHOD, SRC_R16_GEN5,
+      ...SRC_SELECTIVE_II,
+    ],
     body: [
       {
         "h2": "세대 구분 기준",
@@ -602,7 +615,7 @@ export const GUIDES: Guide[] = [
         "ul": [
           "**1세대(2009년 9월 이전):** 표준화 이전 상품으로 자기부담금과 보장 범위가 회사·상품마다 다릅니다. 모든 계약이 자기부담0%인 것은 아닙니다.",
           "**2세대(2009.10~2017.3):** 표준화 실손. 입원 자기부담률 10%가 도입됐고, 이후 판매된 표준형은 20%입니다.",
-          "**3세대(2017.4~2021.6):** 기본형 + 비급여 특약 분리. 비급여 자기부담률이 높아졌습니다.",
+          "**3세대(2017.4~2021.6):** 기본형에서 도수치료 등·비급여 주사료·비급여 MRI/MRA를 별도 특약으로 분리했습니다.",
           "**4세대(2021년 7월 출시):** 급여·비급여 분리와 비급여 보험금에 따른 보험료 차등제가 특징인 기존 계약입니다.",
           "**5세대(2026년 5월 6일 출시):** 급여 기본형과 중증 비급여 특약1·비중증 비급여 특약2를 구분합니다. 특약 선택과 보장 범위가 4세대와 달라 따로 비교해야 합니다."
         ]
@@ -610,7 +623,8 @@ export const GUIDES: Guide[] = [
       {
         "h2": "핵심은 자기부담률",
         "p": [
-          "기존 계약의 대표적인 자기부담률은 **2세대 입원10~20%, 3세대 급여10~20%·비급여20~30%(3대 비급여 특약30%), 4세대 급여20%·비급여30%**입니다. 통원 최소 공제금액·한도와 상품별 예외가 있으므로 이 비율만으로 지급액을 확정하지 마세요. 1세대는 개별 약관을 확인해야 합니다.",
+          "2세대 입원은 약관 유형에 따라 표준형이 합계의 20%, 선택형Ⅰ이 합계의 10%를 공제합니다. 2·3세대 선택형Ⅱ는 급여 본인부담금의 10%와 보장 대상 비급여의 20%를 합산합니다. 3세대 표준형은 기본형 보상 대상 합계의 20%이고, 3대 비급여 특약은 각 항목에서 2만 원과 30% 중 큰 금액을 공제합니다.",
+          "4세대 자기부담률은 급여 20%·비급여 30%입니다. 통원 최소 공제금액·한도와 상품별 예외는 가입 약관에 따라 확인하세요. 1세대는 개별 약관을 확인해야 합니다.",
           "2026년에는 5세대가 출시돼 4세대가 가장 저렴한 최신 상품이라고 안내할 수 없습니다. 현재 제시받은 보험료와 중증·비중증 구분, 자기부담, 제외 항목을 함께 비교하세요."
         ]
       },
@@ -750,13 +764,7 @@ export const GUIDES: Guide[] = [
         locator: "2010. 3. 29. 및 2012. 12. 28. 판본 실손의료보험 제3조 — 초기 계약과 표준형의 입원·통원 기준",
         checkedAt: "2026-09-02",
       },
-      ...REGULATORY_RULES.GEN23_SELECTIVE_II_COST_SHARE.sources.map((source) => ({
-        title: source.document,
-        issuer: source.issuer,
-        url: source.url,
-        locator: source.locator,
-        checkedAt: REGULATORY_RULES.GEN23_SELECTIVE_II_COST_SHARE.verifiedAt,
-      })),
+      ...SRC_SELECTIVE_II,
       SRC_GEN4_TERMS,
       {
         title: "5세대 실손의료보험 출시 안내",
@@ -822,7 +830,7 @@ export const GUIDES: Guide[] = [
       {
         h2: "직접 계산해보기",
         p: [
-          "아래에서 현재 계약의 세대에 맞는 계산기를 선택하세요. 2·3세대 계산기는 선택형Ⅱ와 3세대 선택형의 계산을 보류합니다. 이 경우 위 표와 본인 약관에서 공제 기준을 확인하세요.",
+          "아래에서 현재 계약의 세대에 맞는 계산기를 선택하세요. 약관상 선택형Ⅱ와 공제 기준이 같으면 2·3세대 계산기에서 급여 본인부담금과 보장 대상 비급여를 따로 입력할 수 있습니다. 3세대 선택형 중 공제 기준이 확인되지 않은 계약은 계산을 보류합니다.",
         ],
       },
     ],

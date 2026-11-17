@@ -233,5 +233,31 @@ for (const used of [0, 180]) {
     negCount.status === "PENDING_UNVERIFIED" && negCount.lines.length === 0);
 }
 
+{
+  const splitAmounts = { benefit: 60_000, nonBenefit: 40_000 };
+  const inpatient = { ...inp(100_000), splitAmounts };
+  const outpatient = { ...out(100_000, "hospital"), splitAmounts };
+  const pharmacy = { ...out(100_000, "pharmacy"), splitAmounts };
+  const prior = { plan: "selectiveII", priorAnnualPaid: 1_995_000 } as const;
+  const admissions = calculateMany("2017", { ...prior, lines: [inpatient, inpatient] });
+  check("선택형Ⅱ 입원 두 건: 공제 5,000원 후 연간 상한 소진", admissions.lines.map((line) => line.ownPay).join(",") === "5000,0");
+  const visits = calculateMany("2017", { plan: "selectiveII", lines: [outpatient, pharmacy],
+    priorAnnualOutpatientVisits: 180, priorAnnualPrescriptions: 179 });
+  check("선택형Ⅱ 외래·약국 횟수 한도를 각각 적용", visits.totalOwnPay === 114_000 && visits.totalInsurancePay === 86_000
+    && visits.lines[0]?.covered === false && visits.lines[1]?.covered === true);
+  const oneLimit = calculateMany("2017", { plan: "selectiveII", lines: [outpatient],
+    priorAnnualOutpatientVisits: 0, perVisitCoverageLimit: 25_000 });
+  check("선택형Ⅱ 단일 외래 가입금액 한도 적용", oneLimit.totalInsurancePay === 25_000);
+  for (const result of [
+    calculateMany("2017", { plan: "selectiveII", lines: [out(100_000)], priorAnnualOutpatientVisits: 180 }),
+    calculateMany("2017", { plan: "selectiveII", lines: [inpatient] }),
+    calculateMany("2017", { plan: "selectiveII", lines: [outpatient, pharmacy], priorAnnualOutpatientVisits: 0,
+      priorAnnualPrescriptions: 0, perVisitCoverageLimit: 25_000 }),
+  ]) {
+    check("선택형Ⅱ 다회 필수 입력 누락 또는 가입금액 혼용은 금액 없이 보류", result.status === "PENDING_UNVERIFIED"
+      && result.lines.length === 0 && result.totalOwnPay === null && result.totalInsurancePay === null);
+  }
+}
+
 console.log(`\n[multiClaim] 통과 ${pass} / 실패 ${fail}`);
 if (fail) process.exit(1);

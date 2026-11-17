@@ -215,5 +215,47 @@ check("상한 구속 시 2세대 capCode", capped2.appliedCaps.includes("GEN2009
 const notCapped = calculate("2017", { amount: 1_000_000, coverage: "benefit", visit: "inpatient", plan: "standard" });
 check("상한 미구속 시 capCode 없음", notCapped.appliedCaps.length === 0);
 
+// 삼성화재 2016년 약관 상품요약서 I-56~57 및 2017년 약관 제3조 310~316쪽.
+for (const gen of GENS) {
+  const base = { plan: "selectiveII", coverage: "benefit" } as const;
+  const inpatient = { ...base, visit: "inpatient", priorAnnualPaid: 0 } as const;
+  const mixed = { amount: 100_000, splitAmounts: { benefit: 60_000, nonBenefit: 40_000 } };
+  const mixedIn = calculate(gen, { ...inpatient, ...mixed });
+  check(`${gen} 선택형Ⅱ 입원 급여 6만원·비급여 4만원 → 14,000원`,
+    mixedIn.ownPay === 14_000 && mixedIn.insurancePay === 86_000 && mixedIn.rateApplied === null);
+  const nonBenefitOnly = calculate(gen, { ...inpatient, amount: 100_000, splitAmounts: { benefit: 0, nonBenefit: 100_000 } });
+  check(`${gen} 선택형Ⅱ 입원 비급여 10만원 → 20,000원`, nonBenefitOnly.ownPay === 20_000);
+  const out = { ...base, ...mixed, visit: "outpatient" } as const;
+  check(`${gen} 선택형Ⅱ 병원 정액 우세: 15,000원`, calculate(gen, { ...out, facility: "hospital" }).ownPay === 15_000);
+  check(`${gen} 선택형Ⅱ 의원·약국 정률 우세: 14,000원`, ["clinic", "pharmacy"].every(facility =>
+    calculate(gen, { ...out, facility: facility as Facility }).ownPay === 14_000));
+  check(`${gen} 선택형Ⅱ 약국 정액 우세: 8,000원`, calculate(gen, {
+    ...out, facility: "pharmacy", amount: 30_000, splitAmounts: { benefit: 30_000, nonBenefit: 0 },
+  }).ownPay === 8_000);
+  check(`${gen} 선택형Ⅱ 두 공제 금액을 합한 뒤 한 번만 반올림`, calculate(gen, {
+    ...inpatient, amount: 6, splitAmounts: { benefit: 3, nonBenefit: 3 },
+  }).ownPay === 1);
+  for (const input of [
+    { ...inpatient, amount: 100_000 },
+    { ...inpatient, ...mixed, amount: 100_001 },
+    { ...inpatient, ...mixed, priorAnnualPaid: undefined },
+    { ...inpatient, amount: 0, splitAmounts: { benefit: -1, nonBenefit: 1 } },
+    { ...out },
+    { ...out, facility: "clinic" as const, perVisitCoverageLimit: 0.1 },
+    { ...inpatient, ...mixed, plan: "standard" as const },
+  ]) {
+    const rejected = calculate(gen, input);
+    check(`${gen} 선택형Ⅱ 비일치 입력은 금액 없이 보류`, rejected.status === "PENDING_UNVERIFIED" && rejected.ownPay === null);
+  }
+}
+for (const generation of ["2021", "2026"] as const) {
+  const unrelated = calculate(generation, {
+    amount: 100_000, coverage: "benefit", visit: "inpatient",
+    splitAmounts: { benefit: 60_000, nonBenefit: 40_000 },
+  });
+  check(`${generation} 단건에서 2·3세대 분리 금액을 거부`,
+    unrelated.status === "PENDING_UNVERIFIED" && unrelated.notes[0].includes("splitAmounts"));
+}
+
 console.log(`\n[generationStandardized] 통과 ${pass} / 실패 ${fail}`);
 if (fail) process.exit(1);

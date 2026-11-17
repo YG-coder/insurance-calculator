@@ -472,7 +472,8 @@ console.log("\n[커밋 D·E] 계산·화면 무변경 (기준 30dee21)");
     //   ⚠ 산식·상수·상한 절삭·`ok()`/`pending()`의 반환값·기존 안내 문구는 그대로다.
     // 20차: 본인부담률 미입력 안내의 내부 번호를 사용자 확인 문장으로만 교체했다.
     // 문구를 되돌리면 이전 파일과 바이트 동일함을 대조했고, 계산/보류 조건은 유지한다.
-    "src/lib/insurance/engine/generation2026.ts": "0bcec86b7f9d3e236a31e2d16f6009828628bad20164c582460e41bbae2bba7f",
+    // 2·3세대 선택형Ⅱ 분리 금액을 5세대 직접 호출의 미사용 입력 목록에 추가했다.
+    "src/lib/insurance/engine/generation2026.ts": "f081754110959b912aff148fe731763a0be6d74b3f22538463eac161c409e94d",
     // ⚠ G-33에서 **의도적으로** 갱신했다(종전 da28c9f7…). 제네릭 진입점이 **선택된 세대가
     //   소비하지 않는 5세대 전용 축**을 명시적으로 거부한다 — 종전에는 2009·2017·2021의
     //   모든 경로에서 `nhisCoinsuranceRate`·`severity`·`nonBenefitItem`·
@@ -490,7 +491,8 @@ console.log("\n[커밋 D·E] 계산·화면 무변경 (기준 30dee21)");
     //   ⚠ 소유권 표에서 `held: ["tier"]` 두 칸이 비었다 — G-34C가 확정 stray로 닫았고 판정은
     //     세대 엔진이 한다(라우터는 `coverage`까지 보는 조건을 쓸 수 없다).
     //   ⚠ 세대별 산식·상수·반환 계약·stray 안내 문구와 그 순서는 그대로다.
-    "src/lib/insurance/engine/engine.ts": "9da65dd73b70c5b5ae913cd662a511d15eeaa1e346528fa2822dc130bfb29e88",
+    // 분리 금액을 2·3세대 엔진에 전달하고 제네릭 4·5세대 경로에서 거부한다.
+    "src/lib/insurance/engine/engine.ts": "9732c020ea27be6b19d170340ae610903619340dd267915b883ddfc1209605a7",
     "src/lib/insurance/engine/capLabels.ts": "23d0bc4b40a1b408cf74ec0189457e1a3c9f6bc75988e4bcde4e7c2c8554410d",
     // ⚠ G-14D에서 **의도적으로** 갱신했다(종전 c10d2fea…).
     //   `rejected()`의 '받은 값' 표시가 `JSON.stringify(got) ?? String(got)`이라

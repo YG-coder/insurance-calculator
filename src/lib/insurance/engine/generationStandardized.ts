@@ -1,18 +1,19 @@
 // 표준화 실손 엔진 — 2세대(2009.10~2017.3) · 3세대(2017.4~2021.6) 공용.
 //
-// 표준형과 입원 합계 10%·통원 정액을 확인한 2세대 선택형Ⅰ만 계산한다.
-// 3세대 선택형은 단일률 산식의 판매 적용 근거와 필요한 입력이 확보될 때까지 보류한다.
+// 표준형과 해당 2세대 선택형Ⅰ은 합계 진료비로 계산한다.
+// 가입 약관이 선택형Ⅱ이면 급여 본인부담금과 보장 대상 비급여를 구분한다.
 //
 // 4·5세대와 다른 점 — 옮겨 적을 때 반드시 지켜야 한다:
-//   1) 급여·비급여를 **합한 금액**에 단일 정률을 적용한다. coverage로 요율이 갈리지 않는다.
+//   1) 선택형Ⅱ는 항목별 정률을 더한다. 통원은 이 금액과 항목별 정액 중 큰 금액을 공제한다.
 //   2) 지원하는 2세대 선택형Ⅰ의 통원은 약관 <표1>의 정액 공제만 적용한다.
 //   3) 입원 자기부담에는 연간 200만원 상한이 있다. 이는 보험금 상한이 아니라 자기부담 상한이므로
 //      settle의 insuranceCap이 아니라 ownPayRaw를 깎아야 한다(5세대 500만 상한과 같은 성질).
 //   4) 통원 공제 분류축(Facility)은 4세대의 Tier와 다르다. 종합병원이 2·3세대에서는 1만5천원,
 //      4세대에서는 상급종합과 같은 2만원이다. 섞어 쓰면 안 된다.
-import { roundedRateAmount, rateAmountExceeds } from "../common/exactMoney";
-import { CapCode, ClaimInput, CalcResult, Facility, Plan } from "./types";
+import { combinedRateAmounts, roundedRateAmount, rateAmountExceeds } from "../common/exactMoney";
+import { CapCode, ClaimInput, CalcResult, Plan, StandardizedSplitAmounts } from "./types";
 import { GEN2009, GEN2009_NOT_APPLIED, GEN2017, GEN2017_NOT_APPLIED } from "./constants";
+import { REGULATORY_RULES } from "./regulatoryRules";
 import { settle, normalizeAmount } from "../common/settle";
 
 type StandardizedGeneration = "2009" | "2017";
@@ -44,7 +45,7 @@ function perVisitLimit(value: number | undefined): number | undefined {
  * 입력 소유권 (G-34C) — 이 진입점이 쓰지 않는 축을 조용히 버리지 않는다.
  *
  * 이 엔진이 읽는 축은 `amount`·`coverage`·`visit`·`plan`·`facility`·`priorAnnualPaid`·
- * `perVisitCoverageLimit` 일곱뿐이다(실측: 8경로군 × 35축에서 접근자 호출과 결과 변화).
+ * `perVisitCoverageLimit`을 사용한다. 선택형Ⅱ는 `splitAmounts`도 사용한다.
  * 나머지는 **다른 세대·다른 진입점의 축**이고, 종전에는 접근자 호출 0회로 조용히 버려졌다.
  *
  * ⚠ 제네릭 라우터 `calculate()`는 세대별 소유 필드만 **지연 투영**해 넘기므로 이 검사에
@@ -90,12 +91,40 @@ export function standardizedPlanBlock(generation: StandardizedGeneration, plan: 
   if (generation === "2017" && plan === "selective") {
     return "3세대 선택형은 계약의 공제 기준을 확인해야 하므로 계산을 보류합니다.";
   }
-  if (plan === "standard" || plan === "selective") return null;
+  if (plan === "standard" || plan === "selective" || plan === "selectiveII") return null;
   return "표준형/선택형(plan) 미지정 → 계산 불가. 보험증권의 상품명 또는 가입내역에서 확인해 주세요.";
 }
 
+const selectiveIIRates = REGULATORY_RULES.GEN23_SELECTIVE_II_COST_SHARE.value;
+
+export function isWon(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+export function standardizedSplitBlock(
+  plan: Plan | undefined,
+  amount: number,
+  visit: unknown,
+  facility: unknown,
+  splitAmounts?: StandardizedSplitAmounts,
+): string | null {
+  if (plan !== "selectiveII") {
+    return splitAmounts === undefined ? null : "급여·비급여 분리 금액은 선택형Ⅱ 계산에만 쓰입니다.";
+  }
+  if (!isWon(amount) || !isWon(splitAmounts?.benefit) || !isWon(splitAmounts?.nonBenefit)
+    || splitAmounts.benefit + splitAmounts.nonBenefit !== amount) {
+    return "선택형Ⅱ는 급여 본인부담금과 보장 대상 비급여를 각각 원 단위 정수로 입력해야 합니다. 두 금액의 합은 총 진료비와 같아야 합니다.";
+  }
+  if (visit !== "inpatient" && (visit !== "outpatient" || typeof facility !== "string"
+    || !Object.hasOwn(GEN2009.outpatientMinDeductible, facility))) {
+    return "선택형Ⅱ의 청구 건마다 입원 또는 통원을 선택하고, 통원은 의료기관이나 약국 구분을 확인해 주세요.";
+  }
+  return null;
+}
+
 export function calcStandardized(generation: StandardizedGeneration, input: ClaimInput): CalcResult {
-  const amount = normalizeAmount(input.amount);
+  const enteredAmount = input.amount;
+  const amount = normalizeAmount(enteredAmount);
   const { constants, notApplied, cap, perVisitCap } = TABLE[generation];
 
   // 표준형/선택형은 계약자가 가입한 상품이 정하는 값이다. 계약일로 추정하지 않는다.
@@ -104,7 +133,8 @@ export function calcStandardized(generation: StandardizedGeneration, input: Clai
   if (planBlock !== null) return pending(generation, amount, [planBlock]);
 
   // `visit`은 어느 경로에서도 막지 않는 필수 축이라 여기서 한 번 읽어 아래 전부가 같은 값을 쓴다.
-  const isOutpatient = input.visit === "outpatient";
+  const visit = input.visit;
+  const isOutpatient = visit === "outpatient";
 
   const strayList: readonly string[] = [
     ...STD_UNUSED_KEYS,
@@ -120,7 +150,18 @@ export function calcStandardized(generation: StandardizedGeneration, input: Clai
     ]);
   }
 
+  const splitAmounts = input.splitAmounts;
+  const facility = isOutpatient ? input.facility : undefined;
+  const splitBlock = standardizedSplitBlock(plan, enteredAmount, visit, facility, splitAmounts);
+  if (splitBlock !== null) return pending(generation, amount, [splitBlock]);
+  const splitDeduction = splitAmounts === undefined ? null : combinedRateAmounts(
+    splitAmounts.benefit, selectiveIIRates.benefit, splitAmounts.nonBenefit, selectiveIIRates.nonBenefit,
+  );
+
   const notes: string[] = [];
+  if (splitDeduction) {
+    notes.push(`선택형Ⅱ 정률 공제는 급여 본인부담금의 ${Math.round(selectiveIIRates.benefit * 100)}%와 보장 대상 비급여의 ${Math.round(selectiveIIRates.nonBenefit * 100)}%를 더한 금액입니다.`);
+  }
   const notAppliedList: string[] = [...notApplied.all];
   if (isOutpatient) notAppliedList.push(...notApplied.outpatient);
 
@@ -129,13 +170,17 @@ export function calcStandardized(generation: StandardizedGeneration, input: Clai
     const rate = plan === "standard" ? constants.inpatientRate.standard : GEN2009.inpatientRate.selective;
     const capValue = constants.inpatientAnnualOwnPayCap;
     const priorAnnualPaid = input.priorAnnualPaid;
+    if (splitDeduction && !isWon(priorAnnualPaid)) {
+      return pending(generation, amount, ["선택형Ⅱ 입원은 이미 부담한 연간 입원 자기부담금을 입력해 주세요. 기존 부담액이 없으면 0을 입력하세요."]);
+    }
     if (priorAnnualPaid === undefined) notes.push("기존 입원 자기부담금 누적액을 0원으로 가정한 계산입니다. 기존 누적액이 있으면 결과가 달라집니다.");
     const prior = Math.max(0, priorAnnualPaid ?? 0);
     const remaining = Math.max(capValue - prior, 0);
 
-    let ownPayRaw = roundedRateAmount(amount, rate);
+    const rateBased = splitDeduction?.rounded ?? roundedRateAmount(amount, rate);
+    let ownPayRaw = rateBased;
     const appliedCaps: CapCode[] = [];
-    if (rateAmountExceeds(amount, rate, remaining)) {
+    if (splitDeduction ? splitDeduction.exceeds(remaining) : rateAmountExceeds(amount, rate, remaining)) {
       ownPayRaw = remaining;
       appliedCaps.push(cap);
     }
@@ -147,27 +192,31 @@ export function calcStandardized(generation: StandardizedGeneration, input: Clai
     const s = settle(amount, ownPayRaw);
     return {
       status: "OK", generation, amount: s.amount, ownPay: s.ownPay, insurancePay: s.insurancePay,
-      rateBased: roundedRateAmount(amount, rate), rateApplied: rate, minDeductible: 0,
+      rateBased, rateApplied: splitDeduction ? null : rate, minDeductible: 0,
       notes, appliedCaps,
     };
   }
 
   // ── 통원 ──
-  const facility: Facility = input.facility ?? "clinic";
-  const minDeductible = constants.outpatientMinDeductible[facility];
-  // 표준형만 정률과 비교한다. 선택형은 정액 공제뿐이다.
+  const minDeductible = constants.outpatientMinDeductible[facility ?? "clinic"];
+  // 2세대 선택형Ⅰ의 통원은 정액 공제만 적용한다.
   const rate = plan === "standard" ? constants.outpatientStandardRate : 0;
-  const ownPayRaw = plan === "standard"
-    ? Math.max(roundedRateAmount(amount, rate), minDeductible)
-    : minDeductible;
+  const rateBased = splitDeduction?.rounded ?? roundedRateAmount(amount, rate);
+  const ownPayRaw = Math.max(rateBased, minDeductible);
 
   // 회(건)당 가입금액은 계약자가 정하는 값이라 상수화할 수 없다.
   // 사용자가 준 경우에만 보험금 지급 상한으로 적용하고, 없으면 미적용 한도로 고지한다.
   // 입원에는 적용하지 않는다 — 약관의 회(건)당 한도는 외래·처방조제비 항목의 가입금액이다.
-  const visitLimit = perVisitLimit(input.perVisitCoverageLimit);
+  const enteredLimit = input.perVisitCoverageLimit;
+  if (splitDeduction && enteredLimit !== undefined && !isWon(enteredLimit)) {
+    return pending(generation, amount, ["회(건)당 보험가입금액은 0 이상의 원 단위 정수로 입력해 주세요."]);
+  }
+  const visitLimit = perVisitLimit(enteredLimit);
 
   notes.push(
-    plan === "standard"
+    splitDeduction
+      ? `통원 공제는 ${minDeductible.toLocaleString("ko-KR")}원과 급여·비급여 정률 공제의 합계 중 큰 금액입니다.`
+      : plan === "standard"
       ? `통원 공제는 ${minDeductible.toLocaleString("ko-KR")}원과 의료비의 ${Math.round(rate * 100)}% 중 큰 금액입니다.`
       : `선택형 통원 공제는 정액 ${minDeductible.toLocaleString("ko-KR")}원입니다(정률 공제 없음).`,
   );
@@ -179,7 +228,7 @@ export function calcStandardized(generation: StandardizedGeneration, input: Clai
   const s = settle(amount, ownPayRaw, visitLimit);
   return {
     status: "OK", generation, amount: s.amount, ownPay: s.ownPay, insurancePay: s.insurancePay,
-    rateBased: roundedRateAmount(amount, rate), rateApplied: rate, minDeductible,
+    rateBased, rateApplied: splitDeduction ? null : rate, minDeductible,
     notes, appliedCaps: s.capped ? [perVisitCap] : [],
   };
 }

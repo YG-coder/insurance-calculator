@@ -25,7 +25,7 @@ import { settle, normalizeAmount } from "../common/settle";
  * ──────────────────────────────────────────────────────────────────────── */
 const GEN2021_UNUSED_KEYS = [
   "amounts", "lines", "stays", "roomChargeTotal", "inpatientDays", "generation",
-  "cause", "severity", "facility", "plan", "route", "item", "rider", "nonBenefitItem",
+  "cause", "severity", "facility", "plan", "splitAmounts", "route", "item", "rider", "nonBenefitItem",
   "injectionPurpose", "nhisCoinsuranceRate", "perVisitCoverageLimit",
   "outpatientCoverageLimit", "annualCoverageLimit", "priorAnnualPaid",
   "priorAnnualDeductible", "priorAnnualInpatientDeductible", "priorAnnualInsurancePaid",

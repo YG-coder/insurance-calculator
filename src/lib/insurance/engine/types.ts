@@ -36,9 +36,13 @@ export type Gen2026NonBenefitItem =
 //     4세대에서는 상급종합과 같은 2만원(Tier "hospital")으로 묶인다. 섞어 쓰면 안 된다.
 export type Facility = "clinic" | "hospital" | "tertiary" | "pharmacy";
 
-// 2·3세대 자기부담 유형. 표준형은 정률 공제가 있고, 선택형은 정액 공제만 있다.
-//   2세대 전기(2012.12.28 세칙 개정 전) 계약에는 표준형이 없다 — 사용자가 증권을 보고 고른다.
-export type Plan = "standard" | "selective";
+// selective는 2세대 선택형Ⅰ과 유형 미확정인 3세대 선택형에 쓰는 기존 값이다.
+export type Plan = "standard" | "selective" | "selectiveII";
+
+export interface StandardizedSplitAmounts {
+  benefit: number;     // 급여 항목 중 가입자가 낸 금액
+  nonBenefit: number;  // 기본형에서 보상 대상인 비급여 의료비
+}
 
 export interface ClaimInput {
   amount: number;              // 진료비(원). 현행 로직과 동일하게 비음수 정수 가정
@@ -47,6 +51,7 @@ export interface ClaimInput {
   tier?: Tier;                 // 급여 통원 최소공제 결정용 (미지정 시 clinic) — 4·5세대
   facility?: Facility;         // 2·3세대 통원 공제 결정용 (미지정 시 clinic)
   plan?: Plan;                 // 2·3세대 필수. 미지정 시 계산 불가(PENDING_UNVERIFIED)
+  splitAmounts?: StandardizedSplitAmounts; // 2·3세대 선택형Ⅱ 전용. 합계는 amount와 일치해야 한다.
   severity?: Severity;         // 5세대 비급여에서 필수
   nhisCoinsuranceRate?: number; // 5세대 급여 통원용 건강보험 본인부담률(0~1). 미확정 시 undefined
   // 2·3세대 전용 — 입원 자기부담 상한 200만원의 연 누적 자기부담금. 기본 0.
@@ -203,6 +208,7 @@ type ForeignContainerAxes = "amounts" | "lines" | "stays" | "roomChargeTotal" | 
 
 export interface ClaimLine {
   amount: number;
+  splitAmounts?: StandardizedSplitAmounts;
   visit: Visit;
   facility?: Facility; // 통원에서만 의미 있음
 }
@@ -243,7 +249,7 @@ interface MultiClaimInputFields {
  *     행 구성이 정하는 축이다).
  */
 export type MultiClaimInput = MultiClaimInputFields
-  & SealNever<Exclude<ForeignContainerAxes, "lines"> | "amount" | "coverage" | "visit" | "cause" | "severity"
+  & SealNever<Exclude<ForeignContainerAxes, "lines"> | "amount" | "splitAmounts" | "coverage" | "visit" | "cause" | "severity"
     | "tier" | "facility" | "route" | "item" | "rider" | "nonBenefitItem" | "injectionPurpose"
     | "nhisCoinsuranceRate" | "outpatientCoverageLimit" | "annualCoverageLimit"
     | "priorAnnualDeductible" | "priorAnnualInpatientDeductible" | "priorAnnualInsurancePaid"

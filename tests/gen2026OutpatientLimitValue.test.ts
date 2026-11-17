@@ -481,7 +481,7 @@ console.log("\n[G-24] 9. 소스 계약");
     check(`${label} 엔진은 이 커밋의 대상이 아니다`, !/OutpatientLimitCheck/.test(readFileSync(path, "utf8")));
   }
   check("2·3세대의 회당 한도 파서는 그대로다",
-    /const visitLimit = perVisitLimit\(input\.perVisitCoverageLimit\);/.test(readFileSync("src/lib/insurance/engine/generationStandardized.ts", "utf8")));
+    /const visitLimit = perVisitLimit\(enteredLimit\);/.test(readFileSync("src/lib/insurance/engine/generationStandardized.ts", "utf8")));
 }
 
 console.log(`\n[G-24 통원 가입금액 축 값 검증 · 0원 안내 분리] ✅ ${pass} / ❌ ${fail}`);

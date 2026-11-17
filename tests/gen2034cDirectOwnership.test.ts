@@ -342,9 +342,9 @@ console.log("\n[G-34C] 11. 목록과 자리 — 구조 계약");
   const count = (src: string, name: string) => (src.match(new RegExp(`const ${name} = \\[([\\s\\S]*?)\\] as const;`))?.[1].match(/"/g)?.length ?? 0) / 2;
   check("2·3세대 공통 목록 28종", count(s1, "STD_UNUSED_KEYS") === 28, String(count(s1, "STD_UNUSED_KEYS")));
   check("2·3세대 경로별 목록 2 + 1", count(s1, "STD_OUTPATIENT_ONLY_KEYS") === 2 && count(s1, "STD_INPATIENT_ONLY_KEYS") === 1);
-  check("4세대 공통 목록 31종", count(s2, "GEN2021_UNUSED_KEYS") === 31, String(count(s2, "GEN2021_UNUSED_KEYS")));
-  check("5세대 공통 목록 25종(레거시 priorAnnualPaid는 자기 안내를 가진 기존 검사에 남긴다)",
-    count(s3, "GEN2026_FOREIGN_KEYS") === 25 && !/GEN2026_FOREIGN_KEYS = \[[\s\S]*?"priorAnnualPaid"/.test(s3),
+  check("4세대 공통 목록 32종", count(s2, "GEN2021_UNUSED_KEYS") === 32, String(count(s2, "GEN2021_UNUSED_KEYS")));
+  check("5세대 공통 목록 26종(레거시 priorAnnualPaid는 자기 안내를 가진 기존 검사에 남긴다)",
+    count(s3, "GEN2026_FOREIGN_KEYS") === 26 && !/GEN2026_FOREIGN_KEYS = \[[\s\S]*?"priorAnnualPaid"/.test(s3),
     String(count(s3, "GEN2026_FOREIGN_KEYS")));
   check("2·3세대 stray 검사는 plan preflight 뒤다",
     s1.indexOf("표준형/선택형(plan) 미지정") < s1.indexOf("2·3세대 단건 계산에 쓰이지 않는 입력입니다"));

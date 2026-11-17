@@ -114,10 +114,11 @@ check("AmountInput 소스가 바뀌지 않았다(정제·절단 유지)",
 // ⚠ 이 두 검사는 G-1 당시 "금액 두 축은 아직 AmountInput"을 고정했다. G-7이 그 축을
 //   RawAmountInput으로 옮겼으므로, 이제 이 화면에는 AmountInput이 남아 있지 않다.
 //   금액 축 자체의 계약은 tests/gen2009MoneyInput.test.ts가 검사한다.
-check("2·3세대는 네 금액 입력 모두 RawAmountInput을 쓴다",
+check("2·3세대 금액 입력은 모두 RawAmountInput을 쓴다",
   (ui.match(/<AmountInput/g) ?? []).length === 0
   && !/import AmountInput/.test(ui)
-  && (ui.match(/<RawAmountInput/g) ?? []).length === 4
+  && (ui.match(/<RawAmountInput/g) ?? []).length === 6
+  && /id=\{\x60std-non-benefit-\$\{row\.id\}\x60\}/.test(ui)
   && /id=\{`std-amount-\$\{row\.id\}`\}/.test(ui) && /id="std-quick-amount"/.test(ui)
   && /id="std-per-visit-limit"/.test(ui) && /id="std-prior-paid"/.test(ui));
 check("공용 AmountInput 파일 자체는 그대로다(다른 화면이 계속 쓴다)",
@@ -169,7 +170,7 @@ check("차단 중에는 엔진을 호출하지 않는다(부분합 계약을 만
 // ⚠ 게이트가 있으니 `?? 0`이 닿지 않는다 — 지금은 동작이 같다. 그래도 금지한다:
 //   나중에 게이트를 손대면 무효 행이 조용히 0원으로 되살아나 이 커밋의 결함이 되돌아온다.
 check("무효 행을 0원으로 대체하는 경로를 두지 않는다",
-  /amount: stdAmount\(r\.amount\) as number,/.test(ui)
+  /const amount = stdAmount\(row\.amount\);\s*return amount === null \? null : \{ amount, visit, facility \};/.test(ui)
   && !/stdAmount\([^)]*\) \?\? 0/.test(stripComments(ui))
   && !/onlyNum\(r\.amount\)/.test(stripComments(ui)));
 

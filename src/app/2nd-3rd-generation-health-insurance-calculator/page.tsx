@@ -2,7 +2,6 @@ import { socialMetadata } from "@/lib/metadata";
 import type { Metadata } from "next";
 import Link from "next/link";
 import HealthCalcStandardized from "@/components/calculators/HealthCalcStandardized";
-import PolicyGenerationGuide from "@/components/calculators/PolicyGenerationGuide";
 import NoticeBox from "@/components/NoticeBox";
 import RelatedCalculators from "@/components/RelatedCalculators";
 import { SITE } from "@/lib/site";
@@ -33,8 +32,8 @@ export default function Health2nd3rdPage() {
         </h1>
         <p className="mt-3 text-slate-600 leading-relaxed">
           표준화 실손(2세대)과 착한실손(3세대)은 보험증권에 적힌 유형에 따라 자기부담률과 통원 공제 방식이
-          달라집니다. 이 계산기는 <b>2·3세대 표준형</b>과 <b>약관이 합계 10%·통원 정액인 2세대 선택형Ⅰ</b>을
-          지원합니다. 선택형Ⅱ는 급여와 비급여 공제율이 달라 계산을 보류합니다.
+          달라집니다. 이 계산기는 <b>2·3세대 표준형</b>, <b>입원 합계 10%·통원 정액인 2세대 선택형Ⅰ</b>,
+          <b>급여와 비급여를 따로 공제하는 2·3세대 선택형Ⅱ</b>를 지원합니다. 가입 약관과 공제 기준이 일치하는 유형을 선택하세요.
           병원에 여러 번 다녀왔다면 방문별로 입력해 연간 횟수 한도와 자기부담 상한까지 함께 계산할 수 있습니다.
         </p>
       </header>
@@ -49,15 +48,15 @@ export default function Health2nd3rdPage() {
         </a>
       </div>
 
-      <PolicyGenerationGuide />
-      <HealthCalcStandardized />
+      <HealthCalcStandardized showPolicyGuide />
 
       <div className="mt-6">
         <NoticeBox variant="info">
           본 계산기는 금융감독원 <b>보험업감독업무시행세칙 [별표 15] 표준약관</b>의 해당 시기 연혁본
           원문을 근거로 지원하는 유형의 입원 자기부담률(표준형 20% · 해당 2세대 선택형Ⅰ 10%), 입원 자기부담 연간 상한 200만 원,
           통원 항목별 공제금액(의원 1만 · 병원 1만 5천 · 상급종합 2만 · 처방조제 8천 원)과 표준형의
-          20% 정률 비교를 반영합니다. 여러 건을 한 번에 입력하면 계약해당일 기준 <b>연간 외래 180회 ·
+          20% 정률 비교를 반영합니다. 선택형Ⅱ는 판매 약관에서 확인한 급여 본인부담금 10%와 비급여 20%를 합산하고,
+          외래·처방조제에서는 그 합계와 정액 공제 중 큰 금액을 적용합니다. 여러 건을 한 번에 입력하면 계약해당일 기준 <b>연간 외래 180회 ·
           처방전 180건</b> 한도와 입원 자기부담 연간 상한의 <b>건 사이 누적</b>까지 반영합니다.
           회(건)당 보험가입금액은 계약마다 다른 값이라 입력하신 경우에만 적용합니다. 상급병실료 차액과
           3세대 3대비급여 특약은 계산에 넣지 않고 결과에 미적용 사실을 함께 표시합니다.
@@ -83,13 +82,14 @@ export default function Health2nd3rdPage() {
               </tr>
               <tr>
                 <td className="border border-slate-200 px-3 py-2 font-semibold">입원</td>
-                <td className="border border-slate-200 px-3 py-2">지원 유형 기준 표준형 20% · 해당 2세대 선택형Ⅰ 10%, 연간 자기부담 상한 200만 원</td>
+                <td className="border border-slate-200 px-3 py-2">표준형 합계 20% · 해당 2세대 선택형Ⅰ 합계 10% · 선택형Ⅱ 급여 본인부담금 10%와 비급여 20%의 합계. 연간 자기부담 상한 200만 원</td>
                 <td className="border border-slate-200 px-3 py-2">상한 없음</td>
               </tr>
               <tr>
                 <td className="border border-slate-200 px-3 py-2 font-semibold">통원 공제</td>
                 <td className="border border-slate-200 px-3 py-2">
-                  표준형: 정액과 20% 중 큰 금액 / 해당 2세대 선택형Ⅰ: 정액
+                  표준형: 정액과 합계의 20% 중 큰 금액 / 해당 2세대 선택형Ⅰ: 정액 /
+                  선택형Ⅱ: 정액과 급여·비급여 정률 공제 합계 중 큰 금액
                 </td>
                 <td className="border border-slate-200 px-3 py-2">정액과 정률 중 큰 금액</td>
               </tr>

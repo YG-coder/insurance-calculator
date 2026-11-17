@@ -31,6 +31,19 @@ export function rateAmountExceeds(amount: number, rate: number, cap: number): bo
   return BigInt(amount) * numerator > BigInt(cap) * denominator;
 }
 
+/** 검증된 두 금액의 공제를 합한 뒤 원 단위로 한 번만 반올림한다. */
+export function combinedRateAmounts(first: number, firstRate: number, second: number, secondRate: number) {
+  const [firstNumerator, firstDenominator] = decimalRatio(firstRate);
+  const [secondNumerator, secondDenominator] = decimalRatio(secondRate);
+  const numerator = BigInt(first) * firstNumerator * secondDenominator
+    + BigInt(second) * secondNumerator * firstDenominator;
+  const denominator = firstDenominator * secondDenominator;
+  return {
+    rounded: roundPositive(numerator, denominator),
+    exceeds: (cap: number) => numerator > BigInt(cap) * denominator,
+  };
+}
+
 /** 금액/일수 등 검증된 비음수 정수의 나눗셈을 원 단위로 반올림. */
 export function roundedIntegerRatio(amount: number, divisor: number): number {
   if (!Number.isSafeInteger(amount) || amount < 0 || !Number.isSafeInteger(divisor) || divisor <= 0) {

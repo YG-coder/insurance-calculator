@@ -1,8 +1,8 @@
 // 기존 HOLD note를 이용자 안내로 요약한다. 규칙값·확정 상태를 바꾸지 않는다.
 export const REGULATORY_HOLD_COPY: Record<string, { title: string; summary: string }> = {
   "GEN2017-INPATIENT-RATE-SELECTIVE": {
-    title: "3세대 선택형",
-    summary: "3세대 선택형 계약의 급여·비급여 공제를 구분해야 하므로 이 계산기에서는 금액을 표시하지 않습니다.",
+    title: "공제 기준을 확인하지 못한 3세대 선택형",
+    summary: "약관에 급여 본인부담금 10%와 비급여 20%가 각각 적용되면 선택형Ⅱ로 계산할 수 있습니다. 공제 기준을 확인하기 전에는 계산을 보류합니다.",
   },
   "GEN2026-CRITICAL-OUTPATIENT-VISITS-ZEROPAY": {
     title: "중증 통원에서 지급 보험금이 0원인 경우의 횟수",

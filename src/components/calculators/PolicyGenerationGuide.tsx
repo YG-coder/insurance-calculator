@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { generationFromPolicyDate } from "@/lib/insurance/engine/generationFromPolicyDate";
 
-export default function PolicyGenerationGuide() {
+export default function PolicyGenerationGuide({ onPolicyDateChange }: { onPolicyDateChange?: (date: string) => void } = {}) {
   const [date, setDate] = useState("");
   const [hasChangedPolicy, setHasChangedPolicy] = useState(false);
   const generation = hasChangedPolicy ? "INVALID" : generationFromPolicyDate(date);
@@ -26,7 +26,15 @@ export default function PolicyGenerationGuide() {
       </label>
       <p className="mt-1 text-xs text-slate-600">보험증권의 최초 계약일을 입력하세요. 갱신일이 아닙니다.</p>
       <label className="mt-3 flex items-center gap-2 text-sm text-slate-700">
-        <input type="checkbox" checked={hasChangedPolicy} onChange={(event) => setHasChangedPolicy(event.target.checked)} />
+        <input
+          type="checkbox"
+          checked={hasChangedPolicy}
+          onChange={(event) => {
+            const checked = event.target.checked;
+            setHasChangedPolicy(checked);
+            onPolicyDateChange?.(checked ? "" : date);
+          }}
+        />
         실손보험을 전환하거나 재가입한 적이 있습니다
       </label>
       {hasChangedPolicy && (
@@ -44,7 +52,11 @@ export default function PolicyGenerationGuide() {
         type="date"
         disabled={hasChangedPolicy}
         value={date}
-        onChange={(event) => setDate(event.target.value)}
+        onChange={(event) => {
+          const nextDate = event.target.value;
+          setDate(nextDate);
+          onPolicyDateChange?.(nextDate);
+        }}
         className="mt-3 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
       />
       {date && generation === "2021" && (

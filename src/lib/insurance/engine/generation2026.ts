@@ -187,7 +187,7 @@ const BLOCKED_ITEM_REASON: Record<Exclude<Gen2026NonBenefitItem, "general">, str
  * ──────────────────────────────────────────────────────────────────────── */
 const GEN2026_FOREIGN_KEYS = [
   "amounts", "lines", "stays", "roomChargeTotal", "inpatientDays", "generation",
-  "cause", "facility", "plan", "route", "item", "rider", "injectionPurpose",
+  "cause", "facility", "plan", "splitAmounts", "route", "item", "rider", "injectionPurpose",
   "outpatientCoverageLimit", "annualCoverageLimit",
   "priorAnnualInpatientDeductible", "priorAnnualInsurancePaid", "priorAnnualRiderPaid",
   "priorAnnualOutpatientVisits", "priorAnnualOutpatientDays", "priorAnnualPrescriptions",

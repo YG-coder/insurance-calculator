@@ -17,7 +17,7 @@ import {
   MultiClaimInput, MultiClaimResult,
 } from "./types";
 import { GEN2009, GEN2017 } from "./constants";
-import { calcStandardized, standardizedPlanBlock } from "./generationStandardized";
+import { calcStandardized, isWon, standardizedPlanBlock, standardizedSplitBlock } from "./generationStandardized";
 import { normalizeAmount } from "../common/settle";
 
 type StandardizedGeneration = "2009" | "2017";
@@ -87,7 +87,7 @@ const readCount = (o: object, key: string): unknown =>
   (o as Record<string, unknown>)[key];
 
 /**
- * 이 묶음 진입점의 **어느 행 구성에서도** 쓰이지 않는 축 29종 (G-34B).
+ * 이 묶음 진입점에서 최상위에 두면 쓰이지 않는 축 (G-34B).
  *
  * 종전에는 이 진입점에 stray 목록 자체가 없었다 — 두 카운터만 행 구성으로 판정했고,
  * 나머지 축은 실려 와도 **조용히 버려졌다**. 전수 스윕(기준선 `0914d7d`, 8경로군 × 35축,
@@ -103,7 +103,7 @@ const readCount = (o: object, key: string): unknown =>
  *                         `route`·`item`·`injectionPurpose`·
  *                         `priorAnnualInpatientDeductible`·`priorAnnualCoveredCount`·
  *                         `priorAnnualTreatmentActCount`(5세대)
- *   · 행 안에서만 의미    `visit`·`facility`는 `lines[]`의 원소 필드다. 최상위에 실으면
+ *   · 행 안에서만 의미    `visit`·`facility`·`splitAmounts`는 `lines[]`의 원소 필드다. 최상위에 실으면
  *                         읽히지 않는다 — 이 묶음은 행마다 둘이 다를 수 있기 때문이다.
  *   · 입력 축이 아닌 것   `generation`은 함수의 **첫 인자**이지 입력 객체의 필드가 아니다.
  *                         객체에 실으면 계산 세대를 바꾸지 않고 조용히 버려진다.
@@ -113,7 +113,7 @@ const readCount = (o: object, key: string): unknown =>
  */
 const MULTI_STD_UNUSED_KEYS = [
   "amount", "amounts", "stays", "roomChargeTotal", "inpatientDays", "generation",
-  "coverage", "visit", "cause", "severity", "tier", "facility",
+  "coverage", "visit", "cause", "severity", "tier", "facility", "splitAmounts",
   "route", "item", "rider", "nonBenefitItem", "injectionPurpose", "nhisCoinsuranceRate",
   "outpatientCoverageLimit", "annualCoverageLimit",
   "priorAnnualDeductible", "priorAnnualInpatientDeductible", "priorAnnualInsurancePaid",
@@ -277,6 +277,28 @@ export function calculateMany(
 
   // 이어지는 상태
   const priorAnnualPaid = input.priorAnnualPaid;
+  if (plan === "selectiveII") {
+    if (lines.some((line) => line.visit === "inpatient") && !isWon(priorAnnualPaid)) {
+      return blocked(["선택형Ⅱ 입원은 이미 부담한 연간 입원 자기부담금을 입력해 주세요. 기존 부담액이 없으면 0을 입력하세요."]);
+    }
+    if (hasOutpatient) {
+      const limit = input.perVisitCoverageLimit;
+      if (limit !== undefined && !isWon(limit)) {
+        return blocked(["회(건)당 보험가입금액은 0 이상의 원 단위 정수로 입력해 주세요."]);
+      }
+      if (usesVisits && usesPrescriptions && limit !== undefined && limit > 0) {
+        return blocked(["외래와 약국의 가입금액은 각각 따로 정해집니다. 가입금액을 적용하려면 외래와 약국 건을 나눠 계산해 주세요."]);
+      }
+    }
+  }
+  // 사용 횟수를 채운 행에도 분리 금액과 청구 구분이 유효해야 전체 비용을 확정할 수 있다.
+  let splitTotal = 0;
+  for (const [index, line] of lines.entries()) {
+    const splitBlock = standardizedSplitBlock(plan, line.amount, line.visit, line.facility, line.splitAmounts);
+    if (splitBlock !== null) return blocked([`${index + 1}번째 건. ${splitBlock}`]);
+    if (plan === "selectiveII") splitTotal += line.amount;
+  }
+  if (!Number.isSafeInteger(splitTotal)) return blocked(["선택형Ⅱ의 전체 진료비가 계산할 수 있는 범위를 넘었습니다."]);
   let inpatientOwnPaySoFar = nonNegInt(priorAnnualPaid);
   // ⚠ 두 카운터는 정규화하지 않는다. 위에서 미입력·잘못된 값을 이미 차단했고, 쓰이지 않는
   //   축은 실려 오는 것 자체가 차단된다. 여기서 ?? 0은 "쓰이지 않는 축"의 자리값이다.
@@ -285,7 +307,7 @@ export function calculateMany(
 
   const results: ClaimLineResult[] = [];
 
-  lines.forEach((line, index) => {
+  for (const [index, line] of lines.entries()) {
     const facility: Facility = line.facility ?? "clinic";
 
     if (line.visit === "outpatient") {
@@ -301,14 +323,15 @@ export function calculateMany(
           isPrescription ? prescriptionCap : visitCap,
           `계약해당일 기준 1년간 ${unit} ${limit}회(건) 한도를 이미 채워 이 건은 보상 대상이 아닙니다.`,
         ));
-        return;
+        continue;
       }
       if (isPrescription) prescriptions += 1; else outpatientVisits += 1;
     }
 
     const single: CalcResult = calcStandardized(generation, {
       amount: line.amount,
-      coverage: "benefit", // 2·3세대는 급여·비급여 합계에 단일 정률이라 요율에 영향이 없다
+      coverage: "benefit", // 선택형Ⅱ의 보장 구분은 splitAmounts에 담는다.
+      splitAmounts: line.splitAmounts,
       visit: line.visit,
       facility: line.visit === "outpatient" ? facility : undefined,
       plan,
@@ -316,9 +339,10 @@ export function calculateMany(
       perVisitCoverageLimit: line.visit === "outpatient" ? input.perVisitCoverageLimit : undefined,
     });
 
+    if (single.status !== "OK") return blocked(single.notes);
     if (line.visit === "inpatient") inpatientOwnPaySoFar += single.ownPay ?? 0;
     results.push({ ...single, index, covered: true });
-  });
+  }
 
   const totalAmount = results.reduce((sum, r) => sum + r.amount, 0);
   const totalOwnPay = results.reduce((sum, r) => sum + (r.ownPay ?? 0), 0);

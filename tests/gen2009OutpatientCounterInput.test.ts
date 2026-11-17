@@ -249,12 +249,14 @@ console.log("\n[구조] 검증 위치와 절삭 금지");
         && !/constants\./.test(expr) && !/\b\d{2,}\b/.test(expr), expr);
     }
     // 초기화 뒤 첫 행 처리 전에 다시 손대지 않는다.
-    const between = eng.slice(eng.indexOf("  let outpatientVisits = "), eng.indexOf("  lines.forEach("));
+    const loopStart = eng.indexOf("  for (const [index, line] of lines.entries())", eng.indexOf("  const results:"));
+    check("횟수 한도를 적용하는 행 처리 구간을 찾음", loopStart >= 0);
+    const between = eng.slice(eng.indexOf("  let outpatientVisits = "), loopStart);
     const after = between.slice(between.indexOf("let prescriptions"));
     check("초기화와 첫 행 사이에서 카운터를 다시 손대지 않는다",
       !/(outpatientVisits|prescriptions)\s*(=[^=]|\+=|-=|\*=)/.test(after.slice(after.indexOf(";"))), after);
     // 루프 안의 대입은 1 증가뿐이다.
-    const loop = eng.slice(eng.indexOf("  lines.forEach("));
+    const loop = eng.slice(loopStart);
     const writes = loop.match(/(?:outpatientVisits|prescriptions)\s*(?:=[^=]|\+=|-=|\*=|\/=)[^;]*/g) ?? [];
     check("루프 안의 카운터 대입은 '+= 1'뿐이다",
       writes.length > 0 && writes.every((w) => /\+= 1$/.test(w.trim())), writes.join(" | "));

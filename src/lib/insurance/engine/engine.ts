@@ -88,7 +88,7 @@ export const ALWAYS_ACCEPTED_AXES = ["amount", "coverage", "visit"] as const;
 const ROUTER_AXES = [
   ...GEN2026_ONLY_AXES,
   "perVisitCoverageLimit",
-  "tier", "plan", "facility", "priorAnnualPaid",
+  "tier", "plan", "facility", "priorAnnualPaid", "splitAmounts",
   ...OTHER_ENTRY_AXES,
   ...CONTAINER_AXES,
 ] as const;
@@ -115,7 +115,7 @@ type Ownership = {
 const STANDARDIZED_OWNERSHIP: Ownership = {
   // `plan`은 미지정이면 계산 자체가 PENDING이다(필수 축). `amount`·`coverage`·`visit`은
   // ROUTER_AXES에 없다 — 어느 세대에서도 막지 않으므로 후보가 아니다.
-  always: ["plan"],
+  always: ["plan", "splitAmounts"],
   // 통원 정액공제 표(<표1 항목별 공제금액>)의 분류축과 회(건)당 가입금액.
   //   실측: 통원 8경로에서 접근자 호출 + 값에 따라 결과가 달라진다.
   outpatientOnly: ["facility", "perVisitCoverageLimit"],
@@ -210,6 +210,7 @@ const WHY: Record<RouterAxis, string> = {
   // ── G-34A가 추가한 축 ──
   tier: "의료기관 종별(tier)은 4·5세대의 축입니다. 2·3세대는 통원 정액공제를 facility(의원·병원·종합병원·약국)로 가르고 tier를 읽지 않습니다. 두 축은 분류가 달라 이름만 보고 바꿔 넣으면 공제액이 달라집니다.",
   plan: "표준형/선택형(plan)은 2·3세대의 자기부담 유형 축입니다. 4·5세대는 이 구분이 없어 읽지 않습니다.",
+  splitAmounts: "급여 본인부담금·비급여 분리 입력(splitAmounts)은 2·3세대 선택형Ⅱ 계산에만 쓰입니다.",
   facility: "의료기관 종별 공제 구분(facility)은 2·3세대 통원의 정액공제 표에만 쓰입니다. 2·3세대 입원과 4·5세대는 읽지 않습니다.",
   priorAnnualPaid: "연간 기납부 자기부담금(priorAnnualPaid)은 2·3세대 입원 자기부담 연간 상한(200만원) 계산에만 쓰입니다. 2·3세대 통원과 4세대는 읽지 않습니다.",
 
@@ -300,10 +301,10 @@ export type LegacyClaimInput = ClaimInput
 /** 2021 제네릭 호출의 입력. `tier`는 화면이 늘 싣는 축이라 열어 둔다(위 소유권 표 참조). */
 export type Gen2021ClaimInput = ClaimInput
   & SealNever<(typeof GEN2026_ONLY_AXES)[number] | "perVisitCoverageLimit"
-    | "plan" | "facility" | "priorAnnualPaid" | ForeignAxis>;
+    | "plan" | "facility" | "priorAnnualPaid" | "splitAmounts" | ForeignAxis>;
 
 /** 2026 제네릭 호출의 입력. 5세대가 읽지 않는 2·3세대 축과 다른 진입점의 축을 닫는다. */
-export type Gen2026RouterInput = ClaimInput & SealNever<"plan" | "facility" | ForeignAxis>;
+export type Gen2026RouterInput = ClaimInput & SealNever<"plan" | "facility" | "splitAmounts" | ForeignAxis>;
 
 /* ────────────────────────────────────────────────────────────────────────
  * 세대별 입력 투영 (G-34C)
@@ -321,8 +322,8 @@ export type Gen2026RouterInput = ClaimInput & SealNever<"plan" | "facility" | Fo
  *   라우터가 대신 막으면 그 안내가 사라진다(G-33에서 세운 계약).
  * ──────────────────────────────────────────────────────────────────────── */
 const OWNED_AXES: Record<Generation, readonly string[]> = {
-  "2009": [...ALWAYS_ACCEPTED_AXES, "plan"],
-  "2017": [...ALWAYS_ACCEPTED_AXES, "plan"],
+  "2009": [...ALWAYS_ACCEPTED_AXES, "plan", "splitAmounts"],
+  "2017": [...ALWAYS_ACCEPTED_AXES, "plan", "splitAmounts"],
   // 4·5세대의 경로별 축(`tier` 등)은 `coverage`×`visit`으로 갈리는데 이 표는 `visit`으로만
   // 경로를 나눈다. 그래서 세대 소유로 넘기고 판정은 세대 엔진이 한다(위 소유권 표 주석).
   "2021": [...ALWAYS_ACCEPTED_AXES, "tier"],

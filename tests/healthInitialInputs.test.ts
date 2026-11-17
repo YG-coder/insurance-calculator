@@ -63,13 +63,27 @@ assert.equal(standardized.render().resultItems()?.[1].value, "20,000원");
 for (const generation of ["2017", "2009"]) {
   chooseStandardized(generation);
   chooseStandardized("selectiveII");
-  assert.equal(standardizedSubmit()?.props.disabled, true);
-  assert.match(visibleCopy(standardized.renderMarkup()), /선택형Ⅱ.*계산을 보류합니다/);
+  assert.equal(standardizedSubmit()?.props.disabled, false);
+  const splitFields = standardized.render().nodes.filter(node => node.tag === "#RawAmountInput"
+    && /1번 (급여 본인부담금|보장 대상 비급여 의료비)/.test(String(node.props.ariaLabel)));
+  assert.equal(splitFields.length, 2);
   assert.equal(standardized.render().resultItems(), null);
+  const [benefitField, nonBenefitField] = splitFields;
+  (benefitField.props.onChange as (value: string) => void)("0");
+  assert.equal(standardized.render().resultItems(), null, "blank non-benefit must not become zero");
+  (nonBenefitField.props.onChange as (value: string) => void)("100000");
+  assert.equal(standardized.render().resultItems()?.[1].value, "20,000원");
+  assert.equal(standardized.render().resultItems()?.[2].value, "80,000원");
+  standardized.set("rows", [{ id: 1, amount: "100000", visit: "inpatient" }]);
 }
 chooseStandardized("selective");
 assert.equal(standardizedSubmit()?.props.disabled, false);
 assert.equal(standardized.render().resultItems()?.[1].value, "10,000원");
+standardized.set("policyDate", "2015-08-31");
+assert.doesNotMatch(visibleCopy(standardized.renderMarkup()), /2세대 계약은 선택형Ⅱ일 수 있습니다/);
+standardized.set("policyDate", "2015-09-01");
+assert.match(visibleCopy(standardized.renderMarkup()), /2세대 계약은 선택형Ⅱ일 수 있습니다/);
+assert.equal(standardized.render().resultItems()?.[1].value, "10,000원", "판매 시기로 약관 유형을 바꾸지 않는다");
 chooseStandardized("2017");
 assert.equal(standardizedSubmit()?.props.disabled, true);
 assert.match(visibleCopy(standardized.renderMarkup()), /3세대 선택형.*계산을 보류합니다/);

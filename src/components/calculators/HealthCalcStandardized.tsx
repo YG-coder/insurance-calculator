@@ -6,14 +6,23 @@ import { focusAfterUpdate } from "./focusAfterUpdate";
 import ResultCard from "@/components/ResultCard";
 import RawAmountInput from "@/components/RawAmountInput";
 import NoticeBox from "@/components/NoticeBox";
+import PolicyGenerationGuide from "./PolicyGenerationGuide";
 import { choiceClass, choiceTabIndex, moveChoice } from "./choiceGroup";
+import { generationFromPolicyDate } from "@/lib/insurance/engine/generationFromPolicyDate";
 import { calculateMany } from "@/lib/insurance/engine/multiClaim";
 import { ClaimLine, Facility, Plan, Visit } from "@/lib/insurance/engine/types";
 import { CAP_LABELS } from "@/lib/insurance/engine/capLabels";
 import { REGULATORY_RULES } from "@/lib/insurance/engine/regulatoryRules";
 
 type StdGeneration = "2009" | "2017";
-type Row = { id: number; amount: string; visit: Visit; facility: Facility };
+type Row = {
+  id: number;
+  amount: string;
+  benefitAmount?: string;
+  nonBenefitAmount?: string;
+  visit: Visit;
+  facility: Facility;
+};
 
 const MAX_ROWS = 20;
 
@@ -133,7 +142,6 @@ const stdRepeatCount = (v: string): number | null => {
 //     미선택 묶음은 첫 항목이 Tab 정지점이고 aria-checked 는 모두 false 다.
 const GENERATION_VALUES = ["2009", "2017"] as const;
 const PLAN_VALUES = ["standard", "selective", "selectiveII"] as const;
-type PlanChoice = Plan | "selectiveII";
 const selectiveIIRates = REGULATORY_RULES.GEN23_SELECTIVE_II_COST_SHARE.value;
 const selectiveIICopy = `급여 ${Math.round(selectiveIIRates.benefit * 100)}%·비급여 ${Math.round(selectiveIIRates.nonBenefit * 100)}%`;
 
@@ -147,9 +155,9 @@ const FACILITY_LABELS: Record<Facility, string> = {
 let nextId = 1;
 const newRow = (): Row => ({ id: nextId++, amount: "", visit: "outpatient", facility: "clinic" });
 
-export default function HealthCalcStandardized() {
+export default function HealthCalcStandardized({ showPolicyGuide = false }: { showPolicyGuide?: boolean } = {}) {
   const [generation, setGeneration] = useState<StdGeneration>("2017");
-  const [plan, setPlan] = useState<PlanChoice | null>(null);
+  const [plan, setPlan] = useState<Plan | null>(null);
   const [rows, setRows] = useState<Row[]>([newRow()]);
   const [quickAmount, setQuickAmount] = useState("");
   const [quickCount, setQuickCount] = useState("3");
@@ -158,12 +166,15 @@ export default function HealthCalcStandardized() {
   const [priorPaid, setPriorPaid] = useState("");
   const [perVisitLimit, setPerVisitLimit] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [policyDate, setPolicyDate] = useState("");
 
-  const planBlock = plan === "selectiveII"
-    ? "선택형Ⅱ는 급여와 비급여 의료비를 나눠 계산해야 하므로 현재 계산을 보류합니다."
-    : generation === "2017" && plan === "selective"
-      ? "3세대 선택형은 계약의 공제 기준을 확인해야 하므로 현재 계산을 보류합니다."
-      : null;
+  const splitPlan = plan === "selectiveII";
+  // 금감원 실손보험 상품 현황 표에 나온 2세대 선택형Ⅱ 판매 시기. 산식을 선택하는 기준으로 쓰지 않는다.
+  const warnSecondGenerationSelective = generation === "2009" && plan === "selective"
+    && policyDate >= "2015-09-01" && generationFromPolicyDate(policyDate) === "2009";
+  const planBlock = generation === "2017" && plan === "selective"
+    ? "3세대 선택형은 계약의 공제 기준을 확인해야 하므로 현재 계산을 보류합니다."
+    : null;
 
   const selectGeneration = (next: StdGeneration) => {
     if (generation === "2017" && next === "2009" && plan === "selective") setPlan(null);
@@ -173,13 +184,19 @@ export default function HealthCalcStandardized() {
   const patch = (id: number, next: Partial<Row>) =>
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...next } : r)));
 
-  // ⚠ 진료비를 여기서 0으로 만들지 않는다. 형식이 어긋난 행이 하나라도 있으면 아래
-  //   `gated`가 엔진 호출 자체를 막으므로, 이 map은 게이트를 통과한 뒤에만 쓰인다.
-  const lines: ClaimLine[] = rows.map((r) => ({
-    amount: stdAmount(r.amount) as number,
-    visit: r.visit,
-    facility: r.visit === "outpatient" ? r.facility : undefined,
-  }));
+  const parsedLines = rows.map((row): ClaimLine | null => {
+    const visit = row.visit;
+    const facility = visit === "outpatient" ? row.facility : undefined;
+    if (!splitPlan) {
+      const amount = stdAmount(row.amount);
+      return amount === null ? null : { amount, visit, facility };
+    }
+    const benefit = stdAmount(row.benefitAmount ?? "");
+    const nonBenefit = stdAmount(row.nonBenefitAmount ?? "");
+    if (benefit === null || nonBenefit === null || !Number.isSafeInteger(benefit + nonBenefit)) return null;
+    return { amount: benefit + nonBenefit, splitAmounts: { benefit, nonBenefit }, visit, facility };
+  });
+  const lines = parsedLines.filter((line) => line !== null);
 
   const hasInpatient = rows.some((r) => r.visit === "inpatient");
   const hasOutpatient = rows.some((r) => r.visit === "outpatient");
@@ -194,7 +211,7 @@ export default function HealthCalcStandardized() {
   //   ⚠ 한 행만 어긋나도 묶음 전체를 계산하지 않는다. 그 행을 0원으로 계산하면 연간
   //     횟수를 1회 소진해 **다른 행의 보상 여부**까지 바꾸므로, 행 단위로 넘어갈 수 없다.
   //   ⚠ 부분합을 결과로 내보내지 않는다. 유효한 행만 더한 값은 실제 총 진료비가 아니다.
-  const needsAmounts = rows.some((r) => stdAmount(r.amount) === null);
+  const needsAmounts = lines.length !== rows.length;
   // 금액 두 축은 **현재 계산에 쓰이는 것만** 검증하고 전달한다.
   //   ⚠ 회(건)당 가입금액은 통원 행이 있을 때만, 기존 입원 자기부담금은 입원 행이 있을
   //     때만 쓰인다(엔진 multiClaim.ts의 행별 소비 조건과 같은 규칙). 종전에는 행 구성과
@@ -225,7 +242,7 @@ export default function HealthCalcStandardized() {
     perVisit: perVisitNum, priorPaid: priorPaidNum,
   };
   const result = money === null ? null : calculateMany(generation, {
-    plan: plan === "standard" || plan === "selective" ? plan : undefined,
+    plan: plan ?? undefined,
     lines,
     priorAnnualPaid: money.priorPaid,
     priorAnnualOutpatientVisits: usesVisits ? stdCount(priorVisits) ?? undefined : undefined,
@@ -276,7 +293,7 @@ export default function HealthCalcStandardized() {
     );
   };
 
-  return (
+  const calculator = (
     <div className="card">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="sm:col-span-2">
@@ -349,7 +366,7 @@ export default function HealthCalcStandardized() {
               onKeyDown={(e) => moveChoice(e, PLAN_VALUES, plan, setPlan)}
               className={choiceClass(plan === "selectiveII")}
             >
-              선택형Ⅱ · 계산 보류
+              선택형Ⅱ · 급여·비급여 분리
             </button>
           </div>
           <p className="mt-2 text-xs text-slate-500">
@@ -357,13 +374,18 @@ export default function HealthCalcStandardized() {
             2세대 선택형Ⅰ은 약관의 입원 합계 10%와 통원 정액 조건이 모두 맞을 때 선택하세요.
           </p>
           <p id="std-plan-scope" className="mt-2 text-sm leading-relaxed text-amber-900">
-            선택형Ⅱ({selectiveIICopy})는 현재 지원 범위 밖입니다.
-            다른 유형으로 계산하면 실제보다 자기부담금이 적게 나올 수 있습니다.{" "}
+            선택형Ⅱ는 약관상 {selectiveIICopy} 기준이 적용되는 기본형 계약에 사용하세요.{" "}
             <Link href="/guide/silson-copayment" className="font-semibold underline">세대별 공제금액 확인</Link>
           </p>
           {planBlock && (
             <p id="std-plan-block" role="status" className="mt-2 text-sm font-semibold text-amber-900">
               {planBlock} 가입한 계약의 약관을 확인하거나 보험사에 문의하세요.
+            </p>
+          )}
+          {warnSecondGenerationSelective && (
+            <p role="status" className="mt-2 text-sm font-semibold text-amber-900">
+              2015년 9월 이후의 2세대 계약은 선택형Ⅱ일 수 있습니다. 약관에 급여 본인부담금 10%와
+              비급여 20%가 각각 적용되면 선택형Ⅱ를 선택하세요.
             </p>
           )}
         </div>
@@ -380,18 +402,51 @@ export default function HealthCalcStandardized() {
           이상 통원한 경우 약관이 이를 1회로 보고 가장 높은 공제금액을 적용하므로, <b>한 행으로 합쳐</b>
           입력해 주세요.
         </p>
+        {splitPlan && (
+          <p className="mb-3 text-sm text-slate-600">
+            영수증의 <b>급여 본인부담금</b>과 <b>기본형에서 보장하는 비급여 의료비</b>를 따로 입력하세요.
+            해당 금액이 없으면 0원을 입력하세요. 같은 계약의 상해 또는 질병 중 한 보장에 속하는 건을
+            계약해당일 기준 1년 단위로 묶으세요. 상급병실료 차액과 3세대 별도 특약 비용은 빼고 입력하세요.
+          </p>
+        )}
 
         <div className="space-y-2">
           {rows.map((row, i) => (
-            <div key={row.id} className="grid grid-cols-1 sm:grid-cols-[2rem_1fr_9rem_11rem_2.5rem] gap-2 items-center">
-              <span className="hidden sm:block text-xs text-slate-500 text-center">{i + 1}</span>
-              <RawAmountInput
+            <div
+              key={row.id}
+              className={`grid grid-cols-1 gap-2 items-center ${splitPlan
+                ? "lg:grid-cols-[2rem_minmax(0,1fr)_9rem_11rem_2.5rem]"
+                : "sm:grid-cols-[2rem_minmax(0,1fr)_9rem_11rem_2.5rem]"}`}
+            >
+              <span className={`hidden text-xs text-slate-500 text-center ${splitPlan ? "lg:block" : "sm:block"}`}>{i + 1}</span>
+              {splitPlan ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="block min-w-0 text-xs text-slate-600" htmlFor={`std-amount-${row.id}`}>
+                    급여 본인부담금
+                    <RawAmountInput
+                      id={`std-amount-${row.id}`}
+                      value={row.benefitAmount ?? ""}
+                      onChange={(value) => patch(row.id, { benefitAmount: value })}
+                      ariaLabel={`${i + 1}번 급여 본인부담금`}
+                    />
+                  </label>
+                  <label className="block min-w-0 text-xs text-slate-600" htmlFor={`std-non-benefit-${row.id}`}>
+                    비급여 의료비
+                    <RawAmountInput
+                      id={`std-non-benefit-${row.id}`}
+                      value={row.nonBenefitAmount ?? ""}
+                      onChange={(value) => patch(row.id, { nonBenefitAmount: value })}
+                      ariaLabel={`${i + 1}번 보장 대상 비급여 의료비`}
+                    />
+                  </label>
+                </div>
+              ) : <RawAmountInput
                 id={`std-amount-${row.id}`}
                 value={row.amount}
                 onChange={(v) => patch(row.id, { amount: v })}
                 placeholder="예: 300,000"
                 ariaLabel={`${i + 1}번 진료비`}
-              />
+              />}
               <select
                 aria-label={`${i + 1}번 치료 형태`}
                 className="input-base w-full"
@@ -436,7 +491,7 @@ export default function HealthCalcStandardized() {
           </button>
         </div>
 
-        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+        {!splitPlan && <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
           <p className="text-sm font-semibold text-slate-800">같은 금액으로 여러 번</p>
           <p className="mt-1 text-xs text-slate-600">
             금액이 같은 방문이 반복된 경우 한 번에 채웁니다. 첫 행의 치료 형태·방문 구분을 따르며,
@@ -473,7 +528,7 @@ export default function HealthCalcStandardized() {
               이미 입력한 행은 그대로 둡니다.
             </p>
           )}
-        </div>
+        </div>}
       </div>
 
       {/* 선택 입력 */}
@@ -540,6 +595,7 @@ export default function HealthCalcStandardized() {
               <p className="mt-2 text-xs text-slate-500">
                 외래·처방조제비는 회(건)당 합산 30만 원 이내에서 <b>계약 시 정한 금액</b>이 한도가 됩니다.
                 계약마다 다른 값이라 입력하지 않으면 적용하지 않습니다. 증권에서 확인해 주세요.
+                {splitPlan && usesVisits && usesPrescriptions && " 가입금액을 적용하려면 외래와 약국 건을 나눠 계산해 주세요."}
               </p>
             </div>
           </>
@@ -590,8 +646,8 @@ export default function HealthCalcStandardized() {
           )}
           {needsAmounts && (
             <NoticeBox variant="warning">
-              {rows.map((r, i) => (stdAmount(r.amount) === null ? i + 1 : null)).filter((n) => n !== null).join(", ")}번째 행의{" "}
-              <b>진료비</b>를 올바르게 입력해 주세요. <b>0 이상의 정수</b>만 받습니다 — <b>300000</b> 또는{" "}
+              {parsedLines.flatMap((line, i) => line === null ? [i + 1] : []).join(", ")}번째 행의{" "}
+              <b>{splitPlan ? "급여 본인부담금과 비급여 의료비" : "진료비"}</b> 칸에 금액을 올바르게 입력해 주세요. <b>0 이상의 정수</b>만 받습니다 — <b>300000</b> 또는{" "}
               <b>300,000</b> 형식입니다. 진료비가 실제로 0원이면 <b>0</b>을 입력하세요. 음수·소수·문자·지수 표기·
               잘못된 쉼표는 계산기가 임의로 고치지 않으며, 빈 값을 0원으로 보지도 않습니다. 0원으로 보면 그 행이
               연간 횟수를 1회 소진해 <b>다른 행의 보상 여부</b>까지 바뀝니다. 그래서 한 행만 어긋나도 계산하지
@@ -716,4 +772,10 @@ export default function HealthCalcStandardized() {
       )}
     </div>
   );
+  return showPolicyGuide ? (
+    <>
+      <PolicyGenerationGuide onPolicyDateChange={setPolicyDate} />
+      {calculator}
+    </>
+  ) : calculator;
 }

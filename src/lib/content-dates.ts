@@ -33,6 +33,10 @@ const SELECTIVE_II_OTHER_GENERATIONS = {
   sha: SELECTIVE_II_SHARED_MONEY_ONLY.sha,
   reason: "공통 약관·날짜 안내·입력 처리 변경은 2·3세대 선택형Ⅱ 지원을 위한 것이다. 해당 세대의 표준 입력과 산식에는 적용되지 않는다.",
 };
+const SELECTIVE_II_SOURCE_REVIEW = {
+  sha: "eeca2f282441edb9cde67a5bbdee3e840300bd66",
+  reason: "공통 약관 파일의 추가 출처는 2·3세대 선택형Ⅱ에만 표시된다. 5세대 페이지에는 적용되지 않는다.",
+};
 
 const calculatorWatch = [
   "src/lib/insurance/common/**",
@@ -112,7 +116,7 @@ export const CONTENT_DATES: Record<string, ContentDate> = {
     ...silson("/health-insurance-calculator", [
       "src/components/calculators/HealthCalc.tsx",
       "src/components/calculators/HealthCalcMulti2021.tsx",
-    ]),
+    ], "2026-11-18"),
     ignore: [STANDARDIZED_ENGINE_HOLD_ONLY, SELECTIVE_II_OTHER_GENERATIONS],
   },
   "/2nd-3rd-generation-health-insurance-calculator": silson("/2nd-3rd-generation-health-insurance-calculator", [
@@ -123,7 +127,7 @@ export const CONTENT_DATES: Record<string, ContentDate> = {
       "src/components/calculators/HealthCalc5th.tsx",
       "src/components/calculators/HealthCalcMulti2026.tsx",
     ]),
-    ignore: [STANDARDIZED_ENGINE_HOLD_ONLY, SELECTIVE_II_OTHER_GENERATIONS],
+    ignore: [STANDARDIZED_ENGINE_HOLD_ONLY, SELECTIVE_II_OTHER_GENERATIONS, SELECTIVE_II_SOURCE_REVIEW],
   },
   "/surrender-value-calculator": calculator("/surrender-value-calculator",
     "src/components/calculators/HealthSurrenderCalc.tsx", "src/lib/insurance/decision/surrenderValue.ts"),

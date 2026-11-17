@@ -87,6 +87,7 @@ assert.equal(standardized.render().resultItems()?.[1].value, "10,000원", "판�
 chooseStandardized("2017");
 assert.equal(standardizedSubmit()?.props.disabled, true);
 assert.match(visibleCopy(standardized.renderMarkup()), /3세대 선택형.*계산을 보류합니다/);
+assert.match(visibleCopy(standardized.renderMarkup()), /약관에 급여 본인부담금 10%·비급여 20%가 각각 적용되면 위의 선택형Ⅱ를 선택하세요/);
 assert.equal(standardized.render().resultItems(), null);
 chooseStandardized("2009");
 assert.equal(standardized.get("plan"), null);

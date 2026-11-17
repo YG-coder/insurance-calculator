@@ -143,7 +143,7 @@ const stdRepeatCount = (v: string): number | null => {
 const GENERATION_VALUES = ["2009", "2017"] as const;
 const PLAN_VALUES = ["standard", "selective", "selectiveII"] as const;
 const selectiveIIRates = REGULATORY_RULES.GEN23_SELECTIVE_II_COST_SHARE.value;
-const selectiveIICopy = `급여 ${Math.round(selectiveIIRates.benefit * 100)}%·비급여 ${Math.round(selectiveIIRates.nonBenefit * 100)}%`;
+const selectiveIICopy = `급여 본인부담금 ${Math.round(selectiveIIRates.benefit * 100)}%·비급여 ${Math.round(selectiveIIRates.nonBenefit * 100)}%`;
 
 const FACILITY_LABELS: Record<Facility, string> = {
   clinic: "의원급",
@@ -379,7 +379,8 @@ export default function HealthCalcStandardized({ showPolicyGuide = false }: { sh
           </p>
           {planBlock && (
             <p id="std-plan-block" role="status" className="mt-2 text-sm font-semibold text-amber-900">
-              {planBlock} 가입한 계약의 약관을 확인하거나 보험사에 문의하세요.
+              {planBlock} 약관에 {selectiveIICopy}가 각각 적용되면 위의 선택형Ⅱ를 선택하세요.
+              공제 기준이 불분명하면 보험사에 확인하세요.
             </p>
           )}
           {warnSecondGenerationSelective && (

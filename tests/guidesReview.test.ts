@@ -14,11 +14,13 @@ const OFFICIAL_HOSTS = [
   "www.knia.or.kr", "carinfo.knia.or.kr",
   "direct.hi.co.kr", "direct.samsungfire.com", "www.axa.co.kr", "www.directdb.co.kr",
 ];
-// 보험연구원에 공개된 금감원 원문과 두 판매 약관은 확인한 PDF 주소만 허용한다.
+// 보험연구원에 공개된 금감원 원문과 보험사 판매 자료는 직접 확인한 PDF 주소만 허용한다.
 const VERIFIED_DOCUMENT_URLS = new Set([
   "https://kiri.or.kr/PDF/weeklytrend/20230424/trend20230424_2.pdf",
   "https://www.samsungfire.com/publication/pdf/96156_0_20161101_file1.pdf",
   "https://www.samsungfire.com/publication/pdf/96218_0_20170401_file1.pdf",
+  "https://www.kbinsure.co.kr/CG802030003.ec?fileNm=21990_1_1.pdf",
+  "https://www.hwgeneralins.com/upload/hmpag_upload/product/medical%282%29%281904%29_01.pdf",
 ]);
 
 // 1) 모든 가이드(초안 포함)에 review 가 있고, 발행 가이드는 규칙을 통과한다.

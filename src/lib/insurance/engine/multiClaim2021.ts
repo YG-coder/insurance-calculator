@@ -1,7 +1,7 @@
 // ⚠ `normalizeAmount`를 더 이상 import하지 않는다. 진료비를 조용히 고치던 유일한
 //   호출부를 이번에 검증으로 바꿨고, 남겨 두면 "여기서도 값을 고친다"고 읽힌다.
 //   `settle()`이 내부에서 여전히 자기 인자를 정규화하며 그 동작은 그대로다.
-import { basicMaximum, basicNotes, basicLimitError } from "./basicBenefit";
+import { basicMaximum, basicNotes, basicLimitError, nonBenefitLimitError, outpatientEstimateNote } from "./basicBenefit";
 import { roundedRateAmount } from "../common/exactMoney";
 import { settle } from "../common/settle";
 import { GEN2021 } from "./constants";
@@ -511,11 +511,10 @@ export function calculateMany2021(input: Gen2021MultiClaimInput): MultiClaimResu
 
   const basic = input.coverage === "benefit" && rider === "none";
   const contract = input.basicLimits;
-  if (!basic && contract !== undefined) return blocked(["급여 기본형의 계약 한도는 비급여·특약에 적용할 수 없습니다."]);
-  if (basic) {
-    const error = basicLimitError("2021", input.visit, contract, true);
-    if (error) return blocked([error]);
-  }
+  const generalOutpatient = !basic && rider === "none" && input.visit === "outpatient";
+  const contractError = basic ? basicLimitError("2021", input.visit, contract, true)
+    : nonBenefitLimitError(generalOutpatient, contract);
+  if (contractError) return blocked([contractError]);
   let priorBasic = contract?.priorInpatientDeductible ?? 0;
   const maximum = basicMaximum("2021");
   const annualRemaining = Math.max((selectedLimit ?? maximum.annualMaximum) - paid, 0);
@@ -536,7 +535,7 @@ export function calculateMany2021(input: Gen2021MultiClaimInput): MultiClaimResu
       single = calc2021({
         amount, coverage: input.coverage, visit: input.visit, tier: input.tier,
         basicLimits: basic ? { ...contract, priorInpatientDeductible: input.visit === "inpatient" ? priorBasic : undefined,
-          remainingAnnualBenefit: basicRemaining } : undefined,
+          remainingAnnualBenefit: basicRemaining } : contract,
       });
       if (basic) {
         basicRemaining -= single.insurancePay ?? 0;
@@ -584,6 +583,7 @@ export function calculateMany2021(input: Gen2021MultiClaimInput): MultiClaimResu
   const totalOwnPay = results.reduce((s, r) => s + (r.ownPay ?? 0), 0);
   const totalInsurancePay = results.reduce((s, r) => s + (r.insurancePay ?? 0), 0);
   const notes: string[] = basic ? basicNotes("2021", input.visit, { ...contract, remainingAnnualBenefit: selectedLimit === undefined ? contract?.remainingAnnualBenefit : basicAnnual }) : [];
+  if (generalOutpatient) notes.push(...outpatientEstimateNote(contract?.outpatientLimit));
   const causeLabel = input.cause === "injury" ? "상해" : "질병";
   if (rider === "none") {
     notes.push(`${causeLabel}·${input.coverage === "benefit" ? "급여" : "비급여"} 보장축만 계산했습니다. 다른 원인의 청구는 별도로 계산해 주세요.`);

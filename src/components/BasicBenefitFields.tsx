@@ -5,9 +5,19 @@ import { GEN5_INPATIENT_POOL_NOTE } from "@/lib/insurance/engine/regulatoryRules
 import RawAmountInput from "./RawAmountInput";
 import type { BasicBenefitLimits, Cause, Visit } from "@/lib/insurance/engine/types";
 
-function optionalWon(raw: string) {
+export function optionalWon(raw: string) {
   if (raw === "") return undefined;
   return /^(?:[0-9]+|[1-9][0-9]{0,2}(?:,[0-9]{3})+)$/.test(raw) ? Number(raw.replaceAll(",", "")) : NaN;
+}
+
+export function OutpatientLimitField({ id, value, onChange, benefit }: {
+  id: string; value: string; onChange: (value: string) => void; benefit: boolean;
+}) {
+  return <div>
+    <label className="label-base" htmlFor={id}>증권의 {benefit ? "급여" : "일반 비급여"} 통원 1회 가입금액 (선택)</label>
+    <RawAmountInput id={id} value={value} onChange={onChange} placeholder="빈칸·0원은 최고 20만 원 기준" />
+    <p className="text-sm text-slate-600">빈칸이나 0원은 계약 금액을 모르는 경우로 보고, 회당 최고액으로 추정합니다.</p>
+  </div>;
 }
 
 export const emptyBasicFields = {
@@ -38,10 +48,7 @@ export function basicBenefitFields(
       <label className="label-base" htmlFor={id + "-prior"}>이번 계약연도에 이미 부담한 급여 입원 공제액{year === "2021" && " (상해·질병 합산)"}</label>
       {year === "2026" && <p className="text-sm text-slate-600">{GEN5_INPATIENT_POOL_NOTE}</p>}
       <RawAmountInput id={id + "-prior"} value={prior} onChange={prior => setValues(prev => ({ ...prev, prior }))} placeholder={bundle ? "이전 공제액이 없으면 0" : "비우면 0원으로 가정"} />
-    </div> : <div>
-      <label className="label-base" htmlFor={id + "-visit"}>증권의 급여 통원 1회 가입금액 (선택)</label>
-      <RawAmountInput id={id + "-visit"} value={selected.outpatient} onChange={v => update("outpatient", v)} placeholder="비우면 최고 20만 원 기준" />
-    </div>}
+    </div> : <OutpatientLimitField id={id + "-visit"} benefit value={selected.outpatient} onChange={v => update("outpatient", v)} />}
     {showAnnual && <div>
       <label className="label-base" htmlFor={id + "-annual"}>이번 청구와 같은 보장(상해 또는 질병)의 연간 잔여 지급한도 (선택)</label>
       <RawAmountInput id={id + "-annual"} value={selected.remaining} onChange={v => update("remaining", v)} placeholder="가입금액에서 기존 입원·통원 지급액을 뺀 금액" />

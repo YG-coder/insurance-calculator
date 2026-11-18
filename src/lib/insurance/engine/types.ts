@@ -44,6 +44,7 @@ export interface StandardizedSplitAmounts {
   nonBenefit: number;  // 기본형에서 보상 대상인 비급여 의료비
 }
 
+/** 급여 기본형 계약 조건. 4세대 일반 비급여 통원에서는 해당 계약의 outpatientLimit만 허용한다. */
 export interface BasicBenefitLimits {
   priorInpatientDeductible?: number;
   outpatientLimit?: number;
@@ -325,7 +326,7 @@ interface Gen2021RiderMoneyAxes {
 
 /** 비급여 통원 — 연 100회 한도가 걸리는 유일한 일반 경로. */
 export interface Gen2021MultiGeneralNonBenefitOutpatientInput extends Gen2021MultiCommonInput, Gen2021GeneralMoneyAxes {
-  basicLimits?: never;
+  basicLimits?: { outpatientLimit?: number; priorInpatientDeductible?: never; remainingAnnualBenefit?: never };
   rider?: "none";
   coverage: "non_benefit";
   visit: "outpatient";

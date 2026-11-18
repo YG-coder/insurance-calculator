@@ -51,6 +51,12 @@ for (const year of ["2021", "2026"] as const) {
   assert.equal(single("outpatient", 30_000, {outpatientLimit: 100_000}).insurancePay, 20_000);
   assert.equal(single("outpatient", 1_000_000, {outpatientLimit: 100_000}).insurancePay, 100_000);
   assert.equal(single("outpatient", 1_000_000, {outpatientLimit: 200_000}).insurancePay, 200_000);
+  const zeroVisit = single("outpatient", 150_000, { outpatientLimit: 0 });
+  assert.equal(zeroVisit.insurancePay, year === "2026" ? 105_000 : 120_000);
+  assert.match(zeroVisit.notes.join(" "), /0원.*상한 추정치/);
+  const zeroBundle = bundle("outpatient", [1_000_000], { outpatientLimit: 0 });
+  assert.equal(zeroBundle.totalInsurancePay, 200_000);
+  assert.match(zeroBundle.notes.join(" "), /0원.*상한 추정치/);
   const unconfirmed = single("outpatient", 1_000_000);
   assert.equal(unconfirmed.insurancePay, 200_000);
   assert.match(unconfirmed.notes.join(" "), /상한 추정치/);
@@ -70,6 +76,30 @@ for (const year of ["2021", "2026"] as const) {
   assert.equal(single("outpatient", 30_000, {priorInpatientDeductible: 0}).insurancePay, null);
   assert.equal(single("inpatient", 30_000, {outpatientLimit: 100_000}).insurancePay, null);
 }
+const nonBenefit = { coverage: "non_benefit", visit: "outpatient", amount: 1_000_000 } as const;
+const outpatientBundle = {
+  coverage: "non_benefit", visit: "outpatient", cause: "injury", amounts: [1_000_000, 1_000_000],
+  priorAnnualInsurancePaid: 0, priorAnnualOutpatientVisits: 0,
+} as const;
+for (const [limit, payment] of [[undefined, 200_000], [0, 200_000], [100_000, 100_000], [200_000, 200_000]] as const) {
+  const basicLimits = { outpatientLimit: limit };
+  const one = calculate("2021", { ...nonBenefit, basicLimits });
+  assert.deepEqual([one.ownPay, one.insurancePay], [1_000_000 - payment, payment]);
+  assert.equal(one.notes.join(" ").includes("상한 추정치"), !limit);
+  const many = calculateMany2021({ ...outpatientBundle, amounts: [...outpatientBundle.amounts], basicLimits });
+  assert.equal(many.totalInsurancePay, 2 * payment);
+  assert.equal(many.notes.join(" ").includes("상한 추정치"), !limit);
+}
+const cut = calculateMany2021({ ...outpatientBundle, amounts: [1_000_000, 1_000_000],
+  annualCoverageLimit: 150_000, basicLimits: { outpatientLimit: 100_000 } });
+assert.deepEqual(cut.lines.map(row => row.insurancePay), [100_000, 50_000]);
+for (const invalid of [200_001, NaN, -1, 1.5]) {
+  assert.equal(calculate("2021", { ...nonBenefit, basicLimits: { outpatientLimit: invalid } }).insurancePay, null);
+  assert.equal(calculateMany2021({ ...outpatientBundle, amounts: [10_000], priorAnnualOutpatientVisits: 100,
+    basicLimits: { outpatientLimit: invalid } }).totalInsurancePay, null);
+}
+assert.equal(calculate("2021", { ...nonBenefit, basicLimits: { remainingAnnualBenefit: 0 } }).insurancePay, null);
+assert.equal(calculate("2021", { ...nonBenefit, visit: "inpatient", basicLimits: { outpatientLimit: 0 } }).insurancePay, null);
 for (const [generation, plan] of [["2009","selective"],["2017","standard"],["2017","selectiveII"]] as const) {
   const claim = { plan: plan as Plan, priorAnnualOutpatientVisits: 0,
     priorAnnualPrescriptions: 0, lines: [

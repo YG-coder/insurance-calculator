@@ -1,6 +1,6 @@
 "use client";
 
-import { basicBenefitFields, emptyBasicFields } from "../BasicBenefitFields";
+import { basicBenefitFields, emptyBasicFields, optionalWon, OutpatientLimitField } from "../BasicBenefitFields";
 import { useState } from "react";
 import { focusAfterUpdate } from "./focusAfterUpdate";
 import { flushSync } from "react-dom";
@@ -198,6 +198,7 @@ export default function HealthCalcMulti2021() {
   const [copyCount, setCopyCount] = useState("3");
   const [submitted, setSubmitted] = useState(false);
   const [basicInput, setBasicInput] = useState(emptyBasicFields);
+  const [nonBenefitLimits, setNonBenefitLimits] = useState({ injury: "", disease: "" });
   const basic = basicBenefitFields(basicInput, setBasicInput, "multi4-basic", visit, { year: "2021", bundle: true, cause });
 
   const isRider = rider !== "none";
@@ -310,6 +311,7 @@ export default function HealthCalcMulti2021() {
             } satisfies Gen2021MultiGeneralNonBenefitInpatientInput)
           : calculateMany2021({
               ...common, tier: tierForPath, rider: "none", coverage: "non_benefit", visit: "outpatient",
+              basicLimits: { outpatientLimit: optionalWon(nonBenefitLimits[cause]) },
               annualCoverageLimit: money.annualLimit,
               priorAnnualInsurancePaid: money.priorPaid,
               priorAnnualOutpatientVisits: gen2021Count(priorOutVisits) ?? undefined,
@@ -479,6 +481,9 @@ export default function HealthCalcMulti2021() {
       {rider === "mri" && <div className="mt-4"><NoticeBox variant="info">비급여 MRI·MRA는 약관상 <b>금액 한도만</b> 있고 연간 횟수 한도가 없습니다. 그래서 이미 받은 횟수를 묻지 않습니다.</NoticeBox></div>}
 
       {coverage === "benefit" && basic.fields}
+      {!isRider && coverage === "non_benefit" && visit === "outpatient" &&
+        <OutpatientLimitField id="multi4-nonbenefit-limit" benefit={false} value={nonBenefitLimits[cause]}
+          onChange={value => setNonBenefitLimits(prev => ({ ...prev, [cause]: value }))} />}
       <button type="button" className="btn-primary mt-6" onClick={submit}>여러 건 계산하기</button>
 
       {submitted && blockedSummary !== null && <div

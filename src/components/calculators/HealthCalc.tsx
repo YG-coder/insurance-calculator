@@ -1,6 +1,6 @@
 "use client";
 
-import { basicBenefitFields, emptyBasicFields } from "../BasicBenefitFields";
+import { basicBenefitFields, emptyBasicFields, optionalWon, OutpatientLimitField } from "../BasicBenefitFields";
 import { useState } from "react";
 import { focusAfterUpdate } from "./focusAfterUpdate";
 import ResultCard from "@/components/ResultCard";
@@ -57,6 +57,8 @@ export default function HealthCalc() {
   const [tier, setTier] = useState<Tier>("clinic");
   const [submitted, setSubmitted] = useState(false);
   const [basicInput, setBasicInput] = useState(emptyBasicFields);
+  const [nonBenefitLimit, setNonBenefitLimit] = useState("");
+  const generalOutpatient = coverage === "non_benefit" && visit === "outpatient";
   const basic = basicBenefitFields(basicInput, setBasicInput, "med4-basic", visit, { year: "2021", bundle: false });
 
   // ⚠ 원문이 유효한 형식일 때만 숫자가 된다. 실패를 0으로 바꾸지 않는다.
@@ -77,7 +79,8 @@ export default function HealthCalc() {
     //   ⚠ 상태(`tier`)와 선택 UI는 그대로 둔다. 경로를 오가도 선택이 보존되고, 급여 통원으로
     //     돌아오면 같은 값이 다시 전달된다. **비활성 경로에만 싣지 않는다.**
     : calculate("2021", {
-        amount: parsed, coverage, visit, basicLimits: coverage === "benefit" ? basic.contract : undefined,
+        amount: parsed, coverage, visit, basicLimits: coverage === "benefit" ? basic.contract
+          : generalOutpatient ? { outpatientLimit: optionalWon(nonBenefitLimit) } : undefined,
         tier: coverage === "benefit" && visit === "outpatient" ? tier : undefined,
       });
   const num = parsed ?? 0;
@@ -204,6 +207,8 @@ export default function HealthCalc() {
       </div>
 
       {coverage === "benefit" && basic.fields}
+      {generalOutpatient && <OutpatientLimitField id="med4-nonbenefit-limit" benefit={false}
+        value={nonBenefitLimit} onChange={setNonBenefitLimit} />}
       <div className="mt-6">
         <button
           type="button"

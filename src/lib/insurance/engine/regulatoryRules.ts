@@ -511,10 +511,13 @@ const held = (
 });
 
 // 각 사용 지점마다 ruleId를 분리한다. 값이 같아도 적용 대상·한도 성격이 다르면 다른 규칙이다.
+const samsungGen4Terms = {
+  document: "실손의료비보험(2501.5)", issuer: "삼성화재", publishedOrEffective: "2025-01",
+  url: "https://www.samsungfire.com/publication/pdf/ZPB293050_0_20250101_file1.pdf",
+};
 const gen4BasicLimits = [
   { ...GEN4_BENEFIT_TERMS, locator: "급여 기본형 제5조 제1·3·4·5항" },
-  { document: "실손의료비보험(2501.5)", issuer: "삼성화재", publishedOrEffective: "2025-01",
-    url: "https://www.samsungfire.com/publication/pdf/ZPB293050_0_20250101_file1.pdf", locator: "보통약관 제6조 제1·3·4·5항" },
+  { ...samsungGen4Terms, locator: "보통약관 제6조 제1·3·4·5항" },
   { document: "노후·유병력자 실손보험 가입연령 및 보장연령 확대", issuer: "금융위원회·금융감독원", publishedOrEffective: "2025-02-11",
     url: "https://kiri.or.kr/PDF/weeklytrend/20250224/trend20250224_7.pdf", locator: "참고1 일반 실손 자기부담금 연간 한도: 급여 상해·질병 입원 합산" },
 ];
@@ -736,10 +739,12 @@ export const REGULATORY_RULES = {
     "GEN2021-NONBENEFIT-OUTPATIENT-MIN", "2021", 30_000, [GEN4_NON_BENEFIT_TERMS],
     "비급여 통원 최소공제액",
   ),
-  GEN2021_OUTPATIENT_PER_VISIT_LIMIT: confirmed0902(
+  GEN2021_OUTPATIENT_PER_VISIT_LIMIT: confirmed(
     "GEN2021-OUTPATIENT-PER-VISIT-LIMIT", "2021", 200_000,
-    [GEN4_BENEFIT_TERMS, GEN4_NON_BENEFIT_TERMS],
-    "급여·비급여 통원 1회당 보험금 지급액 상한",
+    [{ ...GEN4_BENEFIT_TERMS, locator: "급여 기본형 제5조 제5항" },
+     { ...GEN4_NON_BENEFIT_TERMS, locator: "비급여 특별약관 제5조 제3항: 상해·질병별 계약 선택액, 3대비급여는 항목별 한도" },
+     { ...samsungGen4Terms, locator: "비급여 실손의료비 특별약관 제5조 제3항 (PDF 59쪽)" }],
+    "급여 및 일반 비급여 통원 1회 가입금액의 최고액. 계약자가 선택한 금액으로 보상", "2026-11-18",
   ),
   GEN2021_NONBENEFIT_OUTPATIENT_ANNUAL_VISITS: confirmed0902(
     "GEN2021-NONBENEFIT-OUTPATIENT-ANNUAL-VISITS", "2021", 100, [GEN4_NON_BENEFIT_TERMS],

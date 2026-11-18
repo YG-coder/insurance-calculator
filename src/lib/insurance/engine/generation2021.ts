@@ -7,7 +7,7 @@
 //           notes로 미적용 사실을 반환한다. 고지는 급여/비급여·입원/통원 적용 범위에 맞춰
 //           구성한다(GEN2021_NOT_APPLIED).
 //   의도된 출력 변경은 tests/generation2021.test.ts의 INTENDED_DIVERGENCES에 등록되어 있다.
-import { applyBasicLimits } from "./basicBenefit";
+import { applyBasicLimits, nonBenefitLimitError, outpatientEstimateNote, outpatientMaximum } from "./basicBenefit";
 import { roundedRateAmount } from "../common/exactMoney";
 import { ClaimInput, CalcResult } from "./types";
 import { GEN2021, GEN2021_NOT_APPLIED } from "./constants";
@@ -96,8 +96,11 @@ export function calc2021(input: ClaimInput): CalcResult {
     ]);
   }
 
-  if (coverage !== "benefit" && input.basicLimits !== undefined)
-    return pending(amount, ["급여 기본형의 계약 한도는 비급여에 적용할 수 없습니다."]);
+  const contract = input.basicLimits;
+  if (coverage === "non_benefit") {
+    const error = nonBenefitLimitError(isOutpatient, contract);
+    if (error) return pending(amount, [error]);
+  }
   const rate = GEN2021.rate[coverage][visit];
 
   let minDeductible = 0;
@@ -115,7 +118,7 @@ export function calc2021(input: ClaimInput): CalcResult {
   }
 
   // 통원에만 회당 보험금 지급 한도를 적용한다. 입원에는 회당 한도가 없다.
-  const cap = isOutpatient ? GEN2021.outpatientPerVisitLimit : undefined;
+  const cap = isOutpatient ? outpatientMaximum(contract?.outpatientLimit, GEN2021.outpatientPerVisitLimit) : undefined;
   const s = settle(amount, Math.max(roundedRateAmount(amount, rate), minDeductible), cap);
 
   // 미적용 한도 고지는 실제 적용 범위에 맞춰 구성한다.
@@ -126,6 +129,7 @@ export function calc2021(input: ClaimInput): CalcResult {
     if (isOutpatient) notApplied.push(...GEN2021_NOT_APPLIED.nonBenefitOutpatient);
   }
   const notes: string[] = [
+    ...(coverage === "non_benefit" && isOutpatient ? outpatientEstimateNote(contract?.outpatientLimit) : []),
     "이 계산에 반영되지 않은 약관 한도: " + notApplied.join(" / "),
   ];
 
@@ -141,5 +145,5 @@ export function calc2021(input: ClaimInput): CalcResult {
     notes,
     appliedCaps: s.capped ? ["GEN2021_OUTPATIENT_PER_VISIT"] : [],
   };
-  return coverage === "benefit" ? applyBasicLimits("2021", base, visit, input.basicLimits) : base;
+  return coverage === "benefit" ? applyBasicLimits("2021", base, visit, contract) : base;
 }

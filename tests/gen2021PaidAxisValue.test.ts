@@ -227,7 +227,7 @@ console.log("\n[G-17] 5. 연간 가입금액이 없어도 활성 축을 검증�
   // 급여 경로·입원 경로에서도 같다.
   for (const [label, base] of [
     ["급여 통원", { cause: "disease", coverage: "benefit", visit: "outpatient", amounts: [AMT] }],
-    ["급여 입원", { cause: "disease", coverage: "benefit", visit: "inpatient", amounts: [AMT] }],
+    ["급여 입원", { cause: "disease", coverage: "benefit", visit: "inpatient", basicLimits: { priorInpatientDeductible: 0 }, amounts: [AMT] }],
     ["비급여 입원", { cause: "disease", coverage: "non_benefit", visit: "inpatient", amounts: [AMT] }],
   ] as [string, Record<string, unknown>][]) {
     check(`${label}: 한도 없이도 무효값 차단`, isBlocked(call({ ...base, priorAnnualInsurancePaid: "abc" }), AMT));

@@ -1,5 +1,6 @@
 "use client";
 
+import { basicBenefitFields, emptyBasicFields } from "../BasicBenefitFields";
 import { useState } from "react";
 import { focusAfterUpdate } from "./focusAfterUpdate";
 import ResultCard from "@/components/ResultCard";
@@ -55,6 +56,8 @@ export default function HealthCalc() {
   const [visit, setVisit] = useState<Visit>("outpatient");
   const [tier, setTier] = useState<Tier>("clinic");
   const [submitted, setSubmitted] = useState(false);
+  const [basicInput, setBasicInput] = useState(emptyBasicFields);
+  const basic = basicBenefitFields(basicInput, setBasicInput, "med4-basic", visit, { year: "2021", bundle: false });
 
   // ⚠ 원문이 유효한 형식일 때만 숫자가 된다. 실패를 0으로 바꾸지 않는다.
   const parsed = gen2021SingleAmount(amount);
@@ -74,7 +77,7 @@ export default function HealthCalc() {
     //   ⚠ 상태(`tier`)와 선택 UI는 그대로 둔다. 경로를 오가도 선택이 보존되고, 급여 통원으로
     //     돌아오면 같은 값이 다시 전달된다. **비활성 경로에만 싣지 않는다.**
     : calculate("2021", {
-        amount: parsed, coverage, visit,
+        amount: parsed, coverage, visit, basicLimits: coverage === "benefit" ? basic.contract : undefined,
         tier: coverage === "benefit" && visit === "outpatient" ? tier : undefined,
       });
   const num = parsed ?? 0;
@@ -200,6 +203,7 @@ export default function HealthCalc() {
         )}
       </div>
 
+      {coverage === "benefit" && basic.fields}
       <div className="mt-6">
         <button
           type="button"
@@ -245,14 +249,13 @@ export default function HealthCalc() {
           {result.appliedCaps.length > 0 && (
             <div className="mt-4">
               <NoticeBox variant="info">
-                적용된 한도: {result.appliedCaps.map((code) => CAP_LABELS[code]).join(", ")}. 보험 적용 금액이 조정되었습니다. 통원 보험금은 외래와
-                처방조제비를 합해 1회당 20만 원이 상한입니다.
+                적용된 한도: {result.appliedCaps.map((code) => CAP_LABELS[code]).join(", ")}. 보험 적용 금액이 조정되었습니다.
               </NoticeBox>
             </div>
           )}
           {result.notes.length > 0 && (
             <div className="mt-3">
-              <NoticeBox variant="info">{result.notes[0]}</NoticeBox>
+              <NoticeBox variant="info">{result.notes.join(" ")}</NoticeBox>
             </div>
           )}
           <p className="mt-3 text-xs text-slate-500">

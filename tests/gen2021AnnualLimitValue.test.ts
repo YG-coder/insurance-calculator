@@ -136,10 +136,10 @@ console.log("\n[G-18] 2. 미입력과 명시적 0원의 안내를 나눈다");
   // 네 경로 모두 같은 계약이다.
   for (const [label, base] of [
     ["급여 통원", { cause: "disease", coverage: "benefit", visit: "outpatient", amounts: [AMT] }],
-    ["급여 입원", { cause: "disease", coverage: "benefit", visit: "inpatient", amounts: [AMT] }],
+    ["급여 입원", { cause: "disease", coverage: "benefit", visit: "inpatient", basicLimits: { priorInpatientDeductible: 0 }, amounts: [AMT] }],
     ["비급여 입원", { cause: "disease", coverage: "non_benefit", visit: "inpatient", amounts: [AMT] }],
   ] as [string, Record<string, unknown>][]) {
-    check(`${label}: 0원 → 전용 안내`, notes(call({ ...base, annualCoverageLimit: 0 })).includes(NOTE_ZERO));
+    check(`${label}: 0원 → 전용 안내`, notes(call({ ...base, annualCoverageLimit: 0 })).includes(base.coverage === "benefit" ? "개별 계약 한도를 적용하지 않았습니다" : NOTE_ZERO));
     check(`${label}: 0원의 계산은 미전달과 같다`,
       shape(call({ ...base, annualCoverageLimit: 0 })) === shape(call(base)),
       shape(call({ ...base, annualCoverageLimit: 0 })));
@@ -366,7 +366,7 @@ console.log("\n[G-18] 7. 소스 계약 — nonNegInt 완전 제거와 검증 위
   check("클램프 안내도 검증된 원값으로 판단한다",
     /if \(rider === "none" && limit !== undefined && limit > GEN2021\.annualLimitMaximum\) \{/.test(body));
   check("0원 안내가 숫자 0에만 걸린다", /if \(rider === "none" && limit === 0\) \{/.test(body));
-  check("미입력 안내가 undefined에만 걸린다", /if \(rider === "none" && limit === undefined\) \{/.test(body));
+  check("비급여 미입력 안내가 undefined에만 걸린다", /if \(!basic && rider === "none" && limit === undefined\) \{/.test(body));
   check("input.annualCoverageLimit을 더 이상 직접 읽지 않는다", !/input\.annualCoverageLimit/.test(body));
   // 순서: 금액 → 횟수 → 승인 → 지급보험금 → 가입금액 → 계산
   const iAmt = body.indexOf("Array.isArray(rawAmounts)");

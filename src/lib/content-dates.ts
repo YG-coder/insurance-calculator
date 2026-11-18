@@ -115,6 +115,7 @@ export const CONTENT_DATES: Record<string, ContentDate> = {
   "/health-insurance-calculator": {
     ...silson("/health-insurance-calculator", [
       "src/components/calculators/HealthCalc.tsx",
+      "src/components/BasicBenefitFields.tsx",
       "src/components/calculators/HealthCalcMulti2021.tsx",
     ], "2026-11-18"),
     ignore: [STANDARDIZED_ENGINE_HOLD_ONLY, SELECTIVE_II_OTHER_GENERATIONS],
@@ -125,8 +126,9 @@ export const CONTENT_DATES: Record<string, ContentDate> = {
   "/5th-generation-health-insurance-calculator": {
     ...silson("/5th-generation-health-insurance-calculator", [
       "src/components/calculators/HealthCalc5th.tsx",
+      "src/components/BasicBenefitFields.tsx",
       "src/components/calculators/HealthCalcMulti2026.tsx",
-    ]),
+    ], "2026-11-18"),
     ignore: [STANDARDIZED_ENGINE_HOLD_ONLY, SELECTIVE_II_OTHER_GENERATIONS, SELECTIVE_II_SOURCE_REVIEW],
   },
   "/surrender-value-calculator": calculator("/surrender-value-calculator",

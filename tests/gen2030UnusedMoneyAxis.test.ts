@@ -108,7 +108,7 @@ const G26M: Record<string, (e?: Any) => Any> = {
   // ⚠ G-34B: 5세대 다회 **급여 입원**은 종별을 읽지 않는다(자기부담률을 약관이 20%로 정한다).
   //   픽스처에서 `tier`를 뺐다 — 종전에는 실어도 읽고 무시됐고 이제는 거부된다.
   //   급여 **통원**은 종별을 소비하므로 그쪽 픽스처는 그대로 둔다.
-  "급여 입원": (e = {}) => ({ cause: "disease", coverage: "benefit", visit: "inpatient", amounts: [AMT], ...e }),
+  "급여 입원": (e = {}) => ({ cause: "disease", coverage: "benefit", visit: "inpatient", basicLimits: { priorInpatientDeductible: 0 }, amounts: [AMT], ...e }),
 };
 // ── 5세대 별도 보장종목 4경로 + 일반 전환 3경로 + 상급병실료 ─────────
 const G26I: Record<string, (e?: Any) => Any> = {

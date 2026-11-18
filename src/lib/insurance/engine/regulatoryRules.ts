@@ -511,7 +511,25 @@ const held = (
 });
 
 // 각 사용 지점마다 ruleId를 분리한다. 값이 같아도 적용 대상·한도 성격이 다르면 다른 규칙이다.
+const gen4BasicLimits = [
+  { ...GEN4_BENEFIT_TERMS, locator: "급여 기본형 제5조 제1·3·4·5항" },
+  { document: "실손의료비보험(2501.5)", issuer: "삼성화재", publishedOrEffective: "2025-01",
+    url: "https://www.samsungfire.com/publication/pdf/ZPB293050_0_20250101_file1.pdf", locator: "보통약관 제6조 제1·3·4·5항" },
+  { document: "노후·유병력자 실손보험 가입연령 및 보장연령 확대", issuer: "금융위원회·금융감독원", publishedOrEffective: "2025-02-11",
+    url: "https://kiri.or.kr/PDF/weeklytrend/20250224/trend20250224_7.pdf", locator: "참고1 일반 실손 자기부담금 연간 한도: 급여 상해·질병 입원 합산" },
+];
+export const GEN5_INPATIENT_POOL_NOTE = "5세대 표준약관의 입원 공제 조문이 4세대와 같아, 이 계산기는 상해와 질병 입원 공제액을 합산해 연 200만 원 상한을 적용합니다. 5세대 조문에 합산 여부가 명시되어 있지는 않습니다.";
+const gen5BasicLimits = [{ ...GEN5_SOURCE_BASE, url: "https://www.law.go.kr/LSW/flDownload.do?flSeq=163984377&bylClsCd=200201",
+  locator: "기본형 제5조 제1·3·4·5항, 인쇄 216~217쪽. 입원 공제 조항은 4세대와 동일. 상해·질병별 지급한도는 제1항." }];
+
 export const REGULATORY_RULES = {
+  GEN2021_BASIC_INPATIENT_DEDUCTIBLE_CAP: confirmed("GEN2021-BASIC-INPATIENT-DEDUCTIBLE-CAP", "2021", 2_000_000, gen4BasicLimits, "급여 입원 20% 공제의 계약연도 상한", "2026-11-18"),
+  GEN2026_BASIC_INPATIENT_DEDUCTIBLE_CAP: confirmed("GEN2026-BASIC-INPATIENT-DEDUCTIBLE-CAP", "2026",
+    2_000_000, gen5BasicLimits, "제5조 제4항 급여 입원 공제 상한. " + GEN5_INPATIENT_POOL_NOTE, "2026-11-18"),
+  GEN2026_BASIC_OUTPATIENT_MAXIMUM: confirmed("GEN2026-BASIC-OUTPATIENT-MAXIMUM", "2026",
+    200_000, gen5BasicLimits, "제5조 제5항 급여 통원 1회 가입금액의 최고액", "2026-11-18"),
+  GEN2026_BASIC_ANNUAL_MAXIMUM: confirmed("GEN2026-BASIC-ANNUAL-MAXIMUM", "2026",
+    50_000_000, gen5BasicLimits, "제5조 제1항 급여 상해·질병별 연간 가입금액의 최고액", "2026-11-18"),
   GEN23_SELECTIVE_II_COST_SHARE: confirmed(
     "GEN2-3-SELECTIVE-II-COST-SHARE", "2017", { benefit: 0.1, nonBenefit: 0.2 },
     [

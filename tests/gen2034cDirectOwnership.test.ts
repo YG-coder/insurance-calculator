@@ -340,7 +340,7 @@ console.log("\n[G-34C] 11. 목록과 자리 — 구조 계약");
   const s2 = readFileSync("src/lib/insurance/engine/generation2021.ts", "utf8");
   const s3 = readFileSync("src/lib/insurance/engine/generation2026.ts", "utf8");
   const count = (src: string, name: string) => (src.match(new RegExp(`const ${name} = \\[([\\s\\S]*?)\\] as const;`))?.[1].match(/"/g)?.length ?? 0) / 2;
-  check("2·3세대 공통 목록 28종", count(s1, "STD_UNUSED_KEYS") === 28, String(count(s1, "STD_UNUSED_KEYS")));
+  check("2·3세대 공통 목록 29종", count(s1, "STD_UNUSED_KEYS") === 29, String(count(s1, "STD_UNUSED_KEYS")));
   check("2·3세대 경로별 목록 2 + 1", count(s1, "STD_OUTPATIENT_ONLY_KEYS") === 2 && count(s1, "STD_INPATIENT_ONLY_KEYS") === 1);
   check("4세대 공통 목록 32종", count(s2, "GEN2021_UNUSED_KEYS") === 32, String(count(s2, "GEN2021_UNUSED_KEYS")));
   check("5세대 공통 목록 26종(레거시 priorAnnualPaid는 자기 안내를 가진 기존 검사에 남긴다)",

@@ -88,7 +88,7 @@ for (const item of BLOCKED) {
   check("급여 입원: 치료유형 없이 계산됨", inp.status === "OK" && inp.ownPay === 60_000, JSON.stringify(inp));
   const out = calc2026({ amount: 300_000, coverage: "benefit", visit: "outpatient", tier: "clinic", nhisCoinsuranceRate: 0.4 });
   check("급여 통원: 치료유형 없이 계산됨", out.status === "OK" && out.ownPay === 120_000, JSON.stringify(out));
-  const m = calculateMany2026({ cause: "disease", coverage: "benefit", visit: "inpatient", amounts: [300_000, 300_000] });
+  const m = calculateMany2026({ cause: "disease", coverage: "benefit", visit: "inpatient", basicLimits: { priorInpatientDeductible: 0 }, amounts: [300_000, 300_000] });
   check("급여 다회: 치료유형 없이 계산됨", m.status === "OK" && m.totalOwnPay === 120_000, JSON.stringify(m));
   const mOut = calculateMany2026({ cause: "disease", coverage: "benefit", visit: "outpatient", tier: "clinic", nhisCoinsuranceRate: 0.4, amounts: [300_000] });
   check("급여 다회 통원: 건보율이 엔진에 전달됨", mOut.status === "OK" && mOut.totalOwnPay === 120_000, JSON.stringify(mOut));
@@ -125,7 +125,7 @@ for (const item of BLOCKED) {
   const joined = m.notes.join(" ");
   check("다회 일반 비급여: 4종 미지원 범위를 명시", 
     joined.includes("근골격계") && joined.includes("주사료") && joined.includes("MRI") && joined.includes("상급병실료"), joined);
-  const b = calculateMany2026({ cause: "disease", coverage: "benefit", visit: "inpatient", amounts: [300_000] });
+  const b = calculateMany2026({ cause: "disease", coverage: "benefit", visit: "inpatient", basicLimits: { priorInpatientDeductible: 0 }, amounts: [300_000] });
   check("다회 급여: 비급여 전용 안내가 붙지 않음", !b.notes.join(" ").includes("상급병실료"), b.notes.join(" "));
 }
 

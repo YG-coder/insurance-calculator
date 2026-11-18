@@ -60,7 +60,7 @@ const nbOut = (e: Record<string, unknown> = {}) => ({ cause: "injury", coverage:
 //   픽스처에서 `tier`를 뺐다 — 종전에는 실어도 읽고 무시됐고 이제는 거부되며, 그 거부가
 //   이 파일이 보려는 안내(priorAnnualPaid·별도 보장종목 전용 축)를 가려 버린다.
 const ben = (e: Record<string, unknown> = {}) => ({ cause: "injury", coverage: "benefit",
-  visit: "inpatient", amounts: [BEN_AMT], ...e });
+  visit: "inpatient", basicLimits: { priorInpatientDeductible: 0 }, amounts: [BEN_AMT], ...e });
 
 const SPECIAL_ONLY = ["priorAnnualInpatientDeductible", "priorAnnualCoveredCount",
   "priorAnnualTreatmentActCount", "approvedThroughVisit", "injectionPurpose",

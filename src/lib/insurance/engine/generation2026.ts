@@ -1,3 +1,4 @@
+import { applyBasicLimits } from "./basicBenefit";
 import { roundedRateAmount, rateAmountExceeds } from "../common/exactMoney";
 import { routeOfGen2026Item, excludedSingle2026, GEN2026_NONCRITICAL_INJECTION_EXCEPTION_NOTE } from "./itemRouting2026";
 // 5세대 실손 엔진 (Engine Core). v0.4 게이팅 기준.
@@ -334,7 +335,7 @@ export function calc2026(input: Gen2026ClaimInput): CalcResult {
       // #1 A: 급여 입원 20%
       const rate = GEN2026.benefit.inpatientRate;
       const s = settle(amount, roundedRateAmount(amount, rate));
-      return ok(amount, s.ownPay, s.insurancePay, rate, 0);
+      return applyBasicLimits("2026", ok(amount, s.ownPay, s.insurancePay, rate, 0), "inpatient", input.basicLimits);
     }
     // 급여 통원: Max(건보율, 20%, 최소공제). 건보율은 건별 사용자 입력값이다.
     //
@@ -391,9 +392,11 @@ export function calc2026(input: Gen2026ClaimInput): CalcResult {
     const tier = tierRaw === "hospital" ? "hospital" : "clinic";
     const deduct = md[tier];
     const s = settle(amount, Math.max(roundedRateAmount(amount, rate), deduct));
-    return ok(amount, s.ownPay, s.insurancePay, rate, deduct);
+    return applyBasicLimits("2026", ok(amount, s.ownPay, s.insurancePay, rate, deduct), "outpatient", input.basicLimits);
   }
 
+  if (input.basicLimits !== undefined)
+    return pending(amount, ["급여 기본형의 계약 한도는 비급여에 적용할 수 없습니다."]);
   // ── 비급여: 치료유형 → 중증/비중증 순으로 검사 ──
   // 타입은 nonBenefitItem을 필수로 강제하지만, 제네릭 진입점(calculate)이나 외부 런타임
   // 데이터는 타입을 우회할 수 있으므로 여기서도 검사한다.

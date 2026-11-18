@@ -68,6 +68,8 @@ assert.equal(routed.render().resultItems(), null, "empty other axis must not inh
 routed.set("cause", "injury");
 assert(routed.render().resultItems(), "explicit entry survives axis switch");
 const benefit = fresh(); enterHealthExpenses(benefit); benefit.set("coverage", "benefit"); benefit.set("visit", "inpatient"); benefit.set("submitted", true);
+assert.equal(benefit.render().resultItems(), null);
+benefit.set("basicInput", { ...(benefit.get("basicInput") as object), prior: "0" });
 assert(benefit.render().resultItems(), "unused cumulative blanks must not block benefit");
 const room = fresh(); room.set("nonBenefitItem", "room_charge"); room.set("severity", "critical"); room.set("cause", "disease");
 room.set("rcRows", [{ amount: "600000", days: "3" }]); room.set("submitted", true);

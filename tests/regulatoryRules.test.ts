@@ -51,7 +51,7 @@ check("4세대 승인 구간 규칙 3건은 2026-09-04 직독",
 check("승인 구간 규칙은 별표 식별번호와 재현 URL을 함께 기록",
   gen4MskRules.every((rule) => rule.sources.every((s) =>
     s.locator.includes("2372861") && s.url.includes("admRulBylHstInfoR.do"))));
-check("그 밖의 4세대 규칙은 최초 직독일 유지", rules.filter((rule) => rule.generation === "2021" && !gen4RiderRules.includes(rule) && !gen4MskRules.includes(rule)).every((rule) => rule.verifiedAt === "2026-09-02"));
+check("그 밖의 4세대 규칙은 최초 직독일 유지", rules.filter((rule) => rule.generation === "2021" && !gen4RiderRules.includes(rule) && !gen4MskRules.includes(rule) && rule.ruleId !== "GEN2021-BASIC-INPATIENT-DEDUCTIBLE-CAP").every((rule) => rule.verifiedAt === "2026-09-02"));
 check("4세대 급여·비급여 출처 위치 분리", REGULATORY_RULES.GEN2021_BENEFIT_INPATIENT_RATE.sources[0].locator !== REGULATORY_RULES.GEN2021_NON_BENEFIT_INPATIENT_RATE.sources[0].locator);
 check("4세대 3대비급여 금액·횟수 출처 위치 통일", REGULATORY_RULES.GEN2021_MANUAL_THERAPY_ANNUAL_LIMIT.sources[0].locator === REGULATORY_RULES.GEN2021_MANUAL_THERAPY_ANNUAL_VISITS.sources[0].locator);
 check("4세대 3대비급여 출처는 인쇄 p.251로 특정", REGULATORY_RULES.GEN2021_RIDER_MIN_DEDUCTIBLE.sources[0].locator.includes("인쇄 p.251"));

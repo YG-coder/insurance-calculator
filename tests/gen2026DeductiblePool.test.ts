@@ -240,7 +240,7 @@ console.log("\n[deductibleApplied] 키가 존재하는 범위 — 5세대 비급
   // 다회: 보상 제외 행에도 키가 있어야 pool 누적이 0으로 명시된다.
   const many = calculateMany2026({ cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "critical", visit: "outpatient", amounts: [1_000_000], priorAnnualOutpatientVisits: 100 });
   check("다회 보상 제외 행: 키 존재 + 0", has(many.lines[0]) && many.lines[0].deductibleApplied === 0, JSON.stringify(many.lines[0]));
-  const manyBen = calculateMany2026({ cause: "disease", coverage: "benefit", visit: "inpatient", amounts: [10_000_000] });
+  const manyBen = calculateMany2026({ cause: "disease", coverage: "benefit", visit: "inpatient", basicLimits: { priorInpatientDeductible: 0 }, amounts: [10_000_000] });
   check("다회 급여 행에 키 없음", !has(manyBen.lines[0]), JSON.stringify(manyBen.lines[0]));
 }
 

@@ -77,7 +77,7 @@ const pay = (h: H) => { const it = items(h); return it === null ? "결과 없음
 const text = (h: H) => (h.render() as any).text as string;
 const warned = (h: H) => text(h).includes("건강보험 본인부담률은 0~100 사이의 숫자로 입력해 주세요")
   && text(h).includes("100으로 깎지 않고");
-const base = (): H => { const h = mount(HealthCalcMulti2026, names); enterHealthExpenses(h); confirmNoPrior2026(h); pick(h, "급여 구분", "benefit"); return h; };
+const base = (): H => { const h = mount(HealthCalcMulti2026, names); enterHealthExpenses(h); confirmNoPrior2026(h); pick(h, "급여 구분", "benefit"); h.set("amounts", ["150000", "150000"]); return h; };
 
 // ── 근거 ──────────────────────────────────────────────────────────────
 console.log("\n[근거] 규칙값과 엔진을 건드리지 않았다");
@@ -94,10 +94,10 @@ console.log("\n[근거] 규칙값과 엔진을 건드리지 않았다");
 console.log("\n[유효] 검증된 값만 /100 해서 넘긴다");
 {
   const VALID: [string, string][] = [
-    ["0", "480,000원"], ["00", "480,000원"], ["01", "480,000원"], ["20", "480,000원"],
-    ["12.5", "480,000원"], ["12.50", "480,000원"], ["0.001", "480,000원"],
-    ["20.12345678901", "479,260원"], ["25.9", "444,600원"], ["26.9", "438,600원"],
-    ["30.5", "417,000원"], ["99.99", "60원"], ["100", "0원"], ["100.0", "0원"],
+    ["0", "240,000원"], ["00", "240,000원"], ["01", "240,000원"], ["20", "240,000원"],
+    ["12.5", "240,000원"], ["12.50", "240,000원"], ["0.001", "240,000원"],
+    ["20.12345678901", "239,630원"], ["25.9", "222,300원"], ["26.9", "219,300원"],
+    ["30.5", "208,500원"], ["99.99", "30원"], ["100", "0원"], ["100.0", "0원"],
   ];
   for (const [v, expect] of VALID) {
     const h = base(); type(rate(h), v); submit(h);
@@ -109,14 +109,14 @@ console.log("\n[유효] 검증된 값만 /100 해서 넘긴다");
 // ── ② 20% 하한 ────────────────────────────────────────────────────────
 console.log("\n[하한] 20% 미만 입력도 계산은 20%로 한다(입력을 바꾸지는 않는다)");
 {
-  const floorPay = "480,000원";
+  const floorPay = "240,000원";
   for (const v of ["0", "01", "12.5", "19.99"]) {
     const h = base(); type(rate(h), v); submit(h);
     check(`${JSON.stringify(v)} → 하한 적용 ${floorPay} · 원문은 그대로`,
       pay(h) === floorPay && String(rate(h)!.props.value) === v, pay(h));
   }
   const at20 = base(); type(rate(at20), "20"); submit(at20);
-  // ⚠ 20을 아주 조금 넘긴 값은 원 단위 반올림에 흡수돼 결과가 같다(`20.0001` 실측 480,000원).
+  // ⚠ 20을 아주 조금 넘긴 값은 원 단위 반올림에 흡수돼 결과가 같다(`20.0001` 실측 240,000원).
   //   하한이 상수로 굳지 않았는지 보려면 반올림에 묻히지 않는 값을 써야 한다.
   const above = base(); type(rate(above), "21"); submit(above);
   check("20 초과부터 결과가 갈린다(하한이 상수로 굳지 않았다)",
@@ -200,7 +200,7 @@ console.log("\n[비활성] 숨은 무효값이 다른 경로를 막지 않는다
   check("급여 통원 복귀: 원문 abc와 전용 안내가 복원된다",
     rate(h) !== null && String(rate(h)!.props.value) === "abc" && warned(h) && pay(h) === "결과 없음");
   type(rate(h), "20"); submit(h);
-  check("  고치면 바로 계산된다", pay(h) === "480,000원", pay(h));
+  check("  고치면 바로 계산된다", pay(h) === "240,000원", pay(h));
 }
 
 // ── ⑦ 적용 비율 라벨은 다회에 없다 ────────────────────────────────────

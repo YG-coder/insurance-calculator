@@ -394,7 +394,7 @@ check("2·3세대 UI: 가입 시기로 추정하지 않음을 명시", std.inclu
 // 회(건)당 가입금액은 계약자가 정하는 값이라 기본값을 넣어 단정하지 않는다.
 check("2·3세대 UI: 회(건)당 가입금액은 미입력 시 미적용", std.includes("입력하지 않으면 적용하지 않습니다"));
 // 하루 중복방문을 1회로 합쳐 입력하라는 약관 규정 안내가 있어야 한다(날짜 축을 두지 않는 근거).
-check("2·3세대 UI: 하루 중복방문 합산 입력 안내", std.includes("한 행으로 합쳐"));
+check("2·3세대 UI: 하루 중복방문 합산 입력 안내", std.includes("약국 처방조제는 별도 행") && std.includes("외래끼리 합쳐"));
 
 const layout = readFileSync("src/app/layout.tsx", "utf8");
 const guides = readFileSync("src/lib/guides.ts", "utf8");

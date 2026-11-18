@@ -50,7 +50,7 @@ const gen2026Amount = new Function(
 // ── 경로 정의 ────────────────────────────────────────────────────────
 /** `amounts` 배열을 쓰는 경로 — 급여 / 일반 비급여 / 일반 경로로 전환되는 조합. */
 const AMOUNT_PATHS: [string, Record<string, unknown>, string][] = [
-  ["급여 통원", { coverage: "benefit", visit: "outpatient", nhisRate: "20", amounts: ["300000"] }, "240,000원"],
+  ["급여 통원", { coverage: "benefit", visit: "outpatient", nhisRate: "20", amounts: ["300000"] }, "200,000원"],
   ["급여 입원", { coverage: "benefit", visit: "inpatient", amounts: ["1000000"] }, "800,000원"],
   ["일반 비급여 중증 통원", { coverage: "non_benefit", nonBenefitItem: "general", severity: "critical", visit: "outpatient", cause: "disease", priorVisits: "0", amounts: ["300000"] }, "210,000원"],
   ["일반 비급여 비중증 통원", { coverage: "non_benefit", nonBenefitItem: "general", severity: "non_critical", visit: "outpatient", cause: "disease", priorOutDays: "0", amounts: ["300000"] }, "150,000원"],

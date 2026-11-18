@@ -399,9 +399,7 @@ export default function HealthCalcStandardized({ showPolicyGuide = false }: { sh
           <span className="text-xs text-slate-500">{rows.length} / {MAX_ROWS}건</span>
         </div>
         <p className="mt-1 mb-3 text-xs text-slate-500">
-          한 행이 약관상 <b>1회의 청구 단위</b>입니다(통원 1회 방문, 처방전 1건, 입원 1회). 하루에 두 번
-          이상 통원한 경우 약관이 이를 1회로 보고 가장 높은 공제금액을 적용하므로, <b>한 행으로 합쳐</b>
-          입력해 주세요.
+          한 행이 약관상 <b>1회의 청구 단위</b>입니다(통원 1회 방문, 처방전 1건, 입원 1회). 같은 날이라도 의원 외래와 약국 처방조제는 별도 행에 입력하세요. 같은 상해 또는 질병으로 같은 치료 목적의 외래를 여러 번 받았다면 외래끼리 합쳐 가장 높은 공제금액의 의료기관을 선택하세요. 같은 사유의 처방조제는 약국끼리 합칩니다.
         </p>
         {splitPlan && (
           <p className="mb-3 text-sm text-slate-600">
@@ -596,7 +594,7 @@ export default function HealthCalcStandardized({ showPolicyGuide = false }: { sh
               <p className="mt-2 text-xs text-slate-500">
                 외래·처방조제비는 회(건)당 합산 30만 원 이내에서 <b>계약 시 정한 금액</b>이 한도가 됩니다.
                 계약마다 다른 값이라 입력하지 않으면 적용하지 않습니다. 증권에서 확인해 주세요.
-                {splitPlan && usesVisits && usesPrescriptions && " 가입금액을 적용하려면 외래와 약국 건을 나눠 계산해 주세요."}
+                {usesVisits && usesPrescriptions && " 가입금액을 적용하려면 외래와 약국 건을 나눠 계산해 주세요."}
               </p>
             </div>
           </>

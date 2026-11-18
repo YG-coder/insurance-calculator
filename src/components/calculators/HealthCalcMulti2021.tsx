@@ -1,5 +1,6 @@
 "use client";
 
+import { basicBenefitFields, emptyBasicFields } from "../BasicBenefitFields";
 import { useState } from "react";
 import { focusAfterUpdate } from "./focusAfterUpdate";
 import { flushSync } from "react-dom";
@@ -196,6 +197,8 @@ export default function HealthCalcMulti2021() {
   const [priorInjectionVisits, setPriorInjectionVisits] = useState("");
   const [copyCount, setCopyCount] = useState("3");
   const [submitted, setSubmitted] = useState(false);
+  const [basicInput, setBasicInput] = useState(emptyBasicFields);
+  const basic = basicBenefitFields(basicInput, setBasicInput, "multi4-basic", visit, { year: "2021", bundle: true, cause });
 
   const isRider = rider !== "none";
   // ── 활성 보장축 ─────────────────────────────────────────────────────
@@ -295,7 +298,7 @@ export default function HealthCalcMulti2021() {
       } satisfies Gen2021MultiRiderMriInput)
       : coverage === "benefit"
         ? calculateMany2021({
-            ...common, tier: tierForPath, rider: "none", coverage: "benefit",
+            ...common, tier: tierForPath, rider: "none", coverage: "benefit", basicLimits: basic.contract,
             annualCoverageLimit: money.annualLimit,
             priorAnnualInsurancePaid: money.priorPaid,
           } satisfies Gen2021MultiGeneralBenefitInput)
@@ -434,7 +437,7 @@ export default function HealthCalcMulti2021() {
               onChange={setAnnualLimit} placeholder="예: 50,000,000"
               ariaLabel={`증권상 연간 가입금액 (${GEN2021_GENERAL_AXIS_LABEL[generalAxis]} 보장축)`} />
           </div>
-          <span className="mt-1 block text-xs font-normal text-slate-500">약관상 최대 5천만 원이며 <b>{GEN2021_GENERAL_AXIS_LABEL[generalAxis]} 보장축</b>에 대해 따로 정해집니다(기본형·특별약관 제5조 제1항). 입원과 통원은 이 축 안에서 합산합니다. 완전히 비우거나 0원을 입력하면 계산기에서는 이 한도를 적용하지 않습니다. 0원을 입력한 경우 그 사실을 결과 안내에 따로 표시합니다.</span>
+          <span className="mt-1 block text-xs font-normal text-slate-500">약관상 최대 5천만 원이며 <b>{GEN2021_GENERAL_AXIS_LABEL[generalAxis]} 보장축</b>에 대해 따로 정해집니다(기본형·특별약관 제5조 제1항). 입원과 통원은 이 축 안에서 합산합니다. 완전히 비우거나 0원을 입력하면 계산기에서는 이 한도를 적용하지 않습니다. 0원을 입력한 경우 그 사실을 결과 안내에 따로 표시합니다. {coverage === "benefit" && "급여는 이 경우 약관상 최고액 5천만 원에서 기존 지급액을 뺀 금액까지만 표시합니다."}</span>
         </label>}
         <label className="text-sm font-semibold">누적기간 내 기존 지급보험금 ({paidAxisLabel})
           <div className="mt-1">
@@ -475,6 +478,7 @@ export default function HealthCalcMulti2021() {
       {rider === "manual_therapy" && <div className="mt-4"><NoticeBox variant="info">도수치료·체외충격파치료·증식치료는 각 치료횟수를 합산해 <b>최초 {GEN2021.rider.mskApproval.initialApproved}회</b>를 보장하고, 이후에는 증상의 개선·병변 호전 등이 확인된 경우에 한하여 <b>{GEN2021.rider.mskApproval.step}회 단위</b>로 연간 {GEN2021.rider.manual_therapy.annualVisits}회까지 보상합니다(실손의료보험 특별약관 제3조 (3)3대비급여 제1항 &lt;표1&gt; 주)). 이 계산기는 증상 개선 여부를 판정하지 않습니다.</NoticeBox></div>}
       {rider === "mri" && <div className="mt-4"><NoticeBox variant="info">비급여 MRI·MRA는 약관상 <b>금액 한도만</b> 있고 연간 횟수 한도가 없습니다. 그래서 이미 받은 횟수를 묻지 않습니다.</NoticeBox></div>}
 
+      {coverage === "benefit" && basic.fields}
       <button type="button" className="btn-primary mt-6" onClick={submit}>여러 건 계산하기</button>
 
       {submitted && blockedSummary !== null && <div
@@ -490,7 +494,7 @@ export default function HealthCalcMulti2021() {
 
       {/* ⚠ 두 금액이 동시에 무효이면 두 안내를 모두 띄운다. 하나만 고쳐서는 계산이
              재개되지 않는데 안내가 하나뿐이면 왜 막히는지 알 수 없다. */}
-      {submitted && limitInvalid && <div className="mt-5"><NoticeBox variant="warning"><b>증권상 연간 가입금액</b>({GEN2021_GENERAL_AXIS_LABEL[generalAxis]} 보장축)을 올바르게 입력해 주세요. <b>0 이상의 정수</b>만 받습니다 — <b>50000000</b> 또는 <b>50,000,000</b> 형식입니다. <b>완전히 비우거나 0원을 입력하면</b> 계산기에서는 이 한도를 적용하지 않습니다. 0원을 입력한 경우 그 사실을 결과 안내에 따로 표시합니다. 공백만 입력한 값은 빈 값으로 보지 않습니다. 음수·소수·문자·지수 표기·잘못된 쉼표는 계산기가 임의로 고치지 않습니다. 잘못된 값을 한도 미적용으로 넘기면 실제 가입금액보다 <b>많은 금액</b>이, 다른 숫자로 바뀌어 넘어가면 <b>적은 금액</b>이 산출될 수 있어 어느 쪽으로도 추정하지 않습니다.</NoticeBox></div>}
+      {submitted && limitInvalid && <div className="mt-5"><NoticeBox variant="warning"><b>증권상 연간 가입금액</b>({GEN2021_GENERAL_AXIS_LABEL[generalAxis]} 보장축)을 올바르게 입력해 주세요. <b>0 이상의 정수</b>만 받습니다 — <b>50000000</b> 또는 <b>50,000,000</b> 형식입니다. <b>완전히 비우거나 0원을 입력하면</b> 계산기에서는 이 한도를 적용하지 않습니다. 0원을 입력한 경우 그 사실을 결과 안내에 따로 표시합니다. {coverage === "benefit" && "급여는 이 경우 약관상 최고액 5천만 원에서 기존 지급액을 뺀 금액까지만 표시합니다."} 공백만 입력한 값은 빈 값으로 보지 않습니다. 음수·소수·문자·지수 표기·잘못된 쉼표는 계산기가 임의로 고치지 않습니다. 잘못된 값을 한도 미적용으로 넘기면 실제 가입금액보다 <b>많은 금액</b>이, 다른 숫자로 바뀌어 넘어가면 <b>적은 금액</b>이 산출될 수 있어 어느 쪽으로도 추정하지 않습니다.</NoticeBox></div>}
       {submitted && paidInvalid && <div className="mt-5"><NoticeBox variant="warning"><b>누적기간 내 기존 지급보험금</b>({paidAxisLabel})을 올바르게 입력해 주세요. <b>0 이상의 정수</b>만 받습니다 — <b>3000000</b> 또는 <b>3,000,000</b> 형식입니다. 이 축에 이미 지급된 보험금이 없으면 <b>0</b>을 입력하세요. 빈 값은 0으로 추정하지 않고 계산을 보류합니다. 공백만 입력한 값은 빈 값으로 보지 않습니다. 음수·소수·문자·지수 표기·잘못된 쉼표는 계산기가 임의로 고치지 않습니다. 잘못된 값이 <b>0</b>으로 바뀌면 남은 한도가 실제보다 커져 보험금이 <b>많이</b> 산출됩니다.</NoticeBox></div>}
 
       {/* ⚠ 엔진이 막았으면 후보 금액을 그리지 않는다. 종전 조건은 totalAmount만 봐서

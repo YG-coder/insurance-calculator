@@ -88,7 +88,7 @@ const scr = (h: H) => {
 };
 /** 급여 통원 — 본인부담률이 보이는 유일한 경로. */
 const ben = (over: Record<string, unknown> = {}) =>
-  setup({ coverage: "benefit", visit: "outpatient", benefitTier: "clinic", amount: "300000", ...over });
+  setup({ coverage: "benefit", visit: "outpatient", benefitTier: "clinic", amount: "150000", ...over });
 
 const VALID: [string, string, number][] = [
   ["명시적 0", "0", 0], ["0 반복", "00", 0], ["앞자리 0", "01", 0.01], ["정수", "20", 0.2],
@@ -129,17 +129,17 @@ console.log("\n[파서] 0~100의 숫자·소수만 받고 나머지는 차단한
 console.log("\n[계산] 엔진의 20% 하한·상한 처리는 그대로");
 {
   const zero = ben(); typeInto(zero, "0");
-  check("0 → 20% 하한이 적용된다", scr(zero).own === "60,000원", String(scr(zero).own));
+  check("0 → 20% 하한이 적용된다", scr(zero).own === "30,000원", String(scr(zero).own));
   const low = ben(); typeInto(low, "12.5");
-  check("12.5 → 하한보다 낮아 20%로 계산", scr(low).own === "60,000원", String(scr(low).own));
+  check("12.5 → 하한보다 낮아 20%로 계산", scr(low).own === "30,000원", String(scr(low).own));
   const mid = ben(); typeInto(mid, "30");
-  check("30 → 30%로 계산", scr(mid).own === "90,000원", String(scr(mid).own));
+  check("30 → 30%로 계산", scr(mid).own === "45,000원", String(scr(mid).own));
   const full = ben(); typeInto(full, "100");
-  check("100 → 100%", scr(full).own === "300,000원" && scr(full).pay === "0원", `${scr(full).own}/${scr(full).pay}`);
+  check("100 → 100%", scr(full).own === "150,000원" && scr(full).pay === "0원", `${scr(full).own}/${scr(full).pay}`);
   const full2 = ben(); typeInto(full2, "100.0");
   check("100.0 → 100과 같다", scr(full2).own === scr(full).own && scr(full2).pay === scr(full).pay);
   const one = ben(); typeInto(one, "01");
-  check("01 → 1%로 읽고 하한 20% 적용", scr(one).own === "60,000원", String(scr(one).own));
+  check("01 → 1%로 읽고 하한 20% 적용", scr(one).own === "30,000원", String(scr(one).own));
 }
 
 // ── 표시 비율과 계산 비율의 일치 ─────────────────────────────────────
@@ -160,23 +160,23 @@ console.log("\n[표시] 적용 비율 라벨이 계산에 쓰인 비율과 같�
   };
   const CASES: [string, string, string][] = [
     // [입력, 기대 표시 비율, 기대 본인부담금]
-    ["20", "20", "60,000원"],
-    ["30", "30", "90,000원"],
-    ["100", "100", "300,000원"],
-    ["100.0", "100", "300,000원"],
-    ["20.25", "20.25", "60,750원"],
-    ["30.5", "30.5", "91,500원"],
-    ["99.99", "99.99", "299,970원"],
+    ["20", "20", "30,000원"],
+    ["30", "30", "45,000원"],
+    ["100", "100", "150,000원"],
+    ["100.0", "100", "150,000원"],
+    ["20.25", "20.25", "30,375원"],
+    ["30.5", "30.5", "45,750원"],
+    ["99.99", "99.99", "149,985원"],
     // ⚠ 아래 둘은 **이진 부동소수점 흔적이 실제로 생기는** 값이다(실측) —
     //   `0.259 * 100 = 25.900000000000002`, `0.269 * 100 = 26.900000000000002`.
     //   반대로 `0.305 * 100`은 정확히 `30.5`라 흔적이 없다. 값에 따라 다르므로
     //   흔적이 실제로 생기는 값을 골라 넣는다.
-    ["25.9", "25.9", "77,700원"],
-    ["26.9", "26.9", "80,700원"],
+    ["25.9", "25.9", "38,850원"],
+    ["26.9", "26.9", "40,350원"],
     // ⚠ 자릿수 제한이 없다는 계약을 지키는지 본다. `rate * 100`을 반올림해 그리면
     //   `toFixed(10)`에서 `20.123456789`로 **잘린다.** 라벨은 `/100` 이전의 검증된 값을
-    //   쓰므로 잘리지 않는다. (300,000 × 0.2012345678901 = 60,370.37… → 60,370원)
-    ["20.12345678901", "20.12345678901", "60,370원"],
+    //   쓰므로 잘리지 않는다. (150,000 × 0.2012345678901 = 30,185.18… → 30,185원)
+    ["20.12345678901", "20.12345678901", "30,185원"],
   ];
   for (const [input, want, own] of CASES) {
     const h = ben(); typeInto(h, input);
@@ -186,8 +186,8 @@ console.log("\n[표시] 적용 비율 라벨이 계산에 쓰인 비율과 같�
       `${label} / ${scr(h).own}`);
   }
   // 20% 하한 아래는 하한이 적용된 **실제 계산 비율**을 보여준다.
-  for (const [input, own] of [["12.5", "60,000원"], ["0", "60,000원"], ["01", "60,000원"],
-    ["0.001", "60,000원"]] as [string, string][]) {
+  for (const [input, own] of [["12.5", "30,000원"], ["0", "30,000원"], ["01", "30,000원"],
+    ["0.001", "30,000원"]] as [string, string][]) {
     const h = ben(); typeInto(h, input);
     const label = rateLabel(h);
     check(`${input} → 하한이 적용돼 라벨은 "20%" · 본인부담 ${own}`,
@@ -296,7 +296,7 @@ console.log("\n[활성 조건] 급여 통원에서만 검증·전달한다");
   h.set("coverage", "benefit"); h.set("visit", "outpatient");
   check("급여 통원 복귀: 원문과 무효 안내가 함께 돌아온다", shown(h) === "1e3" && !scr(h).calc && scr(h).rateInvalid);
   typeInto(h, "30");
-  check("고치면 계산 재개", scr(h).calc && scr(h).own === "90,000원", String(scr(h).own));
+  check("고치면 계산 재개", scr(h).calc && scr(h).own === "45,000원", String(scr(h).own));
 }
 
 // ── 병원비 우선 안내 ─────────────────────────────────────────────────

@@ -87,7 +87,7 @@ export const ALWAYS_ACCEPTED_AXES = ["amount", "coverage", "visit"] as const;
  */
 const ROUTER_AXES = [
   ...GEN2026_ONLY_AXES,
-  "perVisitCoverageLimit",
+  "basicLimits", "perVisitCoverageLimit",
   "tier", "plan", "facility", "priorAnnualPaid", "splitAmounts",
   ...OTHER_ENTRY_AXES,
   ...CONTAINER_AXES,
@@ -134,7 +134,7 @@ const GEN2021_OWNERSHIP: Ownership = {
   //     경로를 나누므로 `coverage`까지 보는 조건을 여기서 다시 쓸 수 없고, 같은 판정을 두 곳에서
   //     하면 안내가 갈린다(5세대 축을 `calc2026`에 맡기는 아래 표와 같은 이유다).
   //     그래서 라우터는 이 축을 **세대 소유로 넘기고**, 경로별 거부·값 검증은 `calc2021`이 한다.
-  always: ["tier"],
+  always: ["tier", "basicLimits"],
   outpatientOnly: [],
   inpatientOnly: [],
   held: [],
@@ -145,7 +145,7 @@ const GEN2026_OWNERSHIP: Ownership = {
   // 여기에 둔다 — 경로별로 좁히는 일은 5세대 자기 진입점(G-30·G-31·G-32)이 이미 하고 있고,
   // 라우터가 같은 판정을 두 번 하면 안내가 갈린다.
   always: [
-    "nhisCoinsuranceRate", "severity", "nonBenefitItem", "injectionPurpose",
+    "basicLimits", "nhisCoinsuranceRate", "severity", "nonBenefitItem", "injectionPurpose",
     "priorAnnualDeductible", "perVisitCoverageLimit", "priorAnnualPaid", "tier",
   ],
   outpatientOnly: [],
@@ -200,6 +200,7 @@ const CONTAINER_WHY =
   "여러 건을 담는 입력 축이라 단건 계산에는 대응 축이 없습니다. 단건 진입점은 amount 한 건만 계산하므로, 이 값을 조용히 버리면 총액이 실제보다 작게 나옵니다. 여러 건은 다회 청구 진입점으로 넘겨 주세요.";
 
 const WHY: Record<RouterAxis, string> = {
+  basicLimits: "급여 기본형의 계약 한도 입력은 4·5세대에서만 사용합니다.",
   // ── G-33이 세운 다섯 문구. 그대로 유지한다(이전 세대 경로의 안내가 바뀌지 않는다). ──
   nhisCoinsuranceRate: "건강보험 본인부담률(nhisCoinsuranceRate)은 5세대 급여 통원 계산에만 쓰입니다.",
   severity: "중증/비중증(severity)은 5세대 비급여 특별약관1·2가 만든 구분이라 이전 세대 표준약관에는 없습니다.",
@@ -296,7 +297,7 @@ type ForeignAxis = (typeof OTHER_ENTRY_AXES)[number] | (typeof CONTAINER_AXES)[n
  *     달라졌으므로 세대별 타입으로 나눈다. 이름과 기존 네 축의 봉인 의미는 그대로다.
  */
 export type LegacyClaimInput = ClaimInput
-  & SealNever<(typeof GEN2026_ONLY_AXES)[number] | "tier" | ForeignAxis>;
+  & SealNever<(typeof GEN2026_ONLY_AXES)[number] | "tier" | "basicLimits" | ForeignAxis>;
 
 /** 2021 제네릭 호출의 입력. `tier`는 화면이 늘 싣는 축이라 열어 둔다(위 소유권 표 참조). */
 export type Gen2021ClaimInput = ClaimInput
@@ -326,8 +327,8 @@ const OWNED_AXES: Record<Generation, readonly string[]> = {
   "2017": [...ALWAYS_ACCEPTED_AXES, "plan", "splitAmounts"],
   // 4·5세대의 경로별 축(`tier` 등)은 `coverage`×`visit`으로 갈리는데 이 표는 `visit`으로만
   // 경로를 나눈다. 그래서 세대 소유로 넘기고 판정은 세대 엔진이 한다(위 소유권 표 주석).
-  "2021": [...ALWAYS_ACCEPTED_AXES, "tier"],
-  "2026": [...ALWAYS_ACCEPTED_AXES, "tier", "severity", "nonBenefitItem", "nhisCoinsuranceRate",
+  "2021": [...ALWAYS_ACCEPTED_AXES, "basicLimits", "tier"],
+  "2026": [...ALWAYS_ACCEPTED_AXES, "basicLimits", "tier", "severity", "nonBenefitItem", "nhisCoinsuranceRate",
     "perVisitCoverageLimit", "priorAnnualDeductible", "priorAnnualPaid", "injectionPurpose"],
 };
 

@@ -100,7 +100,7 @@ const SNB: Record<string, (e?: Any) => Any> = {
 };
 const M: Record<string, (e?: Any) => Any> = {
   "다회 급여 통원": (e = {}) => ({ cause: "disease", coverage: "benefit", visit: "outpatient", tier: "clinic", nhisCoinsuranceRate: 0.2, amounts: [AMT], ...e }),
-  "다회 급여 입원": (e = {}) => ({ cause: "disease", coverage: "benefit", visit: "inpatient", amounts: [AMT], ...e }),
+  "다회 급여 입원": (e = {}) => ({ cause: "disease", coverage: "benefit", visit: "inpatient", basicLimits: { priorInpatientDeductible: 0 }, amounts: [AMT], ...e }),
 };
 const MNB: Record<string, (e?: Any) => Any> = {
   "다회 비급여 중증 통원": (e = {}) => ({ cause: "disease", coverage: "non_benefit", visit: "outpatient", severity: "critical", nonBenefitItem: "general", amounts: [AMT], priorAnnualOutpatientVisits: 0, ...e }),
@@ -165,11 +165,11 @@ console.log("\n[G-31] 2. 단건 급여 입원 — 건강보험 본인부담률�
   }
   // 통원은 소비 경로다 — 건드리지 않는다.
   const okOut = f1(S["단건 급여 통원"]({ nhisCoinsuranceRate: 0.3 }));
-  check("통원은 소비 경로라 그대로 계산한다", statusOf(okOut) === "OK" && !threw(okOut) && okOut.r.ownPay === 90_000,
+  check("통원은 소비 경로라 그대로 계산한다", statusOf(okOut) === "OK" && !threw(okOut) && okOut.r.ownPay === 100_000,
     statusOf(okOut));
   const zeroOut = f1(S["단건 급여 통원"]({ nhisCoinsuranceRate: 0 }));
   check("통원의 숫자 0은 유효값이라 20% 하한이 그대로 적용된다",
-    statusOf(zeroOut) === "OK" && !threw(zeroOut) && zeroOut.r.ownPay === 60_000, statusOf(zeroOut));
+    statusOf(zeroOut) === "OK" && !threw(zeroOut) && zeroOut.r.ownPay === 100_000, statusOf(zeroOut));
   // 금액 축 안내가 먼저다(G-30 우선순위 보존).
   check("급여 금액 축 stray가 비금액 stray보다 앞선다",
     note0(f1(mk({ priorAnnualDeductible: 0, severity: 0 }))).includes("priorAnnualDeductible"));
@@ -379,7 +379,7 @@ console.log("\n[G-31] 8. 반환 계약 — 세 진입점을 섞지 않는다");
   const d = fR(ROOM({ nhisCoinsuranceRate: 0 }));
   check("상급병실료도 rejected — 총액 0", isRejected(d), statusOf(d));
   // 다회의 합계 보존은 행 수·금액과 무관하게 유지된다.
-  const multi = fM({ cause: "disease", coverage: "benefit", visit: "inpatient", amounts: [100, 200, 300], severity: 0 });
+  const multi = fM({ cause: "disease", coverage: "benefit", visit: "inpatient", basicLimits: { priorInpatientDeductible: 0 }, amounts: [100, 200, 300], severity: 0 });
   check("다회 합계 보존: 여러 행의 합계를 그대로 싣는다", isBlocked(multi, 600), statusOf(multi));
 }
 

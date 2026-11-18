@@ -107,7 +107,7 @@ const BASE: Record<string, [(i: Any) => unknown, Any]> = {
   "4세대|일반|비급여|통원": [(i) => calculateMany2021(i as never), { cause: "disease", coverage: "non_benefit", visit: "outpatient", amounts: [1_000_000], priorAnnualOutpatientVisits: 0 }],
   "4세대|특약|도수": [(i) => calculateMany2021(i as never), { cause: "disease", coverage: "non_benefit", visit: "outpatient", rider: "manual_therapy", amounts: [1_000_000], priorAnnualRiderVisits: 0 }],
   "5세대|급여|통원": [(i) => calculateMany2026(i as never), { cause: "disease", coverage: "benefit", visit: "outpatient", tier: "clinic", nhisCoinsuranceRate: 0.2, amounts: [3_000_000] }],
-  "5세대|급여|입원": [(i) => calculateMany2026(i as never), { cause: "disease", coverage: "benefit", visit: "inpatient", amounts: [3_000_000] }],
+  "5세대|급여|입원": [(i) => calculateMany2026(i as never), { cause: "disease", coverage: "benefit", visit: "inpatient", basicLimits: { priorInpatientDeductible: 0 }, amounts: [3_000_000] }],
   "5세대|비급여|입원|중증": [(i) => calculateMany2026(i as never), { cause: "disease", coverage: "non_benefit", nonBenefitItem: "general", severity: "critical", visit: "inpatient", tier: "hospital", amounts: [3_000_000] }],
   "별도|중증|근골격계": [(i) => calculateGen2026Item(i as never), { route: "special_item", coverage: "non_benefit", severity: "critical", item: "musculoskeletal_esw", lines: SL, priorAnnualTreatmentActCount: 15, approvedThroughVisit: 50 }],
   "별도|중증|주사료": [(i) => calculateGen2026Item(i as never), { route: "special_item", coverage: "non_benefit", severity: "critical", item: "injection", injectionPurpose: "general", lines: SL }],

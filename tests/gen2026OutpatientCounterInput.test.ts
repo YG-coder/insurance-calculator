@@ -147,7 +147,7 @@ console.log("\n[범위] 이 축이 쓰이지 않는 경로");
   }
   check("급여 통원 자체는 종전대로 계산된다",
     stray({ coverage: "benefit", visit: "outpatient", tier: "clinic", nhisCoinsuranceRate: 0.2 })
-      .totalInsurancePay === 400_000);
+      .totalInsurancePay === 200_000);
   check("중증 입원 자체는 종전대로 계산된다",
     stray({ coverage: "non_benefit", visit: "inpatient", tier: "clinic", severity: "critical",
       nonBenefitItem: "general" }).status === "OK");

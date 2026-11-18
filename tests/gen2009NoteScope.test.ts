@@ -116,7 +116,7 @@ const scr = (h: H) => {
     pay: items === null ? null : (items[2]?.value ?? null),
     rows: s.nodes.filter((n) => n.tag === "td").map((n) => n.text).join(","),
     info,
-    합산안내: info.includes("하루에 2회 이상 통원한 경우"),
+    합산안내: info.includes("같은 날이라도 의원 외래와 약국 처방조제는 별도 행"),
     미적용안내: info.includes("계약마다 다른 값이라 입력하지 않으면"),
     통원공제: info.includes("통원 공제는"),
     입원상한: info.includes("입원 자기부담은 계약일"),
@@ -145,13 +145,17 @@ console.log("\n[통원 있음] 두 안내가 조건에 맞게 표시된다");
     check(`${name}: 합산 안내 있음 · 미적용 안내 있음(한도 미입력)`, s.합산안내 && s.미적용안내, s.info.slice(0, 90));
     typeInto(h, "std-per-visit-limit", "100000");
     const s2 = scr(h);
-    check(`  한도를 넣으면 미적용 안내만 사라지고 합산 안내는 남는다`, s2.합산안내 && !s2.미적용안내);
+    if (spec.includes("out") && spec.includes("pharm")) {
+      check("서로 다른 한도가 필요한 외래·약국 혼합 청구는 보류", !s2.calc && h.render().text.includes("나눠 계산"));
+    } else {
+      check("가입금액 적용 후에도 같은 날 청구 안내를 유지", s2.합산안내 && !s2.미적용안내);
+    }
   }
   // 두 안내가 함께 나올 때의 순서도 고정한다. 화면은 엔진이 만든 배열을 그대로 join하므로
   // 배열 순서가 곧 사용자에게 보이는 순서다(변조 검사 30번이 이 항목으로 검출된다).
   {
     const s = scr(build(["out"]));
-    const a = s.info.indexOf("하루에 2회 이상 통원한 경우");
+    const a = s.info.indexOf("같은 날이라도 의원 외래와 약국 처방조제는 별도 행");
     const b = s.info.indexOf("회(건)당 가입금액은 계약마다 다른 값이라");
     check("두 안내가 함께 나오면 합산 안내가 먼저 온다", a >= 0 && b >= 0 && a < b, `a=${a} b=${b}`);
   }

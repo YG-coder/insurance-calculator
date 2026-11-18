@@ -44,7 +44,14 @@ export interface StandardizedSplitAmounts {
   nonBenefit: number;  // 기본형에서 보상 대상인 비급여 의료비
 }
 
+export interface BasicBenefitLimits {
+  priorInpatientDeductible?: number;
+  outpatientLimit?: number;
+  remainingAnnualBenefit?: number;
+}
+
 export interface ClaimInput {
+  basicLimits?: BasicBenefitLimits;
   amount: number;              // 진료비(원). 현행 로직과 동일하게 비음수 정수 가정
   coverage: Coverage;
   visit: Visit;
@@ -81,6 +88,7 @@ interface Gen2026CommonInput {
 }
 
 export interface Gen2026BenefitInput extends Gen2026CommonInput {
+  basicLimits?: BasicBenefitLimits;
   coverage: "benefit";
   nhisCoinsuranceRate?: number;
   // ⚠ 두 축은 비급여 특별약관의 금액 축이라 급여에는 대응 축이 없다(G-30).
@@ -100,6 +108,7 @@ export interface Gen2026BenefitInput extends Gen2026CommonInput {
 }
 
 export interface Gen2026NonBenefitInput extends Gen2026CommonInput {
+  basicLimits?: never;
   coverage: "non_benefit";
   severity?: Severity;                    // 미지정 시 런타임에서 PENDING_UNVERIFIED
   injectionPurpose?: Gen2026InjectionPurpose; // 비중증 주사료의 면책 예외 판정
@@ -125,6 +134,7 @@ export type CapCode =
   | "GEN2017_PER_VISIT_COVERAGE_LIMIT"
   | "GEN2017_OUTPATIENT_ANNUAL_VISITS"
   | "GEN2017_PRESCRIPTION_ANNUAL_COUNT"
+  | "GEN2021_BASIC_INPATIENT_DEDUCTIBLE" | "GEN2026_BASIC_INPATIENT_DEDUCTIBLE" | "GEN2026_BASIC_OUTPATIENT_LIMIT" | "GEN2026_BASIC_ANNUAL_LIMIT"
   | "GEN2021_OUTPATIENT_PER_VISIT"
   | "GEN2021_ANNUAL_COVERAGE"
   | "GEN2021_NONBENEFIT_OUTPATIENT_ANNUAL_VISITS"
@@ -298,6 +308,7 @@ interface Gen2021GeneralMoneyAxes {
 
 /** 3대비급여 특약이 쓰는 금액 축. 일반 축 두 개는 닫는다. */
 interface Gen2021RiderMoneyAxes {
+  basicLimits?: never;
   priorAnnualRiderPaid?: number;
   annualCoverageLimit?: never;
   priorAnnualInsurancePaid?: never;
@@ -314,6 +325,7 @@ interface Gen2021RiderMoneyAxes {
 
 /** 비급여 통원 — 연 100회 한도가 걸리는 유일한 일반 경로. */
 export interface Gen2021MultiGeneralNonBenefitOutpatientInput extends Gen2021MultiCommonInput, Gen2021GeneralMoneyAxes {
+  basicLimits?: never;
   rider?: "none";
   coverage: "non_benefit";
   visit: "outpatient";
@@ -324,6 +336,7 @@ export interface Gen2021MultiGeneralNonBenefitOutpatientInput extends Gen2021Mul
 
 /** 급여 — 연간 횟수 한도가 없다(약관의 '90회'는 계약 종료 후 계속 통원 규정이다). */
 export interface Gen2021MultiGeneralBenefitInput extends Gen2021MultiCommonInput, Gen2021GeneralMoneyAxes {
+  basicLimits?: BasicBenefitLimits;
   rider?: "none";
   coverage: "benefit";
   priorAnnualOutpatientVisits?: never;
@@ -333,6 +346,7 @@ export interface Gen2021MultiGeneralBenefitInput extends Gen2021MultiCommonInput
 
 /** 비급여 입원 — 통원 횟수 한도가 적용되지 않는다. */
 export interface Gen2021MultiGeneralNonBenefitInpatientInput extends Gen2021MultiCommonInput, Gen2021GeneralMoneyAxes {
+  basicLimits?: never;
   rider?: "none";
   coverage: "non_benefit";
   visit: "inpatient";
@@ -422,6 +436,7 @@ interface Gen2026MultiCommonInput {
 }
 
 export interface Gen2026MultiBenefitInput extends Gen2026MultiCommonInput {
+  basicLimits?: BasicBenefitLimits;
   coverage: "benefit";
   nhisCoinsuranceRate?: number;
   // ⚠ 비급여 특별약관 제5조①의 금액 축 세 개는 급여에 없다. 타입에서 닫고 런타임에서도 막는다.
@@ -441,6 +456,7 @@ export interface Gen2026MultiBenefitInput extends Gen2026MultiCommonInput {
 }
 
 export interface Gen2026MultiNonBenefitInput extends Gen2026MultiCommonInput {
+  basicLimits?: never;
   coverage: "non_benefit";
   severity?: Severity;
   /** ⚠ 급여 전용 축이라 비급여에는 대응 축이 없다(G-31). 런타임에서도 막는다. */

@@ -83,7 +83,7 @@ export default function Health2nd3rdPage() {
               <tr>
                 <td className="border border-slate-200 px-3 py-2 font-semibold">입원</td>
                 <td className="border border-slate-200 px-3 py-2">표준형 합계 20% · 해당 2세대 선택형Ⅰ 합계 10% · 선택형Ⅱ 급여 본인부담금 10%와 비급여 20%의 합계. 연간 자기부담 상한 200만 원</td>
-                <td className="border border-slate-200 px-3 py-2">상한 없음</td>
+                <td className="border border-slate-200 px-3 py-2">급여 입원 연 200만 원 (상해·질병 합산)</td>
               </tr>
               <tr>
                 <td className="border border-slate-200 px-3 py-2 font-semibold">통원 공제</td>

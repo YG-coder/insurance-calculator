@@ -1,3 +1,4 @@
+import { basicMaximum, basicNotes, basicLimitError } from "./basicBenefit";
 import { routeOfGen2026Item, excludedMany2026 } from "./itemRouting2026";
 // ⚠ `normalizeAmount`를 더 이상 import하지 않는다(G-27). 진료비를 조용히 고치던 유일한
 //   자리(`(input.amounts ?? []).map(normalizeAmount)`)가 엄격 검증으로 바뀌어 사용처가
@@ -205,7 +206,10 @@ function buildNotes(
   const notes = [
     `각 행을 발생 순서대로 계산했습니다. ${causeLabel}·${coverageLabel} 보장축만 계산했으며, 입력한 모든 행과 기존 지급보험금·자기부담금이 이 축의 것이어야 합니다. 다른 원인의 청구는 별도로 계산해 주세요.`,
   ];
-  if (input.coverage === "benefit") return notes;
+  if (input.coverage === "benefit") return [
+    `각 행은 같은 계약연도·${causeLabel}·급여 보장축으로 계산했습니다. 연간 보험금 한도는 상해·질병별로 적용합니다.`,
+    ...basicNotes("2026", input.visit, input.basicLimits),
+  ];
   // 여기부터는 일반 비급여(nonBenefitItem === "general")만 도달한다.
   //   3대비급여·MRI·상급병실료는 계산 전에 PENDING_UNVERIFIED로 차단된다.
   notes.push(
@@ -829,9 +833,18 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
    *   ⚠ 이 인자를 읽는 곳은 아래 두 카운터뿐이고, 그 둘은 서로 배타적이다.
    *     통원이 아닌 경로(급여·입원·별도 보장종목)는 두 번째 실행 자체가 없다.
    */
+  const contract = input.basicLimits;
+  if (!bf && contract !== undefined) return blocked(["급여 기본형의 계약 한도는 비급여에 적용할 수 없습니다."]);
+  if (bf) {
+    const error = basicLimitError("2026", input.visit, contract, true);
+    if (error) return blocked([error]);
+  }
   function runBundle(countZeroPay: boolean): MultiClaimResult {
     // 여기 오는 값은 `undefined`이거나 0 이상의 안전한 정수다. 정규화하지 않고 그대로 쓴다.
     //   ⚠ 위에서 **한 번만** 읽은 원값을 재사용한다. 두 해석이 같은 값에서 출발해야 한다.
+    const maximum = basicMaximum("2026");
+    let priorBasic = contract?.priorInpatientDeductible ?? 0;
+    let basicRemaining = contract?.remainingAnnualBenefit ?? maximum.annualMaximum;
     let insurancePaid = (paidRaw as number | undefined) ?? 0;
     // 특별약관1 제5조⑤ 500만원 상한의 누적 대상은 약관상 **공제금액**이다(인쇄 p.280).
     //   ⚠ single.ownPay를 누적하면 안 된다. 연간 보험가입금액 한도로 잘려 추가 부담한 금액이
@@ -890,12 +903,18 @@ export function calculateMany2026(input: Gen2026MultiClaimInput): MultiClaimResu
           })
         : calc2026({
             amount, coverage: "benefit", visit: input.visit, tier: input.tier,
+            basicLimits: { ...contract, remainingAnnualBenefit: basicRemaining,
+              priorInpatientDeductible: input.visit === "inpatient" ? priorBasic : undefined },
             // ⚠ 위에서 한 번 읽은 원값을 재사용한다(G-31). 종전에는 이 자리가 행마다
             //   `bf?.nhisCoinsuranceRate`를 다시 읽어 행마다 다른 요율이 적용될 수 있었다.
             nhisCoinsuranceRate: checkedNhis as number | undefined,
           });
       if (single.status !== "OK") return blocked(single.notes);
 
+      if (bf) {
+        basicRemaining -= single.insurancePay ?? 0;
+        if (input.visit === "inpatient") priorBasic = Math.min(maximum.inpatientDeductible, priorBasic + (single.rateBased ?? 0));
+      }
       if (nb && severity && annualLimit !== undefined) {
         const capCode: CapCode = severity === "critical"
           ? "GEN2026_CRITICAL_ANNUAL_COVERAGE"

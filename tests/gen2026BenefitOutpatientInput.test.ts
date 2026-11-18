@@ -66,13 +66,13 @@ console.log("\n[G-15] 1. 정상 입력의 결과가 그대로다");
   const md = GEN2026.benefit.outpatient.minDeductible;
   // 기준선(69c8dab)에서 측정한 값을 그대로 고정한다.
   for (const [label, input, want] of [
-    ["rate 0 (하한 20% 적용)", out({ nhisCoinsuranceRate: 0, tier: "clinic" }), `own=60000/ins=240000/rate=0.2/minD=${md.clinic}`],
-    ["rate 0.2 clinic", out({ nhisCoinsuranceRate: 0.2, tier: "clinic" }), `own=60000/ins=240000/rate=0.2/minD=${md.clinic}`],
-    ["rate 0.2 hospital", out({ nhisCoinsuranceRate: 0.2, tier: "hospital" }), `own=60000/ins=240000/rate=0.2/minD=${md.hospital}`],
-    ["rate 0.3", out({ nhisCoinsuranceRate: 0.3, tier: "clinic" }), `own=90000/ins=210000/rate=0.3/minD=${md.clinic}`],
-    ["rate 0.1 (하한이 이김)", out({ nhisCoinsuranceRate: 0.1, tier: "clinic" }), `own=60000/ins=240000/rate=0.2/minD=${md.clinic}`],
+    ["rate 0 (하한 20% 적용)", out({ nhisCoinsuranceRate: 0, tier: "clinic" }), `own=100000/ins=200000/rate=0.2/minD=${md.clinic}`],
+    ["rate 0.2 clinic", out({ nhisCoinsuranceRate: 0.2, tier: "clinic" }), `own=100000/ins=200000/rate=0.2/minD=${md.clinic}`],
+    ["rate 0.2 hospital", out({ nhisCoinsuranceRate: 0.2, tier: "hospital" }), `own=100000/ins=200000/rate=0.2/minD=${md.hospital}`],
+    ["rate 0.3", out({ nhisCoinsuranceRate: 0.3, tier: "clinic" }), `own=100000/ins=200000/rate=0.3/minD=${md.clinic}`],
+    ["rate 0.1 (하한이 이김)", out({ nhisCoinsuranceRate: 0.1, tier: "clinic" }), `own=100000/ins=200000/rate=0.2/minD=${md.clinic}`],
     ["rate 1 (전액 자기부담)", out({ nhisCoinsuranceRate: 1, tier: "clinic" }), `own=300000/ins=0/rate=1/minD=${md.clinic}`],
-    ["tier 미지정 = 병·의원급", out({ nhisCoinsuranceRate: 0.2 }), `own=60000/ins=240000/rate=0.2/minD=${md.clinic}`],
+    ["tier 미지정 = 병·의원급", out({ nhisCoinsuranceRate: 0.2 }), `own=100000/ins=200000/rate=0.2/minD=${md.clinic}`],
     ["최소공제가 이기는 소액(hospital)", { amount: 50_000, coverage: "benefit", visit: "outpatient", nhisCoinsuranceRate: 0.2, tier: "hospital" }, `own=${md.hospital}/ins=${50_000 - md.hospital}/rate=0.2/minD=${md.hospital}`],
   ] as [string, unknown, string][]) {
     check(`무회귀 — ${label}`, shape(call(input)) === want, shape(call(input)));
@@ -104,7 +104,7 @@ console.log("\n[G-15] 2. nhisCoinsuranceRate — 거부 행렬");
   // 경계값은 허용이다.
   // ⚠ 경계 바로 아래는 `Math.round`가 진료비까지 올릴 수 있으므로(0.999999 × 300,000 =
   //   299,999.7 → 300,000) 반올림이 개입하지 않는 값을 쓴다. 확인하려는 것은 **허용 여부**다.
-  for (const [label, v, want] of [["0", 0, "own=60000"], ["1", 1, "own=300000"], ["0.999", 0.999, "own=299700"]] as [string, number, string][]) {
+  for (const [label, v, want] of [["0", 0, "own=100000"], ["1", 1, "own=300000"], ["0.999", 0.999, "own=299700"]] as [string, number, string][]) {
     const x = call(out({ nhisCoinsuranceRate: v, tier: "clinic" }));
     check(`rate 경계 ${label} → 허용`, !threw(x) && x.r.status === "OK" && shape(x).startsWith(want), shape(x));
   }
@@ -218,7 +218,7 @@ console.log("\n[G-15] 6. 다회는 기존 blocked() 계약으로 전달한다");
     calculateMany2026({ coverage: "benefit", cause: "disease", visit: "outpatient",
       amounts: [AMOUNT, 150_000], ...extra } as unknown as Gen2026MultiClaimInput);
   const okRun = many({ nhisCoinsuranceRate: 0.2, tier: "clinic" });
-  check("다회 정상 무회귀", okRun.status === "OK" && okRun.totalOwnPay === 90_000 && okRun.totalInsurancePay === 360_000,
+  check("다회 정상 무회귀", okRun.status === "OK" && okRun.totalOwnPay === 130_000 && okRun.totalInsurancePay === 320_000,
     `${okRun.status}/${okRun.totalOwnPay}/${okRun.totalInsurancePay}`);
   for (const [label, extra] of [
     ["rate 'abc'", { nhisCoinsuranceRate: "abc", tier: "clinic" }],

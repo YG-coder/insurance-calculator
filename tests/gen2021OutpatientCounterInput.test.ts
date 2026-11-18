@@ -182,7 +182,7 @@ console.log("\n[범위] 급여·입원과 축 교차");
 {
   for (const [what, base] of [
     ["급여 통원", { coverage: "benefit", visit: "outpatient", tier: "clinic" }],
-    ["급여 입원", { coverage: "benefit", visit: "inpatient" }],
+    ["급여 입원", { coverage: "benefit", visit: "inpatient", basicLimits: { priorInpatientDeductible: 0 } }],
     ["비급여 입원", { coverage: "non_benefit", visit: "inpatient" }]] as const) {
     check(`${what}: 횟수 없이 정상 계산`, call(base).status === "OK");
     for (const field of ["priorAnnualOutpatientVisits", "priorAnnualRiderVisits"] as const) {

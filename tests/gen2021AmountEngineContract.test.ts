@@ -72,7 +72,7 @@ console.log("\n[G-16] 1. 정상 입력의 결과가 그대로다");
     ["비급여 통원 1건", OUT({ amounts: [300_000] }), "OK/amt=300000/own=100000/ins=200000/lines=1"],
     ["비급여 통원 2건", OUT({ amounts: [300_000, 150_000] }), "OK/amt=450000/own=145000/ins=305000/lines=2"],
     ["급여 통원", { cause: "disease", coverage: "benefit", visit: "outpatient", amounts: [300_000] }, "OK/amt=300000/own=100000/ins=200000/lines=1"],
-    ["급여 입원", { cause: "disease", coverage: "benefit", visit: "inpatient", amounts: [300_000] }, "OK/amt=300000/own=60000/ins=240000/lines=1"],
+    ["급여 입원", { cause: "disease", coverage: "benefit", visit: "inpatient", basicLimits: { priorInpatientDeductible: 0 }, amounts: [300_000] }, "OK/amt=300000/own=60000/ins=240000/lines=1"],
     ["비급여 입원", { cause: "disease", coverage: "non_benefit", visit: "inpatient", amounts: [300_000] }, "OK/amt=300000/own=90000/ins=210000/lines=1"],
     ["주사료", RIDER("injection", { amounts: [300_000] }), "OK/amt=300000/own=90000/ins=210000/lines=1"],
     ["MRI", RIDER("mri", { amounts: [300_000] }), "OK/amt=300000/own=90000/ins=210000/lines=1"],
@@ -199,7 +199,7 @@ console.log("\n[G-16] 6. 전 경로에서 같은 계약");
 {
   const paths: [string, (a: unknown) => unknown][] = [
     ["급여 통원", (a) => ({ cause: "disease", coverage: "benefit", visit: "outpatient", amounts: a })],
-    ["급여 입원", (a) => ({ cause: "disease", coverage: "benefit", visit: "inpatient", amounts: a })],
+    ["급여 입원", (a) => ({ cause: "disease", coverage: "benefit", visit: "inpatient", basicLimits: { priorInpatientDeductible: 0 }, amounts: a })],
     ["비급여 통원", (a) => OUT({ amounts: a })],
     ["비급여 입원", (a) => ({ cause: "disease", coverage: "non_benefit", visit: "inpatient", amounts: a })],
     ["도수", (a) => RIDER("manual_therapy", { amounts: a })],

@@ -1,5 +1,6 @@
 "use client";
 
+import { basicBenefitFields, emptyBasicFields } from "../BasicBenefitFields";
 import { percentToRate } from "@/lib/insurance/common/exactMoney";
 import { useState } from "react";
 import { focusAfterUpdate } from "./focusAfterUpdate";
@@ -135,6 +136,8 @@ export default function HealthCalc5th() {
   const [outpatientLimit, setOutpatientLimit] = useState<string>("");
   const [nhisRate, setNhisRate] = useState<string>("");
   const [submitted, setSubmitted] = useState(false);
+  const [basicInput, setBasicInput] = useState(emptyBasicFields);
+  const basic = basicBenefitFields(basicInput, setBasicInput, "med5-basic", visit, { year: "2026", bundle: false });
   const [injectionPurpose, setInjectionPurpose] = useState<Gen2026InjectionPurpose | "">("");
 
   // ⚠ 원문이 유효한 형식일 때만 숫자가 된다. 실패를 0으로 바꾸지 않는다.
@@ -251,7 +254,7 @@ export default function HealthCalc5th() {
         ? null
         : calc2026({
             amount: num,
-            coverage: "benefit",
+            coverage: "benefit", basicLimits: basic.contract,
             visit,
             // ⚠ 종별은 급여 **통원**의 최소공제만 가른다(G-34C). 급여 입원의 자기부담률은
             //   약관이 20%로 정하고 있어 엔진이 종별을 읽지 않는다. 종전에는 두 경로 모두에
@@ -511,6 +514,7 @@ export default function HealthCalc5th() {
         )}
       </div>
 
+      {coverage === "benefit" && basic.fields}
       <div className="mt-6">
         <button type="button" className="btn-primary w-full sm:w-auto" onClick={() => focusAfterUpdate(() => setSubmitted(true), "single2026-blocked-summary")}>
           자기부담금 계산하기

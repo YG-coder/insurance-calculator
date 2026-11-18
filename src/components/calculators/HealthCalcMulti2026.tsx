@@ -1,5 +1,6 @@
 "use client";
 
+import { basicBenefitFields, emptyBasicFields } from "../BasicBenefitFields";
 import { percentToRate } from "@/lib/insurance/common/exactMoney";
 import { useState } from "react";
 import { focusAfterUpdate } from "./focusAfterUpdate";
@@ -385,7 +386,7 @@ export default function HealthCalcMulti2026() {
   //   원인을 고르지 않은 채 계산하면 사용자가 인식하지 못한 채 한쪽 축으로 계산된다.
   //   ⚠ 별도 보장종목은 상해·질병 합산이라 이 입력을 노출하지도, 요구하지도 않는다.
   const [cause, setCause] = useState<Cause | "">("");
-  // 급여는 원인이 산식에 영향을 주지 않고 결과 안내 문구에만 쓰인다. 종전 동작을 그대로 둔다
+  // 급여 원인마다 통원 가입금액과 연간 잔여액을 따로 보존한다. 종전 동작을 그대로 둔다
   //   — 이번 변경으로 급여 사용자에게 새 선택을 강제하지 않기 위해서다.
   const [benefitCause, setBenefitCause] = useState<Cause>("disease");
   const [coverage, setCoverage] = useState<Coverage>("non_benefit");
@@ -459,6 +460,8 @@ export default function HealthCalcMulti2026() {
   const [priorActs, setPriorActs] = useState("");
   const [priorPool, setPriorPool] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [basicInput, setBasicInput] = useState(emptyBasicFields);
+  const basic = basicBenefitFields(basicInput, setBasicInput, "multi5-basic", visit, { year: "2026", bundle: true, cause: benefitCause });
 
   // 판정 선택이 바뀌면 제출 상태를 함께 초기화한다. 결과와 계산 경고는 재계산 전까지 숨긴다.
   const resetCalculation = () => setSubmitted(false);
@@ -824,7 +827,7 @@ export default function HealthCalcMulti2026() {
     ? null
     : coverage === "benefit"
     ? calculateMany2026({
-        cause: benefitCause, coverage: "benefit", visit,
+        cause: benefitCause, coverage: "benefit", visit, basicLimits: basic.contract,
         // ⚠ 종별은 급여 **통원**의 최소공제만 가른다. 급여 입원의 자기부담률은 약관이 20%로
         //   정하고 있어 엔진이 종별을 읽지 않는다(G-34B). 종전에는 두 경로 모두에 실어
         //   보냈고 입원에서는 **읽고 무시**됐다 — 화면이 고른 종별이 반영된 것처럼 보였다.
@@ -1052,7 +1055,8 @@ export default function HealthCalcMulti2026() {
       <p className="text-xs text-slate-500 sm:col-span-2">보험계약이 종료된 뒤에도 <b>계속 중인 치료</b>는 연간 보장한도(금액)에서 <b>지급한 금액</b>을, 연간 보장한도(횟수)에서 <b>보상한 횟수</b>를 뺀 잔여분을 한도로 보상합니다(특별약관1 제3조(3)제7항·제5조 제4항 — 이월 계산 전용이며, 보험기간 중 연간 한도의 소진 기준을 정하는 조항이 아닙니다). 일반 비급여의 통원 가입금액(20만 원)과 연간 보험가입금액은 이 보장종목에 적용되지 않습니다.</p>
     </div>}
 
-    <button type="button" className="btn-primary mt-6" onClick={submit}>여러 건 계산하기</button>
+    {coverage === "benefit" && basic.fields}
+      <button type="button" className="btn-primary mt-6" onClick={submit}>여러 건 계산하기</button>
     {submitted && blockedSummary !== null && <div
       id={blockedSummaryId}
       role="alert"

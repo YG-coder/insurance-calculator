@@ -277,6 +277,9 @@ export function calculateMany(
 
   // 이어지는 상태
   const priorAnnualPaid = input.priorAnnualPaid;
+  if (usesVisits && usesPrescriptions && typeof input.perVisitCoverageLimit === "number" && input.perVisitCoverageLimit > 0) {
+    return blocked(["외래와 약국의 가입금액은 각각 따로 정해집니다. 가입금액을 적용하려면 외래와 약국 건을 나눠 계산해 주세요."]);
+  }
   if (plan === "selectiveII") {
     if (lines.some((line) => line.visit === "inpatient") && !isWon(priorAnnualPaid)) {
       return blocked(["선택형Ⅱ 입원은 이미 부담한 연간 입원 자기부담금을 입력해 주세요. 기존 부담액이 없으면 0을 입력하세요."]);
@@ -285,9 +288,6 @@ export function calculateMany(
       const limit = input.perVisitCoverageLimit;
       if (limit !== undefined && !isWon(limit)) {
         return blocked(["회(건)당 보험가입금액은 0 이상의 원 단위 정수로 입력해 주세요."]);
-      }
-      if (usesVisits && usesPrescriptions && limit !== undefined && limit > 0) {
-        return blocked(["외래와 약국의 가입금액은 각각 따로 정해집니다. 가입금액을 적용하려면 외래와 약국 건을 나눠 계산해 주세요."]);
       }
     }
   }
@@ -365,7 +365,7 @@ export function calculateMany(
   //   "같은 날 통원은 한 행으로 합쳐 입력하라"는 안내는 여전히 필요하다 — 그 안내는 보상
   //   여부가 아니라 **입력 방법**에 관한 것이다.
   if (hasOutpatient) {
-    notes.push("각 행은 약관상 1회의 청구 단위입니다. 하루에 2회 이상 통원한 경우 약관이 1회로 보고 가장 높은 공제금액을 적용하므로, 한 행으로 합쳐 입력해 주세요.");
+    notes.push("각 행은 약관상 1회의 청구 단위입니다. 같은 날이라도 의원 외래와 약국 처방조제는 별도 행에 입력하세요. 같은 상해 또는 질병으로 같은 치료 목적의 외래를 여러 번 받았다면 외래끼리 합쳐 가장 높은 공제금액의 의료기관을 선택하세요. 같은 사유의 처방조제는 약국끼리 합칩니다.");
   }
   // ⚠ 회(건)당 가입금액은 **통원 행에만** 적용된다(아래 행 루프의
   //   `line.visit === "outpatient" ? input.perVisitCoverageLimit : undefined`).

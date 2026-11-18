@@ -1,6 +1,7 @@
 // ⚠ `normalizeAmount`를 더 이상 import하지 않는다. 진료비를 조용히 고치던 유일한
 //   호출부를 이번에 검증으로 바꿨고, 남겨 두면 "여기서도 값을 고친다"고 읽힌다.
 //   `settle()`이 내부에서 여전히 자기 인자를 정규화하며 그 동작은 그대로다.
+import { basicMaximum, basicNotes, basicLimitError } from "./basicBenefit";
 import { roundedRateAmount } from "../common/exactMoney";
 import { settle } from "../common/settle";
 import { GEN2021 } from "./constants";
@@ -508,6 +509,18 @@ export function calculateMany2021(input: Gen2021MultiClaimInput): MultiClaimResu
     ? undefined
     : Math.min(limit, GEN2021.annualLimitMaximum);
 
+  const basic = input.coverage === "benefit" && rider === "none";
+  const contract = input.basicLimits;
+  if (!basic && contract !== undefined) return blocked(["급여 기본형의 계약 한도는 비급여·특약에 적용할 수 없습니다."]);
+  if (basic) {
+    const error = basicLimitError("2021", input.visit, contract, true);
+    if (error) return blocked([error]);
+  }
+  let priorBasic = contract?.priorInpatientDeductible ?? 0;
+  const maximum = basicMaximum("2021");
+  const annualRemaining = Math.max((selectedLimit ?? maximum.annualMaximum) - paid, 0);
+  const basicAnnual = Math.min(contract?.remainingAnnualBenefit ?? annualRemaining, annualRemaining);
+  let basicRemaining = basicAnnual;
   amounts.forEach((amount, index) => {
     if (rider === "none" && input.coverage === "non_benefit" && input.visit === "outpatient") {
       if (visits >= GEN2021.nonBenefitOutpatientAnnualVisits) {
@@ -522,7 +535,13 @@ export function calculateMany2021(input: Gen2021MultiClaimInput): MultiClaimResu
     if (rider === "none") {
       single = calc2021({
         amount, coverage: input.coverage, visit: input.visit, tier: input.tier,
+        basicLimits: basic ? { ...contract, priorInpatientDeductible: input.visit === "inpatient" ? priorBasic : undefined,
+          remainingAnnualBenefit: basicRemaining } : undefined,
       });
+      if (basic) {
+        basicRemaining -= single.insurancePay ?? 0;
+        if (input.visit === "inpatient") priorBasic = Math.min(maximum.inpatientDeductible, priorBasic + (single.rateBased ?? 0));
+      }
     } else {
       const rc = RIDER_CAPS[rider];
       if (rc.annualVisits !== null && visits >= rc.annualVisits) {
@@ -544,7 +563,7 @@ export function calculateMany2021(input: Gen2021MultiClaimInput): MultiClaimResu
     }
 
     // 일반 급여/비급여는 상해·질병 및 급여·비급여 보장축 안에서 입원·통원이 합산된다.
-    if (rider === "none" && selectedLimit !== undefined) {
+    if (!basic && rider === "none" && selectedLimit !== undefined) {
       const remaining = Math.max(selectedLimit - paid, 0);
       const insuranceBefore = single.insurancePay ?? 0;
       if (insuranceBefore > remaining) {
@@ -564,20 +583,22 @@ export function calculateMany2021(input: Gen2021MultiClaimInput): MultiClaimResu
   const totalAmount = results.reduce((s, r) => s + r.amount, 0);
   const totalOwnPay = results.reduce((s, r) => s + (r.ownPay ?? 0), 0);
   const totalInsurancePay = results.reduce((s, r) => s + (r.insurancePay ?? 0), 0);
-  const notes: string[] = [];
+  const notes: string[] = basic ? basicNotes("2021", input.visit, { ...contract, remainingAnnualBenefit: selectedLimit === undefined ? contract?.remainingAnnualBenefit : basicAnnual }) : [];
   const causeLabel = input.cause === "injury" ? "상해" : "질병";
   if (rider === "none") {
     notes.push(`${causeLabel}·${input.coverage === "benefit" ? "급여" : "비급여"} 보장축만 계산했습니다. 다른 원인의 청구는 별도로 계산해 주세요.`);
   }
   // ⚠ 미입력과 명시적 0원을 **나눠서** 안내한다. 종전에는 0원을 넘겨도 "입력하지 않아"라고
   //   말해, 사용자가 넣은 값이 무시된 사실을 알 수 없었다.
-  if (rider === "none" && limit === undefined) {
+  if (!basic && rider === "none" && limit === undefined) {
     notes.push("연간 보험가입금액은 계약자가 선택한 값입니다. 증권의 금액을 입력하지 않아 연간 지급 한도는 적용하지 않았습니다.");
   }
   // ⚠ 이 문장은 **계산기가 0원을 어떻게 다뤘는지**만 말한다. 0원 가입이 가능한 계약인지,
   //   0원의 약관상 의미가 무엇인지는 원문에서 확인하지 않았고 여기서 단정하지 않는다.
   if (rider === "none" && limit === 0) {
-    notes.push("연간 보험가입금액을 0원으로 입력하셔서 계산기에서는 연간 지급 한도를 적용하지 않았습니다. 실제 가입금액이 있으면 증권의 금액을 입력해 주세요.");
+    notes.push(basic
+      ? "연간 보험가입금액을 0원으로 입력하셔서 개별 계약 한도를 적용하지 않았습니다. 급여 보장의 연간 최고액에서 기존 지급액을 뺀 잔여액을 기준으로 계산했습니다."
+      : "연간 보험가입금액을 0원으로 입력하셔서 계산기에서는 연간 지급 한도를 적용하지 않았습니다. 실제 가입금액이 있으면 증권의 금액을 입력해 주세요.");
   }
   if (rider === "none" && limit !== undefined && limit > GEN2021.annualLimitMaximum) {
     notes.push("입력한 연간 가입금액이 약관상 최대 5천만원을 넘어 5천만원으로 적용했습니다.");

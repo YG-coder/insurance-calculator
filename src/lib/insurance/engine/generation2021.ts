@@ -7,6 +7,7 @@
 //           notes로 미적용 사실을 반환한다. 고지는 급여/비급여·입원/통원 적용 범위에 맞춰
 //           구성한다(GEN2021_NOT_APPLIED).
 //   의도된 출력 변경은 tests/generation2021.test.ts의 INTENDED_DIVERGENCES에 등록되어 있다.
+import { applyBasicLimits } from "./basicBenefit";
 import { roundedRateAmount } from "../common/exactMoney";
 import { ClaimInput, CalcResult } from "./types";
 import { GEN2021, GEN2021_NOT_APPLIED } from "./constants";
@@ -95,6 +96,8 @@ export function calc2021(input: ClaimInput): CalcResult {
     ]);
   }
 
+  if (coverage !== "benefit" && input.basicLimits !== undefined)
+    return pending(amount, ["급여 기본형의 계약 한도는 비급여에 적용할 수 없습니다."]);
   const rate = GEN2021.rate[coverage][visit];
 
   let minDeductible = 0;
@@ -126,7 +129,7 @@ export function calc2021(input: ClaimInput): CalcResult {
     "이 계산에 반영되지 않은 약관 한도: " + notApplied.join(" / "),
   ];
 
-  return {
+  const base: CalcResult = {
     status: "OK",
     generation: "2021",
     amount: s.amount,
@@ -138,4 +141,5 @@ export function calc2021(input: ClaimInput): CalcResult {
     notes,
     appliedCaps: s.capped ? ["GEN2021_OUTPATIENT_PER_VISIT"] : [],
   };
+  return coverage === "benefit" ? applyBasicLimits("2021", base, visit, input.basicLimits) : base;
 }

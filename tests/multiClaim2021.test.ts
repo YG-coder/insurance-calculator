@@ -42,14 +42,14 @@ function check(name: string, ok: boolean, detail = "") {
 // 연간 가입금액은 사용자 입력값으로만 적용하고 입원·통원 보험금을 합산한다.
 {
   const r = calculateMany2021({
-    cause: "disease", coverage: "benefit", visit: "inpatient", amounts: [500_000, 500_000],
+    cause: "disease", coverage: "benefit", visit: "inpatient", basicLimits: { priorInpatientDeductible: 0 }, amounts: [500_000, 500_000],
     annualCoverageLimit: 1_000_000, priorAnnualInsurancePaid: 600_000,
   });
   check("연간 잔여 40만원만 지급", r.totalInsurancePay === 400_000 && r.totalOwnPay === 600_000, JSON.stringify(r));
   check("두 번째 건에서 연간 한도 소진", r.lines[0].insurancePay === 400_000 && r.lines[1].insurancePay === 0);
   check("연간 지급 한도 코드", r.appliedCaps.includes("GEN2021_ANNUAL_COVERAGE"));
 
-  const cappedInput = calculateMany2021({ cause: "disease", coverage: "benefit", visit: "inpatient", amounts: [100_000_000], annualCoverageLimit: 99_000_000 });
+  const cappedInput = calculateMany2021({ cause: "disease", coverage: "benefit", visit: "inpatient", basicLimits: { priorInpatientDeductible: 0 }, amounts: [100_000_000], annualCoverageLimit: 99_000_000 });
   check("증권 입력은 약관 최대 5천만원을 넘지 못함", cappedInput.totalInsurancePay === 50_000_000);
 }
 
@@ -97,13 +97,13 @@ function check(name: string, ok: boolean, detail = "") {
 //     진료비를 차단하므로, 같은 입력은 이제 계산되지 않는다. 불변식은 **유효한 입력**에서
 //     확인하고, 무효 입력의 새 계약은 tests/gen2021AmountEngineContract.test.ts가 본다.
 {
-  const r = calculateMany2021({ cause: "disease", coverage: "benefit", visit: "inpatient", amounts: [0, 100_000, 250_000] });
+  const r = calculateMany2021({ cause: "disease", coverage: "benefit", visit: "inpatient", basicLimits: { priorInpatientDeductible: 0 }, amounts: [0, 100_000, 250_000] });
   check("유효 금액은 그대로 쓰인다", r.lines.map((x) => x.amount).join(",") === "0,100000,250000");
   check("합계 정합", (r.totalOwnPay ?? 0) + (r.totalInsurancePay ?? 0) === r.totalAmount);
   check("모든 결과 정수", r.lines.every((x) => Number.isInteger(x.ownPay) && Number.isInteger(x.insurancePay)));
   // 종전 관용이 되살아나지 않는지 같은 자리에서 확인한다.
   const bad = calculateMany2021({ cause: "disease", coverage: "benefit", visit: "inpatient",
-    amounts: [-1, Number.NaN, 100_000.9] } as unknown as Gen2021MultiClaimInput);
+    basicLimits: { priorInpatientDeductible: 0 }, amounts: [-1, Number.NaN, 100_000.9] } as unknown as Gen2021MultiClaimInput);
   check("무효 금액을 0원 행으로 정규화하지 않는다",
     bad.status === "PENDING_UNVERIFIED" && bad.lines.length === 0 && bad.totalAmount === 0);
 }

@@ -59,6 +59,7 @@ function perVisitLimit(value: number | undefined): number | undefined {
  * ⚠ 자리는 **`plan` preflight 뒤**다. 선행 차단이 결과를 정하는 경로에서 새 이름을 읽지 않는다.
  * ──────────────────────────────────────────────────────────────────────── */
 const STD_UNUSED_KEYS = [
+  "basicLimits",
   "amounts", "lines", "stays", "roomChargeTotal", "inpatientDays", "generation",
   "cause", "severity", "tier", "route", "item", "rider", "nonBenefitItem",
   "injectionPurpose", "nhisCoinsuranceRate", "outpatientCoverageLimit", "annualCoverageLimit",

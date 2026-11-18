@@ -10,11 +10,11 @@ export function optionalWon(raw: string) {
   return /^(?:[0-9]+|[1-9][0-9]{0,2}(?:,[0-9]{3})+)$/.test(raw) ? Number(raw.replaceAll(",", "")) : NaN;
 }
 
-export function OutpatientLimitField({ id, value, onChange, benefit }: {
-  id: string; value: string; onChange: (value: string) => void; benefit: boolean;
+export function OutpatientLimitField({ id, value, onChange, benefit, axisLabel }: {
+  id: string; value: string; onChange: (value: string) => void; benefit: boolean; axisLabel?: string;
 }) {
   return <div>
-    <label className="label-base" htmlFor={id}>증권의 {benefit ? "급여" : "일반 비급여"} 통원 1회 가입금액 (선택)</label>
+    <label className="label-base" htmlFor={id}>증권의 {benefit ? "급여" : "일반 비급여"} 통원 1회 가입금액{axisLabel && ` (${axisLabel})`} (선택)</label>
     <RawAmountInput id={id} value={value} onChange={onChange} placeholder="빈칸·0원은 최고 20만 원 기준" />
     <p className="text-sm text-slate-600">빈칸이나 0원은 계약 금액을 모르는 경우로 보고, 회당 최고액으로 추정합니다.</p>
   </div>;

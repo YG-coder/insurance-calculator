@@ -482,7 +482,7 @@ export default function HealthCalcMulti2021() {
 
       {coverage === "benefit" && basic.fields}
       {!isRider && coverage === "non_benefit" && visit === "outpatient" &&
-        <OutpatientLimitField id="multi4-nonbenefit-limit" benefit={false} value={nonBenefitLimits[cause]}
+        <OutpatientLimitField id="multi4-nonbenefit-limit" benefit={false} axisLabel={paidAxisLabel} value={nonBenefitLimits[cause]}
           onChange={value => setNonBenefitLimits(prev => ({ ...prev, [cause]: value }))} />}
       <button type="button" className="btn-primary mt-6" onClick={submit}>여러 건 계산하기</button>
 

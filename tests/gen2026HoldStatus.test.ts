@@ -515,7 +515,8 @@ console.log("\n[커밋 D·E] 계산·화면 무변경 (기준 30dee21)");
     "src/lib/insurance/engine/itemGuards.ts": "546f476a59ff0dd8ca85fd6e84c25eedeeaed80f63d042e1d662bdff0e1ebc94",
     // 2026-10-15 공유 이미지 보완: socialMetadata import와 메타데이터 호출만 변경.
     // 페이지 렌더 함수 본문은 직전 커밋과 동일함을 별도 대조하고 파일 해시를 갱신했다.
-    "src/app/5th-generation-health-insurance-calculator/page.tsx": "d53b0b35432488e2c8dca2a6ec16367391955a6f3a9d906c63b576dbb897e34e",
+    // 2026-11-18 급여 단건의 연간 잔여 지급한도 안내를 실제 산식에 맞춰 수정. 문구 검사는 uiCopy에서 수행한다.
+    "src/app/5th-generation-health-insurance-calculator/page.tsx": "e506e2f82ff63fa7c51d31d3e3827d559a97133fe187f673af868464709c0d20",
   };
   // 21차: 정수 기반 반올림·병실료 일수 상한 수정 후 해시. claimRounding.test.ts로 산술을 별도 검증.
   for (const [file, want] of Object.entries(FROZEN)) {
